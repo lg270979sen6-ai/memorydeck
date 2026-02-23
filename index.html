@@ -1,0 +1,1451 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>MemoryDeck</title>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<style>
+:root{
+  --bg:#080b10;--s1:#0f1318;--s2:#161c24;--s3:#1e2630;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#f0f4ff;--text2:#8892a4;--text3:#4a5568;
+  --accent:#00d4aa;--accent2:#0099ff;--red:#ff4757;--orange:#ff9f43;--purple:#a855f7;--yellow:#fbbf24;
+  --green:#00d4aa;
+  --nav-h:64px;--safe-b:env(safe-area-inset-bottom,0px);--safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+html,body{height:100%;background:var(--bg);overflow:hidden;}
+body{font-family:'Space Grotesk',sans-serif;color:var(--text);display:flex;flex-direction:column;}
+
+body::before{content:'';position:fixed;inset:0;background-image:linear-gradient(rgba(0,212,170,.02) 1px,transparent 1px),linear-gradient(90deg,rgba(0,212,170,.02) 1px,transparent 1px);background-size:50px 50px;pointer-events:none;z-index:0;}
+
+/* ═══════════════════════════════════════
+   SYNC BAR
+═══════════════════════════════════════ */
+.sync-bar{display:flex;align-items:center;justify-content:center;gap:6px;padding:5px 16px;font-size:10px;font-weight:600;letter-spacing:.05em;flex-shrink:0;position:relative;z-index:2;}
+.sync-bar.online{background:rgba(0,212,170,.1);color:var(--accent);}
+.sync-bar.offline{background:rgba(255,71,87,.1);color:var(--red);}
+.sync-bar.syncing{background:rgba(0,153,255,.1);color:var(--accent2);}
+.sync-dot{width:5px;height:5px;border-radius:50%;background:currentColor;}
+.sync-dot.pulse{animation:pulse 1.2s infinite;}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.2}}
+
+/* ═══════════════════════════════════════
+   LOCK SCREEN
+═══════════════════════════════════════ */
+.lock-screen{position:fixed;inset:0;background:var(--bg);z-index:999;display:flex;flex-direction:column;overflow-y:auto;padding:calc(var(--safe-t) + 40px) 20px calc(var(--safe-b) + 20px);}
+.lock-logo{display:flex;align-items:center;gap:10px;margin-bottom:4px;}
+.lock-logo-icon{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:20px;}
+.lock-logo-text{font-size:24px;font-weight:700;letter-spacing:-.02em;}
+.lock-tagline{font-size:12px;color:var(--text3);margin-bottom:32px;letter-spacing:.05em;}
+
+/* Step indicators */
+.step-dots{display:flex;gap:6px;margin-bottom:28px;}
+.step-dot{width:6px;height:6px;border-radius:50%;background:var(--border2);transition:.2s;}
+.step-dot.active{background:var(--accent);width:18px;border-radius:3px;}
+
+/* STEP 1: pick account */
+.lock-step{display:none;}
+.lock-step.active{display:block;}
+.step-label{font-size:13px;font-weight:600;color:var(--text2);margin-bottom:12px;}
+
+.acc-list{display:flex;flex-direction:column;gap:8px;}
+.acc-item{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--s1);border:1.5px solid var(--border);border-radius:14px;cursor:pointer;transition:.2s;}
+.acc-item:hover,.acc-item:active{border-color:var(--accent);background:var(--s2);}
+.acc-item-av{width:40px;height:40px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:17px;color:#000;flex-shrink:0;}
+.acc-item-name{font-size:15px;font-weight:600;}
+.acc-item-sub{font-size:11px;color:var(--text3);margin-top:1px;}
+.acc-item-arr{margin-left:auto;color:var(--text3);font-size:18px;}
+
+/* STEP 2: pick user */
+.user-list{display:flex;flex-direction:column;gap:8px;}
+.user-item{display:flex;align-items:center;gap:12px;padding:12px 14px;background:var(--s1);border:1.5px solid var(--border);border-radius:14px;cursor:pointer;transition:.2s;}
+.user-item:hover,.user-item:active{border-color:var(--accent);}
+.user-av{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:15px;color:#000;flex-shrink:0;}
+.user-name{font-size:14px;font-weight:600;}
+.user-role{font-size:11px;color:var(--text3);}
+
+/* STEP 3: enter password */
+.pass-form{background:var(--s1);border:1.5px solid var(--border);border-radius:16px;padding:20px;}
+.pass-user-info{display:flex;align-items:center;gap:10px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border);}
+.pass-av{width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:14px;color:#000;}
+.pass-name{font-size:14px;font-weight:600;}
+.pass-role{font-size:11px;color:var(--text3);}
+.pass-field{width:100%;padding:12px 14px;background:var(--s2);border:1.5px solid var(--border);border-radius:11px;color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:16px;outline:none;transition:.2s;margin-bottom:12px;letter-spacing:.1em;}
+.pass-field:focus{border-color:var(--accent);}
+.pass-btn{width:100%;padding:13px;border-radius:11px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;border:none;font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:700;cursor:pointer;transition:.15s;}
+.pass-btn:active{opacity:.85;}
+.pass-err{font-size:12px;color:var(--red);margin-top:8px;text-align:center;min-height:14px;}
+.back-btn{display:flex;align-items:center;gap:6px;color:var(--text3);font-size:13px;cursor:pointer;margin-bottom:18px;background:none;border:none;font-family:'Space Grotesk',sans-serif;padding:4px 0;}
+.back-btn:hover{color:var(--text2);}
+
+/* ═══════════════════════════════════════
+   APP LAYOUT
+═══════════════════════════════════════ */
+.app-header{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--s1);border-bottom:1px solid var(--border);flex-shrink:0;position:relative;z-index:2;}
+.hdr-logo{display:flex;align-items:center;gap:8px;}
+.hdr-icon{width:30px;height:30px;border-radius:8px;background:linear-gradient(135deg,var(--accent),var(--accent2));display:flex;align-items:center;justify-content:center;font-size:14px;}
+.hdr-title{font-size:17px;font-weight:700;}
+.hdr-right{display:flex;align-items:center;gap:8px;}
+.hdr-user-av{width:32px;height:32px;border-radius:9px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px;color:#000;cursor:pointer;}
+.hdr-btn{width:34px;height:34px;border-radius:9px;background:var(--s2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;cursor:pointer;transition:.15s;}
+.hdr-btn:active{background:var(--s3);transform:scale(.93);}
+
+/* ── VIEWS ── */
+.view{display:none;flex-direction:column;flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding-bottom:calc(var(--nav-h) + var(--safe-b) + 10px);position:relative;z-index:1;}
+.view.active{display:flex;}
+
+/* ── BOTTOM NAV ── */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;height:calc(var(--nav-h) + var(--safe-b));background:var(--s1);border-top:1px solid var(--border);display:flex;align-items:flex-start;padding-top:6px;z-index:100;}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:4px 0;cursor:pointer;transition:.15s;position:relative;}
+.nav-icon{font-size:20px;transition:.2s;}
+.nav-label{font-size:9px;font-weight:600;color:var(--text3);letter-spacing:.04em;transition:.2s;}
+.nav-item.active .nav-label{color:var(--accent);}
+.nav-item.active .nav-icon{transform:scale(1.1);}
+.nav-badge{position:absolute;top:0;right:25%;background:var(--red);color:white;font-size:9px;font-weight:700;border-radius:8px;padding:1px 5px;min-width:16px;text-align:center;}
+
+/* ═══════════════════════════════════════
+   HOME VIEW (Today's review)
+═══════════════════════════════════════ */
+.home-hero{margin:14px 16px;background:linear-gradient(135deg,rgba(0,212,170,.12),rgba(0,153,255,.08));border:1px solid rgba(0,212,170,.25);border-radius:18px;padding:20px;}
+.hero-greeting{font-size:12px;color:var(--accent);font-weight:600;text-transform:uppercase;letter-spacing:.08em;margin-bottom:4px;}
+.hero-title{font-size:22px;font-weight:700;margin-bottom:14px;}
+.hero-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.hero-stat{background:rgba(0,0,0,.3);border-radius:12px;padding:12px;text-align:center;}
+.hero-stat-n{font-size:24px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+.hero-stat-l{font-size:9px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-top:2px;font-weight:600;}
+.stat-new{color:#60a5fa;}
+.stat-review{color:var(--orange);}
+.stat-learn{color:var(--purple);}
+
+.start-review-btn{display:flex;align-items:center;justify-content:center;gap:8px;margin:0 16px 14px;padding:14px;border-radius:14px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;font-size:16px;font-weight:700;cursor:pointer;border:none;font-family:'Space Grotesk',sans-serif;width:calc(100% - 32px);transition:.15s;}
+.start-review-btn:active{opacity:.85;transform:scale(.98);}
+.start-review-btn:disabled{background:var(--s2);color:var(--text3);cursor:default;}
+
+.sec-head{display:flex;align-items:center;justify-content:space-between;padding:14px 16px 8px;}
+.sec-title{font-size:13px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.07em;}
+.sec-action{font-size:12px;color:var(--accent);cursor:pointer;font-weight:600;}
+
+/* ═══════════════════════════════════════
+   DECKS VIEW
+═══════════════════════════════════════ */
+.deck-card{display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:.12s;position:relative;}
+.deck-card:active{background:var(--s2);}
+.deck-icon{width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;}
+.deck-info{flex:1;min-width:0;}
+.deck-name{font-size:15px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.deck-meta{font-size:11px;color:var(--text3);margin-top:3px;display:flex;gap:10px;}
+.deck-cnt{display:flex;align-items:center;gap:3px;}
+.deck-cnt-dot{width:6px;height:6px;border-radius:50%;}
+.deck-due{font-size:12px;font-weight:700;color:var(--orange);text-align:right;flex-shrink:0;}
+.deck-actions{display:flex;gap:6px;margin-left:8px;}
+.deck-action-btn{width:30px;height:30px;border-radius:8px;background:var(--s2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:14px;cursor:pointer;transition:.15s;}
+.deck-action-btn:active{background:var(--s3);}
+
+.fab{position:fixed;bottom:calc(var(--nav-h) + var(--safe-b) + 14px);right:16px;width:52px;height:52px;border-radius:16px;background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;font-size:24px;font-weight:300;display:flex;align-items:center;justify-content:center;cursor:pointer;border:none;box-shadow:0 6px 20px rgba(0,212,170,.35);z-index:50;transition:.15s;}
+.fab:active{transform:scale(.93);}
+
+/* ═══════════════════════════════════════
+   REVIEW SCREEN (Full screen)
+═══════════════════════════════════════ */
+.review-screen{position:fixed;inset:0;background:var(--bg);z-index:200;display:none;flex-direction:column;padding:calc(var(--safe-t) + 10px) 16px calc(var(--safe-b) + 16px);}
+.review-screen.open{display:flex;}
+
+.review-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;}
+.review-close{width:36px;height:36px;border-radius:10px;background:var(--s2);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:20px;cursor:pointer;transition:.15s;color:var(--text2);}
+.review-progress-bar{flex:1;height:5px;background:var(--s2);border-radius:3px;margin:0 12px;overflow:hidden;}
+.review-progress-fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--accent2));border-radius:3px;transition:width .3s;}
+.review-counter{font-size:12px;color:var(--text3);font-family:'JetBrains Mono',monospace;font-weight:500;}
+
+.card-area{flex:1;display:flex;flex-direction:column;perspective:1200px;}
+.card-wrap{flex:1;display:flex;flex-direction:column;cursor:pointer;position:relative;}
+.card-flip{width:100%;height:100%;position:relative;transform-style:preserve-3d;transition:transform .5s cubic-bezier(.4,0,.2,1);}
+.card-flip.flipped{transform:rotateY(180deg);}
+.card-face{position:absolute;inset:0;backface-visibility:hidden;background:var(--s1);border:1px solid var(--border2);border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:28px 24px;text-align:center;}
+.card-back{transform:rotateY(180deg);background:var(--s2);}
+.card-type-badge{position:absolute;top:14px;left:16px;font-size:10px;font-weight:700;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;}
+.card-deck-badge{position:absolute;top:14px;right:16px;font-size:10px;color:var(--text3);}
+.card-content{font-size:20px;font-weight:600;line-height:1.5;color:var(--text);max-width:500px;}
+.card-hint{font-size:12px;color:var(--text3);margin-top:14px;}
+.flip-hint{position:absolute;bottom:14px;font-size:11px;color:var(--text3);display:flex;align-items:center;gap:4px;}
+
+/* Grade buttons */
+.grade-row{display:flex;gap:8px;margin-top:14px;flex-shrink:0;}
+.grade-btn{flex:1;padding:12px 6px;border-radius:13px;border:none;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:700;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:3px;transition:.15s;}
+.grade-btn:active{transform:scale(.95);}
+.grade-again{background:rgba(255,71,87,.15);color:var(--red);border:1px solid rgba(255,71,87,.25);}
+.grade-hard{background:rgba(255,159,67,.15);color:var(--orange);border:1px solid rgba(255,159,67,.25);}
+.grade-good{background:rgba(0,153,255,.15);color:var(--accent2);border:1px solid rgba(0,153,255,.25);}
+.grade-easy{background:rgba(0,212,170,.15);color:var(--accent);border:1px solid rgba(0,212,170,.25);}
+.grade-lbl{font-size:10px;font-weight:500;color:inherit;opacity:.7;}
+
+.show-answer-btn{width:100%;padding:14px;border-radius:14px;background:var(--s1);border:1.5px solid var(--border2);color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:15px;font-weight:600;cursor:pointer;margin-top:14px;transition:.15s;flex-shrink:0;}
+.show-answer-btn:active{background:var(--s2);}
+
+/* Done screen */
+.review-done{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;gap:12px;}
+.done-icon{font-size:60px;margin-bottom:8px;}
+.done-title{font-size:24px;font-weight:700;}
+.done-sub{font-size:14px;color:var(--text3);}
+.done-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;width:100%;max-width:320px;margin:8px 0;}
+.done-stat{background:var(--s1);border:1px solid var(--border);border-radius:12px;padding:12px;}
+.done-stat-n{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;}
+.done-stat-l{font-size:10px;color:var(--text3);margin-top:2px;}
+
+/* ═══════════════════════════════════════
+   CARD EDITOR
+═══════════════════════════════════════ */
+.editor-screen{position:fixed;inset:0;background:var(--bg);z-index:200;display:none;flex-direction:column;padding:calc(var(--safe-t) + 10px) 16px calc(var(--safe-b) + 16px);}
+.editor-screen.open{display:flex;overflow-y:auto;}
+.editor-top{display:flex;align-items:center;gap:10px;margin-bottom:20px;flex-shrink:0;}
+.editor-title{font-size:18px;font-weight:700;flex:1;}
+.edit-btn{padding:8px 16px;border-radius:10px;border:none;font-family:'Space Grotesk',sans-serif;font-size:13px;font-weight:600;cursor:pointer;transition:.15s;}
+.edit-btn-save{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;}
+.edit-btn-cancel{background:var(--s2);border:1px solid var(--border);color:var(--text2);}
+
+.form-field{margin-bottom:16px;}
+.form-lbl{display:block;font-size:10px;color:var(--text3);font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;}
+.form-inp{width:100%;padding:12px 14px;background:var(--s1);border:1.5px solid var(--border);border-radius:11px;color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:15px;outline:none;transition:.2s;resize:vertical;}
+.form-inp:focus{border-color:var(--accent);}
+.form-inp.textarea{min-height:100px;}
+.form-sel{width:100%;padding:12px 14px;background:var(--s1);border:1.5px solid var(--border);border-radius:11px;color:var(--text);font-family:'Space Grotesk',sans-serif;font-size:14px;outline:none;cursor:pointer;}
+
+/* ═══════════════════════════════════════
+   CARDS LIST VIEW
+═══════════════════════════════════════ */
+.card-list-item{display:flex;align-items:center;gap:10px;padding:12px 16px;border-bottom:1px solid var(--border);cursor:pointer;}
+.card-list-item:active{background:var(--s2);}
+.cli-front{flex:1;font-size:14px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cli-back{font-size:12px;color:var(--text3);max-width:120px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.cli-state{font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;}
+.state-new{background:rgba(96,165,250,.15);color:#60a5fa;}
+.state-learning{background:rgba(168,85,247,.15);color:var(--purple);}
+.state-review{background:rgba(0,212,170,.15);color:var(--accent);}
+.state-overdue{background:rgba(255,71,87,.15);color:var(--red);}
+
+/* ═══════════════════════════════════════
+   STATS VIEW
+═══════════════════════════════════════ */
+.stats-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px 16px;}
+.stat-tile{background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:14px;}
+.tile-n{font-size:22px;font-weight:700;font-family:'JetBrains Mono',monospace;color:var(--accent);}
+.tile-l{font-size:10px;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;margin-top:3px;font-weight:600;}
+
+.heatmap-wrap{margin:0 16px 14px;background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:16px;}
+.heatmap-title{font-size:12px;font-weight:700;color:var(--text2);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;}
+.heatmap-grid{display:flex;gap:2px;flex-wrap:wrap;}
+.hm-cell{width:12px;height:12px;border-radius:3px;background:var(--s2);}
+.hm-cell.lv1{background:rgba(0,212,170,.25);}
+.hm-cell.lv2{background:rgba(0,212,170,.5);}
+.hm-cell.lv3{background:rgba(0,212,170,.75);}
+.hm-cell.lv4{background:var(--accent);}
+
+/* ═══════════════════════════════════════
+   MODALS
+═══════════════════════════════════════ */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:300;display:none;align-items:flex-end;justify-content:center;backdrop-filter:blur(4px);}
+.modal-overlay.open{display:flex;}
+.bottom-sheet{background:var(--s1);border:1px solid var(--border2);border-radius:20px 20px 0 0;padding:20px 20px calc(var(--safe-b) + 20px);width:100%;max-width:500px;animation:slideUp .25s ease;}
+@keyframes slideUp{from{transform:translateY(100%)}to{transform:none}}
+.sheet-handle{width:36px;height:4px;border-radius:2px;background:var(--border2);margin:0 auto 16px;}
+.sheet-title{font-size:16px;font-weight:700;margin-bottom:4px;}
+.sheet-sub{font-size:12px;color:var(--text3);margin-bottom:18px;}
+.sheet-row{display:flex;gap:8px;margin-top:14px;}
+
+/* TOAST */
+.toast{position:fixed;top:calc(var(--safe-t) + 16px);left:50%;transform:translateX(-50%) translateY(-80px);background:var(--s1);border:1px solid var(--border2);border-radius:11px;padding:9px 18px;font-size:13px;font-weight:500;transition:transform .3s;z-index:9999;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.toast.show{transform:translateX(-50%) translateY(0);}
+
+/* SETTINGS */
+.settings-item{display:flex;align-items:center;padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;}
+.settings-item:active{background:var(--s2);}
+.settings-icon{font-size:20px;width:36px;flex-shrink:0;}
+.settings-info{flex:1;}
+.settings-name{font-size:14px;font-weight:500;}
+.settings-desc{font-size:11px;color:var(--text3);margin-top:1px;}
+.settings-arr{color:var(--text3);}
+
+@keyframes fadeUp{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+.fade-up{animation:fadeUp .3s ease both;}
+
+/* Card animations */
+@keyframes cardOut{to{opacity:0;transform:scale(.9) translateY(-10px)}}
+@keyframes cardIn{from{opacity:0;transform:scale(1.05) translateY(10px)}to{opacity:1;transform:none}}
+.card-out{animation:cardOut .2s ease forwards;}
+.card-in{animation:cardIn .25s ease both;}
+</style>
+</head>
+<body>
+
+<!-- SYNC BAR -->
+<div id="syncBar" class="sync-bar offline">
+  <div class="sync-dot" id="syncDot"></div>
+  <span id="syncTxt">Нет соединения</span>
+</div>
+
+<!-- ═══════════════════════════════════════
+     LOCK SCREEN
+═══════════════════════════════════════ -->
+<div id="lockScreen" class="lock-screen">
+  <div class="lock-logo">
+    <div class="lock-logo-icon">🧠</div>
+    <div class="lock-logo-text">MemoryDeck</div>
+  </div>
+  <div class="lock-tagline">Умное запоминание · Алгоритм SM-2</div>
+
+  <div class="step-dots">
+    <div class="step-dot active" id="dot0"></div>
+    <div class="step-dot" id="dot1"></div>
+    <div class="step-dot" id="dot2"></div>
+  </div>
+
+  <!-- Step 1: accounts -->
+  <div id="step1" class="lock-step active">
+    <div class="step-label">Выберите аккаунт</div>
+    <div id="accList" class="acc-list">
+      <div style="color:var(--text3);font-size:13px;padding:20px;text-align:center;">Загрузка...</div>
+    </div>
+  </div>
+
+  <!-- Step 2: users -->
+  <div id="step2" class="lock-step">
+    <button class="back-btn" onclick="goStep(1)">← Назад</button>
+    <div class="step-label">Выберите пользователя</div>
+    <div id="userList" class="user-list"></div>
+  </div>
+
+  <!-- Step 3: password -->
+  <div id="step3" class="lock-step">
+    <button class="back-btn" onclick="goStep(2)">← Назад</button>
+    <div class="pass-form">
+      <div class="pass-user-info" id="passUserInfo"></div>
+      <label class="form-lbl" style="display:block;font-size:10px;color:var(--text3);font-weight:600;letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;">Пароль</label>
+      <input id="passInput" class="pass-field" type="password" placeholder="Введите пароль">
+      <button class="pass-btn" onclick="doLogin()">Войти →</button>
+      <div id="passErr" class="pass-err"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     APP
+═══════════════════════════════════════ -->
+<div id="app" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+
+  <!-- Header -->
+  <div class="app-header">
+    <div class="hdr-logo">
+      <div class="hdr-icon">🧠</div>
+      <div class="hdr-title" id="hdrTitle">MemoryDeck</div>
+    </div>
+    <div class="hdr-right">
+      <div class="hdr-btn" onclick="openSearch()" title="Поиск">🔍</div>
+      <div id="userAv" class="hdr-user-av" onclick="openSettings()"></div>
+    </div>
+  </div>
+
+  <!-- Views container -->
+  <div style="flex:1;overflow:hidden;display:flex;flex-direction:column;">
+
+    <!-- HOME view -->
+    <div id="viewHome" class="view active">
+      <div class="home-hero">
+        <div class="hero-greeting" id="heroGreeting">Доброе утро!</div>
+        <div class="hero-title" id="heroTitle">На сегодня готово 0 карточек</div>
+        <div class="hero-stats">
+          <div class="hero-stat"><div class="hero-stat-n stat-new" id="countNew">0</div><div class="hero-stat-l">Новых</div></div>
+          <div class="hero-stat"><div class="hero-stat-n stat-review" id="countReview">0</div><div class="hero-stat-l">Повторить</div></div>
+          <div class="hero-stat"><div class="hero-stat-n stat-learn" id="countLearning">0</div><div class="hero-stat-l">Учится</div></div>
+        </div>
+      </div>
+      <button class="start-review-btn" id="startReviewBtn" onclick="startReview(null)">▶ Начать повторение</button>
+      <div class="sec-head">
+        <div class="sec-title">Мои колоды</div>
+        <div class="sec-action" onclick="switchView('decks')">Все →</div>
+      </div>
+      <div id="homeDeckList"></div>
+    </div>
+
+    <!-- DECKS view -->
+    <div id="viewDecks" class="view">
+      <div class="sec-head" style="position:sticky;top:0;background:var(--bg);z-index:5;border-bottom:1px solid var(--border);">
+        <div class="sec-title">Все колоды</div>
+        <div class="sec-action" onclick="openCreateDeck()">＋ Колода</div>
+      </div>
+      <div id="deckListView"></div>
+    </div>
+
+    <!-- STATS view -->
+    <div id="viewStats" class="view">
+      <div class="sec-head"><div class="sec-title">Статистика</div></div>
+      <div class="stats-grid" id="statsGrid"></div>
+      <div class="heatmap-wrap">
+        <div class="heatmap-title">Активность (90 дней)</div>
+        <div class="heatmap-grid" id="heatmapGrid"></div>
+      </div>
+      <div style="padding:0 16px 14px;">
+        <div class="heatmap-wrap" style="margin:0;">
+          <div class="heatmap-title">По колодам</div>
+          <div id="deckStatsList"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SETTINGS view -->
+    <div id="viewSettings" class="view">
+      <div class="sec-head"><div class="sec-title">Настройки</div></div>
+      <div id="userCard" style="margin:0 16px 14px;background:var(--s1);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;align-items:center;gap:12px;"></div>
+      <div class="settings-item" onclick="openImportExport()">
+        <div class="settings-icon">📥</div>
+        <div class="settings-info"><div class="settings-name">Импорт / Экспорт</div><div class="settings-desc">CSV файлы, резервные копии</div></div>
+        <div class="settings-arr">›</div>
+      </div>
+      <div class="settings-item" onclick="openStudySettings()">
+        <div class="settings-icon">⚙️</div>
+        <div class="settings-info"><div class="settings-name">Настройки обучения</div><div class="settings-desc">Новых карточек в день, интервалы</div></div>
+        <div class="settings-arr">›</div>
+      </div>
+      <div class="settings-item" onclick="resetProgress()">
+        <div class="settings-icon">🔄</div>
+        <div class="settings-info"><div class="settings-name">Сбросить прогресс</div><div class="settings-desc">Удалить весь прогресс повторения</div></div>
+        <div class="settings-arr">›</div>
+      </div>
+      <div class="settings-item" onclick="doLogout()">
+        <div class="settings-icon">🚪</div>
+        <div class="settings-info"><div class="settings-name">Выйти из аккаунта</div><div class="settings-desc" id="settingsAccName"></div></div>
+        <div class="settings-arr">›</div>
+      </div>
+    </div>
+
+  </div><!-- views container -->
+
+  <!-- Bottom nav -->
+  <div class="bottom-nav" id="bottomNav">
+    <div class="nav-item active" id="nav-home" onclick="switchView('home')">
+      <div class="nav-icon">🏠</div><div class="nav-label">Главная</div>
+    </div>
+    <div class="nav-item" id="nav-decks" onclick="switchView('decks')">
+      <div class="nav-icon">📚</div><div class="nav-label">Колоды</div>
+      <div class="nav-badge" id="navBadge" style="display:none"></div>
+    </div>
+    <div class="nav-item" id="nav-stats" onclick="switchView('stats')">
+      <div class="nav-icon">📊</div><div class="nav-label">Статистика</div>
+    </div>
+    <div class="nav-item" id="nav-settings" onclick="switchView('settings')">
+      <div class="nav-icon">⚙️</div><div class="nav-label">Настройки</div>
+    </div>
+  </div>
+
+</div><!-- app -->
+
+<!-- ═══════════════════════════════════════
+     REVIEW SCREEN
+═══════════════════════════════════════ -->
+<div id="reviewScreen" class="review-screen">
+  <div class="review-top">
+    <div class="review-close" onclick="closeReview()">✕</div>
+    <div class="review-progress-bar"><div class="review-progress-fill" id="reviewProgress" style="width:0%"></div></div>
+    <div class="review-counter" id="reviewCounter">0/0</div>
+  </div>
+  <div class="card-area" id="cardArea"></div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     DECK DETAIL SCREEN
+═══════════════════════════════════════ -->
+<div id="deckDetailScreen" class="editor-screen">
+  <div class="editor-top">
+    <div class="review-close" onclick="closeDeckDetail()">✕</div>
+    <div class="editor-title" id="deckDetailTitle">Колода</div>
+    <button class="edit-btn edit-btn-save" onclick="openCreateCard()">＋ Карточка</button>
+  </div>
+  <div id="deckDetailMeta" style="margin-bottom:14px;"></div>
+  <div style="display:flex;gap:8px;margin-bottom:14px;flex-shrink:0;">
+    <button class="start-review-btn" id="deckReviewBtn" style="margin:0;flex:1;padding:11px;" onclick="startReviewDeck()">▶ Повторить колоду</button>
+  </div>
+  <div id="deckCardList" style="flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;border:1px solid var(--border);border-radius:14px;"></div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     CARD EDITOR SCREEN
+═══════════════════════════════════════ -->
+<div id="cardEditorScreen" class="editor-screen">
+  <div class="editor-top">
+    <div class="review-close" onclick="closeCardEditor()">✕</div>
+    <div class="editor-title" id="cardEditorTitle">Новая карточка</div>
+    <button class="edit-btn edit-btn-save" onclick="saveCard()">Сохранить</button>
+  </div>
+  <div class="form-field"><label class="form-lbl">Лицевая сторона (вопрос)</label><textarea class="form-inp textarea" id="cardFront" placeholder="Что такое...?"></textarea></div>
+  <div class="form-field"><label class="form-lbl">Обратная сторона (ответ)</label><textarea class="form-inp textarea" id="cardBack" placeholder="Это..."></textarea></div>
+  <div class="form-field"><label class="form-lbl">Колода</label><select class="form-sel" id="cardDeckSelect"></select></div>
+  <div class="form-field"><label class="form-lbl">Теги (через запятую)</label><input class="form-inp" id="cardTags" placeholder="биология, экзамен"></div>
+</div>
+
+<!-- ═══════════════════════════════════════
+     DECK EDITOR SHEET
+═══════════════════════════════════════ -->
+<div class="modal-overlay" id="deckEditorModal">
+  <div class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title" id="deckEditorTitle">Новая колода</div>
+    <div class="sheet-sub">Создайте тематическую группу карточек</div>
+    <div class="form-field"><label class="form-lbl">Название колоды</label><input class="form-inp" id="deckName" placeholder="Испанский язык — глаголы"></div>
+    <div class="form-field"><label class="form-lbl">Эмодзи-иконка</label><div id="deckEmojiPicker" style="display:flex;flex-wrap:wrap;gap:6px;"></div></div>
+    <div class="form-field"><label class="form-lbl">Цвет</label><div id="deckColorPicker" style="display:flex;gap:7px;flex-wrap:wrap;"></div></div>
+    <div class="sheet-row">
+      <button class="edit-btn edit-btn-cancel" onclick="closeModal('deckEditorModal')" style="flex:1;">Отмена</button>
+      <button class="edit-btn edit-btn-save" onclick="saveDeck()" style="flex:2;">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<!-- SETTINGS SHEETS -->
+<div class="modal-overlay" id="studySettingsModal">
+  <div class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Настройки обучения</div>
+    <div class="form-field"><label class="form-lbl">Новых карточек в день</label><input class="form-inp" id="cfgNewPerDay" type="number" min="1" max="200" value="20"></div>
+    <div class="form-field"><label class="form-lbl">Макс. повторений в день</label><input class="form-inp" id="cfgMaxReviews" type="number" min="10" max="9999" value="200"></div>
+    <div class="form-field"><label class="form-lbl">Начальный интервал (дней)</label><input class="form-inp" id="cfgFirstInterval" type="number" min="1" max="30" value="1"></div>
+    <div class="sheet-row">
+      <button class="edit-btn edit-btn-cancel" onclick="closeModal('studySettingsModal')" style="flex:1;">Отмена</button>
+      <button class="edit-btn edit-btn-save" onclick="saveStudySettings()" style="flex:2;">Сохранить</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="importExportModal">
+  <div class="bottom-sheet">
+    <div class="sheet-handle"></div>
+    <div class="sheet-title">Импорт / Экспорт</div>
+    <div class="form-field"><label class="form-lbl">Импорт CSV (фронт;бэк;колода)</label><input class="form-inp" id="csvFileInput" type="file" accept=".csv,.txt"></div>
+    <div class="sheet-row">
+      <button class="edit-btn edit-btn-cancel" onclick="closeModal('importExportModal')" style="flex:1;">Закрыть</button>
+      <button class="edit-btn edit-btn-save" onclick="importCSV()" style="flex:1;">Импорт</button>
+      <button class="edit-btn edit-btn-save" onclick="exportCSV()" style="flex:1;background:var(--s2);border:1px solid var(--border);color:var(--text2);">Экспорт</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ════════════════════════════════════════════════════════════
+// CONFIG
+// ════════════════════════════════════════════════════════════
+const FB_URL = 'https://family-budget-32149-default-rtdb.europe-west1.firebasedatabase.app';
+const APP_VER = '1.0';
+const STORE_PFX = 'memorydeck_';
+
+const DECK_COLORS = ['#00d4aa','#0099ff','#a855f7','#ff9f43','#ff4757','#fbbf24','#34d399','#60a5fa','#f472b6'];
+const DECK_EMOJIS = ['📚','🧠','💡','🌍','🔬','📐','🎨','🎵','💪','🏛️','✈️','🍕','💻','🌿','⚽','🎭','📝','🔤','🧪','💰'];
+
+// ════════════════════════════════════════════════════════════
+// STATE
+// ════════════════════════════════════════════════════════════
+let db = null, fbRef = null, fbConnected = false;
+let _allAccounts = {};
+let _session = { accId:null, userId:null, userData:null, accData:null };
+let _pendingAcc = null, _pendingUser = null;
+
+let decks = {};      // { deckId: {name, emoji, color, createdAt} }
+let cards = {};      // { cardId: {front, back, deckId, tags, sm2:{interval, ease, due, state, reps}} }
+let cfg = { newPerDay: 20, maxReviews: 200, firstInterval: 1 };
+let studyLog = {};   // { 'YYYY-MM-DD': count }
+
+let _reviewQueue = [];
+let _reviewIdx = 0;
+let _reviewDeckId = null;
+let _reviewFlipped = false;
+let _reviewStats = { again:0, hard:0, good:0, easy:0 };
+
+let _editDeckId = null;
+let _editCardId = null;
+let _selDeckColor = DECK_COLORS[0];
+let _selDeckEmoji = '📚';
+let _detailDeckId = null;
+
+// ════════════════════════════════════════════════════════════
+// SM-2 ALGORITHM
+// ════════════════════════════════════════════════════════════
+function sm2_init(){
+  return { interval:0, ease:2.5, due: today(), state:'new', reps:0 };
+}
+
+function sm2_grade(card, grade){
+  // grade: 0=again, 1=hard, 2=good, 3=easy
+  const sm = card.sm2 ? {...card.sm2} : sm2_init();
+  const EF_MAP = [0, 0, 0.1, 0.25]; // delta for ease factor
+  const d = new Date();
+  d.setHours(0,0,0,0);
+
+  if(grade === 0){ // Again
+    sm.interval = 0;
+    sm.reps = 0;
+    sm.state = 'learning';
+    sm.ease = Math.max(1.3, sm.ease - 0.2);
+    sm.due = today(); // show again today
+  } else {
+    sm.ease = Math.max(1.3, sm.ease + (EF_MAP[grade] - (5-grade*1.5)*0.02));
+    if(sm.reps === 0 || sm.state === 'learning'){
+      if(grade === 1) { sm.interval = 1; }
+      else if(grade === 2) { sm.interval = cfg.firstInterval || 1; }
+      else { sm.interval = 4; }
+    } else if(sm.reps === 1){
+      sm.interval = 6;
+    } else {
+      sm.interval = Math.max(1, Math.round(sm.interval * sm.ease));
+      if(grade === 1) sm.interval = Math.max(1, Math.round(sm.interval * 0.5));
+    }
+    sm.reps++;
+    sm.state = sm.interval >= 21 ? 'review' : 'learning';
+    sm.due = addDays(today(), sm.interval);
+  }
+  return sm;
+}
+
+function today(){ return new Date().toISOString().slice(0,10); }
+function addDays(dateStr, n){
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + n);
+  return d.toISOString().slice(0,10);
+}
+function isDue(sm){
+  if(!sm || sm.state === 'new') return true;
+  return sm.due <= today();
+}
+
+// ════════════════════════════════════════════════════════════
+// FIREBASE
+// ════════════════════════════════════════════════════════════
+function initFirebase(){
+  try{ firebase.apps.forEach(a=>a.delete()); }catch(e){}
+  firebase.initializeApp({databaseURL: FB_URL});
+  db = firebase.database();
+
+  db.ref('.info/connected').on('value', snap=>{
+    fbConnected = !!snap.val();
+    const bar = document.getElementById('syncBar');
+    const dot = document.getElementById('syncDot');
+    const txt = document.getElementById('syncTxt');
+    if(fbConnected){
+      bar.className = 'sync-bar online';
+      dot.className = 'sync-dot';
+      txt.textContent = 'Синхронизировано';
+    } else {
+      bar.className = 'sync-bar offline';
+      dot.className = 'sync-dot';
+      txt.textContent = 'Нет соединения';
+    }
+  });
+}
+
+function loadAccounts(cb){
+  db.ref('memorydeck_meta').once('value').then(snap=>{
+    _allAccounts = {};
+    const data = snap.val() || {};
+    Object.entries(data).forEach(([id, d])=>{
+      if(id==='_system') return;
+      _allAccounts[id] = { name: d.name||id, color: d.color||DECK_COLORS[0], users: d.users||{} };
+    });
+    if(cb) cb();
+  });
+}
+
+function startApp(accId, userId, accData, userData){
+  _session = { accId, userId, userData, accData };
+
+  // Save session
+  try{ sessionStorage.setItem('mdsess_acc', accId); sessionStorage.setItem('mdsess_user', userId); }catch(e){}
+  try{ localStorage.setItem(STORE_PFX+accId+'_'+userId+'_sess', String(Date.now())); }catch(e){}
+  try{ localStorage.setItem(STORE_PFX+accId+'_'+userId+'_ver', APP_VER); }catch(e){}
+
+  // Update UI
+  const av = document.getElementById('userAv');
+  av.style.background = userData.color || DECK_COLORS[0];
+  av.textContent = (userData.name||'?')[0].toUpperCase();
+  document.getElementById('settingsAccName').textContent = accData.name + ' · ' + (userData.role||'');
+
+  // Show user card in settings
+  const uc = document.getElementById('userCard');
+  uc.innerHTML = `
+    <div style="width:48px;height:48px;border-radius:14px;background:${userData.color||DECK_COLORS[0]};display:flex;align-items:center;justify-content:center;font-weight:700;font-size:20px;color:#000;">${(userData.name||'?')[0].toUpperCase()}</div>
+    <div>
+      <div style="font-size:16px;font-weight:700;">${userData.name}</div>
+      <div style="font-size:12px;color:var(--text3);">${accData.name}</div>
+    </div>`;
+
+  // Subscribe to data
+  fbRef = db.ref('memorydeck/'+accId+'/users/'+userId);
+  fbRef.on('value', snap=>{
+    const data = snap.val() || {};
+    decks = data.decks || {};
+    cards = data.cards || {};
+    cfg = Object.assign({newPerDay:20, maxReviews:200, firstInterval:1}, data.cfg||{});
+    studyLog = data.studyLog || {};
+
+    // Load study settings UI
+    document.getElementById('cfgNewPerDay').value = cfg.newPerDay;
+    document.getElementById('cfgMaxReviews').value = cfg.maxReviews;
+    document.getElementById('cfgFirstInterval').value = cfg.firstInterval;
+
+    renderAll();
+  });
+
+  document.getElementById('lockScreen').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('syncBar').className = 'sync-bar ' + (fbConnected ? 'online' : 'offline');
+}
+
+function saveData(path, value){
+  if(!_session.accId) return;
+  db.ref('memorydeck/'+_session.accId+'/users/'+_session.userId+'/'+path).set(value);
+}
+
+// ════════════════════════════════════════════════════════════
+// LOGIN FLOW
+// ════════════════════════════════════════════════════════════
+function goStep(n){
+  [1,2,3].forEach(i=>{
+    document.getElementById('step'+i).className = 'lock-step' + (i===n?' active':'');
+    document.getElementById('dot'+(i-1)).className = 'step-dot' + (i===n?' active':'');
+  });
+  if(n===1) { _pendingAcc=null; _pendingUser=null; }
+  if(n===3) { document.getElementById('passInput').value=''; document.getElementById('passErr').textContent=''; setTimeout(()=>document.getElementById('passInput').focus(), 300); }
+}
+
+function renderLockAccounts(){
+  const list = document.getElementById('accList');
+  const accs = Object.entries(_allAccounts);
+  if(!accs.length){ list.innerHTML = '<div style="color:var(--text3);font-size:13px;padding:20px;text-align:center;">Нет аккаунтов</div>'; return; }
+  list.innerHTML = accs.map(([accId, acc])=>`
+    <div class="acc-item fade-up" onclick="selectAcc('${accId}')">
+      <div class="acc-item-av" style="background:${acc.color}">${(acc.name||'?')[0].toUpperCase()}</div>
+      <div>
+        <div class="acc-item-name">${acc.name}</div>
+        <div class="acc-item-sub">${Object.keys(acc.users||{}).length} пользователей</div>
+      </div>
+      <div class="acc-item-arr">›</div>
+    </div>
+  `).join('');
+}
+
+function selectAcc(accId){
+  _pendingAcc = { accId, accData: _allAccounts[accId] };
+  const users = Object.entries(_allAccounts[accId].users||{});
+  const ul = document.getElementById('userList');
+  ul.innerHTML = users.map(([uid, u])=>`
+    <div class="user-item fade-up" onclick="selectUser('${accId}','${uid}')">
+      <div class="user-av" style="background:${u.color||DECK_COLORS[0]}">${(u.name||'?')[0].toUpperCase()}</div>
+      <div>
+        <div class="user-name">${u.name}</div>
+        <div class="user-role">${{admin:'Администратор',editor:'Редактор',viewer:'Читатель'}[u.role]||u.role}</div>
+      </div>
+    </div>
+  `).join('');
+  goStep(2);
+}
+
+function selectUser(accId, userId){
+  const u = _allAccounts[accId].users[userId];
+  _pendingUser = { userId, userData: u };
+  const pi = document.getElementById('passUserInfo');
+  pi.innerHTML = `
+    <div class="pass-av" style="background:${u.color||DECK_COLORS[0]}">${(u.name||'?')[0].toUpperCase()}</div>
+    <div><div class="pass-name">${u.name}</div><div class="pass-role">${_allAccounts[accId].name}</div></div>`;
+  goStep(3);
+}
+
+function doLogin(){
+  if(!_pendingAcc || !_pendingUser) return;
+  const { accId, accData } = _pendingAcc;
+  const { userId, userData } = _pendingUser;
+  const entered = document.getElementById('passInput').value;
+
+  // Check local override password first
+  let storedPass = userData.password;
+  try{ const lp = localStorage.getItem(STORE_PFX+accId+'_'+userId+'_pass'); if(lp) storedPass=lp; }catch(e){}
+
+  if(entered !== storedPass){
+    document.getElementById('passErr').textContent = '❌ Неверный пароль';
+    document.getElementById('passInput').style.borderColor = 'var(--red)';
+    setTimeout(()=>{ document.getElementById('passErr').textContent=''; document.getElementById('passInput').style.borderColor=''; }, 2500);
+    return;
+  }
+  startApp(accId, userId, accData, userData);
+}
+
+document.getElementById('passInput').addEventListener('keydown', e=>{ if(e.key==='Enter') doLogin(); });
+
+function doLogout(){
+  if(!confirm('Выйти из аккаунта?')) return;
+  try{ sessionStorage.removeItem('mdsess_acc'); sessionStorage.removeItem('mdsess_user'); }catch(e){}
+  if(fbRef){ try{ fbRef.off(); }catch(e){} fbRef=null; }
+  _session = { accId:null, userId:null, userData:null, accData:null };
+  decks={}; cards={}; cfg={};
+  document.getElementById('app').style.display = 'none';
+  document.getElementById('lockScreen').style.display = 'flex';
+  goStep(1);
+  loadAccounts(renderLockAccounts);
+}
+
+// Check session on load
+function checkSession(){
+  initFirebase();
+  const syncBar = document.getElementById('syncBar');
+  syncBar.className = 'sync-bar syncing';
+  syncBar.querySelector('#syncTxt').textContent = 'Подключение...';
+  syncBar.querySelector('#syncDot').classList.add('pulse');
+
+  loadAccounts(()=>{
+    renderLockAccounts();
+    // Try restoring session
+    const savedAcc = (()=>{try{return sessionStorage.getItem('mdsess_acc');}catch(e){return null;}})();
+    const savedUser = (()=>{try{return sessionStorage.getItem('mdsess_user');}catch(e){return null;}})();
+    if(savedAcc && savedUser){
+      const sessTs = (()=>{try{return localStorage.getItem(STORE_PFX+savedAcc+'_'+savedUser+'_sess');}catch(e){return null;}})();
+      const sessVer = (()=>{try{return localStorage.getItem(STORE_PFX+savedAcc+'_'+savedUser+'_ver');}catch(e){return null;}})();
+      if(sessVer===APP_VER && sessTs && Date.now() - parseInt(sessTs) < 24*60*60*1000){
+        const accData = _allAccounts[savedAcc];
+        if(accData && accData.users && accData.users[savedUser]){
+          startApp(savedAcc, savedUser, accData, accData.users[savedUser]);
+          return;
+        }
+      }
+    }
+    document.getElementById('lockScreen').style.display = 'flex';
+  });
+}
+
+// ════════════════════════════════════════════════════════════
+// RENDER ALL
+// ════════════════════════════════════════════════════════════
+function renderAll(){
+  renderHomeView();
+  renderDecksView();
+  renderStatsView();
+  updateNavBadge();
+}
+
+function getDueCounts(){
+  const todayStr = today();
+  let newCount=0, reviewCount=0, learningCount=0;
+  const todayNewShown = (()=>{
+    try{ return parseInt(localStorage.getItem(STORE_PFX+'new_today_'+todayStr)||'0'); }catch(e){ return 0; }
+  })();
+
+  Object.values(cards).forEach(c=>{
+    const sm = c.sm2;
+    if(!sm || sm.state==='new'){ newCount++; }
+    else if(sm.due <= todayStr){
+      if(sm.state==='learning') learningCount++;
+      else reviewCount++;
+    }
+  });
+  return { newCount: Math.max(0, Math.min(newCount, cfg.newPerDay - todayNewShown)), reviewCount, learningCount };
+}
+
+function renderHomeView(){
+  const h = new Date().getHours();
+  const greet = h < 12 ? 'Доброе утро' : h < 18 ? 'Добрый день' : 'Добрый вечер';
+  document.getElementById('heroGreeting').textContent = greet + ', ' + (_session.userData?.name||'') + '!';
+
+  const { newCount, reviewCount, learningCount } = getDueCounts();
+  const total = newCount + reviewCount + learningCount;
+  document.getElementById('countNew').textContent = newCount;
+  document.getElementById('countReview').textContent = reviewCount;
+  document.getElementById('countLearning').textContent = learningCount;
+  document.getElementById('heroTitle').textContent = total > 0
+    ? `На сегодня: ${total} карточек`
+    : '🎉 Всё повторено!';
+
+  const btn = document.getElementById('startReviewBtn');
+  btn.disabled = total === 0;
+  btn.textContent = total > 0 ? `▶ Начать повторение (${total})` : '✅ Всё сделано на сегодня';
+
+  // Mini deck list on home
+  const dl = document.getElementById('homeDeckList');
+  const deckEntries = Object.entries(decks).slice(0,4);
+  if(!deckEntries.length){
+    dl.innerHTML = `<div style="padding:20px 16px;color:var(--text3);font-size:13px;text-align:center;">
+      Нет колод — <span style="color:var(--accent);cursor:pointer;" onclick="switchView('decks')">создайте первую</span>
+    </div>`;
+    return;
+  }
+  dl.innerHTML = deckEntries.map(([deckId,deck])=>buildDeckCard(deckId,deck,true)).join('');
+}
+
+function buildDeckCard(deckId, deck, compact=false){
+  const deckCards = Object.entries(cards).filter(([,c])=>c.deckId===deckId);
+  const due = deckCards.filter(([,c])=>isDue(c.sm2)).length;
+  const total = deckCards.length;
+  const newC = deckCards.filter(([,c])=>!c.sm2||c.sm2.state==='new').length;
+  return `
+  <div class="deck-card fade-up" onclick="openDeckDetail('${deckId}')">
+    <div class="deck-icon" style="background:${deck.color||DECK_COLORS[0]}22;">${deck.emoji||'📚'}</div>
+    <div class="deck-info">
+      <div class="deck-name">${deck.name||'Без названия'}</div>
+      <div class="deck-meta">
+        <span class="deck-cnt"><span class="deck-cnt-dot" style="background:#60a5fa;"></span>${newC} новых</span>
+        <span>${total} карточек</span>
+      </div>
+    </div>
+    ${due>0?`<div class="deck-due">${due} к повторению</div>`:'<div style="color:var(--accent);font-size:12px;font-weight:600;">✓</div>'}
+    <div class="deck-actions">
+      <div class="deck-action-btn" onclick="event.stopPropagation();openEditDeck('${deckId}')">✏️</div>
+    </div>
+  </div>`;
+}
+
+function renderDecksView(){
+  const dl = document.getElementById('deckListView');
+  const entries = Object.entries(decks);
+  if(!entries.length){
+    dl.innerHTML = `<div class="empty" style="padding:48px 20px;">
+      <div style="font-size:48px;margin-bottom:12px;">📭</div>
+      <div style="font-size:15px;font-weight:600;margin-bottom:6px;">Нет колод</div>
+      <div style="font-size:13px;color:var(--text3);">Создайте первую колоду и добавьте карточки</div>
+    </div>`;
+    return;
+  }
+  dl.innerHTML = entries.map(([deckId,deck])=>buildDeckCard(deckId,deck)).join('');
+}
+
+function renderStatsView(){
+  const todayStr = today();
+  const allCards = Object.values(cards);
+  const total = allCards.length;
+  const mature = allCards.filter(c=>c.sm2&&c.sm2.state==='review'&&c.sm2.interval>=21).length;
+  const young = allCards.filter(c=>c.sm2&&c.sm2.state==='learning').length;
+  const due = allCards.filter(c=>isDue(c.sm2)).length;
+
+  let streak = 0;
+  let d = new Date();
+  while(true){ const ds=d.toISOString().slice(0,10); if(studyLog[ds]){ streak++; d.setDate(d.getDate()-1); }else break; }
+
+  document.getElementById('statsGrid').innerHTML = `
+    <div class="stat-tile"><div class="tile-n" style="color:#60a5fa;">${total}</div><div class="tile-l">Всего карточек</div></div>
+    <div class="stat-tile"><div class="tile-n" style="color:var(--accent);">${mature}</div><div class="tile-l">Зрелых</div></div>
+    <div class="stat-tile"><div class="tile-n" style="color:var(--orange);">${due}</div><div class="tile-l">Требуют повтора</div></div>
+    <div class="stat-tile"><div class="tile-n" style="color:var(--purple);">${streak}</div><div class="tile-l">Дней подряд</div></div>
+    <div class="stat-tile"><div class="tile-n">${Object.keys(decks).length}</div><div class="tile-l">Колод</div></div>
+    <div class="stat-tile"><div class="tile-n" style="color:var(--accent2);">${studyLog[todayStr]||0}</div><div class="tile-l">Сегодня повторено</div></div>
+  `;
+
+  // Heatmap 90 days
+  const hm = document.getElementById('heatmapGrid');
+  const cells = [];
+  for(let i=89;i>=0;i--){
+    const d2 = new Date(); d2.setDate(d2.getDate()-i);
+    const ds = d2.toISOString().slice(0,10);
+    const cnt = studyLog[ds]||0;
+    const lv = cnt===0?'':cnt<10?'lv1':cnt<30?'lv2':cnt<60?'lv3':'lv4';
+    cells.push(`<div class="hm-cell ${lv}" title="${ds}: ${cnt}"></div>`);
+  }
+  hm.innerHTML = cells.join('');
+
+  // Per-deck stats
+  const dsl = document.getElementById('deckStatsList');
+  dsl.innerHTML = Object.entries(decks).map(([deckId,deck])=>{
+    const dc = Object.values(cards).filter(c=>c.deckId===deckId);
+    const m = dc.filter(c=>c.sm2&&c.sm2.interval>=21).length;
+    const pct = dc.length ? Math.round(m/dc.length*100) : 0;
+    return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+      <div style="font-size:18px;">${deck.emoji||'📚'}</div>
+      <div style="flex:1;">
+        <div style="font-size:13px;font-weight:600;">${deck.name}</div>
+        <div style="height:4px;background:var(--s2);border-radius:2px;margin-top:5px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${deck.color||DECK_COLORS[0]};border-radius:2px;"></div>
+        </div>
+      </div>
+      <div style="font-size:11px;color:var(--text3);">${m}/${dc.length}</div>
+    </div>`;
+  }).join('');
+}
+
+function updateNavBadge(){
+  const { newCount, reviewCount, learningCount } = getDueCounts();
+  const total = newCount + reviewCount + learningCount;
+  const badge = document.getElementById('navBadge');
+  if(total > 0){ badge.style.display=''; badge.textContent = total>99?'99+':total; }
+  else{ badge.style.display='none'; }
+}
+
+// ════════════════════════════════════════════════════════════
+// REVIEW LOGIC
+// ════════════════════════════════════════════════════════════
+function buildQueue(deckIdFilter=null){
+  const todayStr = today();
+  const key = STORE_PFX+'new_today_'+todayStr;
+  let newShown = (()=>{ try{return parseInt(localStorage.getItem(key)||'0');}catch(e){return 0;} })();
+
+  let newCards = [], reviewCards = [], learnCards = [];
+  Object.entries(cards).forEach(([cardId, c])=>{
+    if(deckIdFilter && c.deckId !== deckIdFilter) return;
+    const sm = c.sm2;
+    if(!sm || sm.state==='new'){ newCards.push({cardId,...c}); }
+    else if(sm.due <= todayStr){
+      if(sm.state==='learning') learnCards.push({cardId,...c});
+      else reviewCards.push({cardId,...c});
+    }
+  });
+
+  // Limit new
+  newCards = shuffle(newCards).slice(0, Math.max(0, cfg.newPerDay - newShown));
+  reviewCards = shuffle(reviewCards).slice(0, cfg.maxReviews);
+  learnCards = shuffle(learnCards);
+
+  return [...learnCards, ...reviewCards, ...newCards];
+}
+
+function shuffle(arr){ return arr.sort(()=>Math.random()-.5); }
+
+function startReview(deckId=null){
+  _reviewDeckId = deckId;
+  _reviewQueue = buildQueue(deckId);
+  if(!_reviewQueue.length){ showToast('✅ Нечего повторять!'); return; }
+  _reviewIdx = 0;
+  _reviewFlipped = false;
+  _reviewStats = { again:0, hard:0, good:0, easy:0 };
+  document.getElementById('reviewScreen').classList.add('open');
+  showReviewCard();
+}
+
+function startReviewDeck(){
+  closeReviewNothing();
+  startReview(_detailDeckId);
+}
+
+function closeReviewNothing(){}
+
+function showReviewCard(){
+  if(_reviewIdx >= _reviewQueue.length){ showDoneScreen(); return; }
+  const card = _reviewQueue[_reviewIdx];
+  _reviewFlipped = false;
+
+  const total = _reviewQueue.length;
+  const done = _reviewIdx;
+  document.getElementById('reviewProgress').style.width = (done/total*100)+'%';
+  document.getElementById('reviewCounter').textContent = done+'/'+total;
+
+  const deck = decks[card.deckId] || {};
+  const stateLabel = (!card.sm2||card.sm2.state==='new') ? '🆕 Новая' :
+    card.sm2.state==='learning' ? '📖 Учится' : '🔁 Повторение';
+
+  const intervalStr = card.sm2 && card.sm2.interval > 0 ? `<br><span style="font-size:10px;color:var(--text3);margin-top:4px;">Текущий интервал: ${card.sm2.interval}д · EF: ${(card.sm2.ease||2.5).toFixed(1)}</span>` : '';
+
+  const html = `
+  <div class="card-wrap" onclick="flipCard()">
+    <div class="card-flip card-in" id="cardFlip">
+      <div class="card-face">
+        <div class="card-type-badge">${stateLabel}</div>
+        <div class="card-deck-badge">${deck.emoji||'📚'} ${deck.name||''}</div>
+        <div class="card-content">${escHtml(card.front)}</div>
+        <div class="card-hint">Нажмите, чтобы показать ответ</div>
+        <div class="flip-hint">👆 Нажмите на карточку</div>
+      </div>
+      <div class="card-face card-back">
+        <div class="card-type-badge">${stateLabel}</div>
+        <div class="card-deck-badge">${deck.emoji||'📚'} ${deck.name||''}</div>
+        <div class="card-content">${escHtml(card.back)}${intervalStr}</div>
+      </div>
+    </div>
+  </div>
+  <button class="show-answer-btn" id="showAnswerBtn" onclick="flipCard()">Показать ответ</button>
+  <div class="grade-row" id="gradeRow" style="display:none;">
+    <button class="grade-btn grade-again" onclick="gradeCard(0)"><span>🔴</span><span class="grade-lbl">Снова<br>${nextInterval(card,0)}</span></button>
+    <button class="grade-btn grade-hard" onclick="gradeCard(1)"><span>🟠</span><span class="grade-lbl">Трудно<br>${nextInterval(card,1)}</span></button>
+    <button class="grade-btn grade-good" onclick="gradeCard(2)"><span>🟢</span><span class="grade-lbl">Хорошо<br>${nextInterval(card,2)}</span></button>
+    <button class="grade-btn grade-easy" onclick="gradeCard(3)"><span>🔵</span><span class="grade-lbl">Легко<br>${nextInterval(card,3)}</span></button>
+  </div>`;
+  document.getElementById('cardArea').innerHTML = html;
+}
+
+function nextInterval(card, grade){
+  const sm = sm2_grade(card, grade);
+  if(grade===0) return 'сейчас';
+  if(sm.interval === 0) return 'сейчас';
+  if(sm.interval === 1) return '1д';
+  if(sm.interval < 30) return sm.interval+'д';
+  if(sm.interval < 365) return Math.round(sm.interval/7)+'н';
+  return Math.round(sm.interval/30)+'м';
+}
+
+function flipCard(){
+  _reviewFlipped = !_reviewFlipped;
+  const flip = document.getElementById('cardFlip');
+  if(_reviewFlipped){
+    flip.classList.add('flipped');
+    document.getElementById('showAnswerBtn').style.display = 'none';
+    document.getElementById('gradeRow').style.display = 'flex';
+  } else {
+    flip.classList.remove('flipped');
+    document.getElementById('showAnswerBtn').style.display = '';
+    document.getElementById('gradeRow').style.display = 'none';
+  }
+}
+
+function gradeCard(grade){
+  const card = _reviewQueue[_reviewIdx];
+  const newSm2 = sm2_grade(card, grade);
+
+  // Save SM2 to Firebase
+  saveData('cards/'+card.cardId+'/sm2', newSm2);
+
+  // Track stats
+  const keys = ['again','hard','good','easy'];
+  _reviewStats[keys[grade]]++;
+
+  // If "again" put back in queue (later)
+  if(grade === 0){
+    const reinsertAt = Math.min(_reviewIdx + 5, _reviewQueue.length);
+    _reviewQueue.splice(reinsertAt, 0, {...card, sm2: newSm2});
+  }
+
+  // Track study log
+  const todayStr = today();
+  const currentCount = (studyLog[todayStr]||0) + 1;
+  saveData('studyLog/'+todayStr, currentCount);
+  studyLog[todayStr] = currentCount;
+
+  // Track new cards shown today
+  if(!card.sm2 || card.sm2.state==='new'){
+    const key = STORE_PFX+'new_today_'+todayStr;
+    try{ localStorage.setItem(key, String((parseInt(localStorage.getItem(key)||'0')+1))); }catch(e){}
+  }
+
+  _reviewIdx++;
+  setTimeout(showReviewCard, 100);
+}
+
+function showDoneScreen(){
+  const total = _reviewStats.again + _reviewStats.hard + _reviewStats.good + _reviewStats.easy;
+  const correct = _reviewStats.good + _reviewStats.easy;
+  const pct = total ? Math.round(correct/total*100) : 0;
+  document.getElementById('cardArea').innerHTML = `
+  <div class="review-done">
+    <div class="done-icon">🎉</div>
+    <div class="done-title">Сессия завершена!</div>
+    <div class="done-sub">Рассмотрено ${total} карточек · ${pct}% правильно</div>
+    <div class="done-stats">
+      <div class="done-stat"><div class="done-stat-n" style="color:var(--red);">${_reviewStats.again}</div><div class="done-stat-l">Снова</div></div>
+      <div class="done-stat"><div class="done-stat-n" style="color:var(--accent2);">${_reviewStats.good}</div><div class="done-stat-l">Хорошо</div></div>
+      <div class="done-stat"><div class="done-stat-n" style="color:var(--accent);">${_reviewStats.easy}</div><div class="done-stat-l">Легко</div></div>
+    </div>
+    <button class="pass-btn" onclick="closeReview()" style="max-width:240px;">Завершить →</button>
+  </div>`;
+  document.getElementById('reviewProgress').style.width = '100%';
+  document.getElementById('reviewCounter').textContent = '✓';
+  renderAll();
+}
+
+function closeReview(){
+  document.getElementById('reviewScreen').classList.remove('open');
+  renderAll();
+}
+
+// ════════════════════════════════════════════════════════════
+// DECK DETAIL
+// ════════════════════════════════════════════════════════════
+function openDeckDetail(deckId){
+  _detailDeckId = deckId;
+  const deck = decks[deckId];
+  const deckCards = Object.entries(cards).filter(([,c])=>c.deckId===deckId);
+  const due = deckCards.filter(([,c])=>isDue(c.sm2)).length;
+
+  document.getElementById('deckDetailTitle').textContent = (deck.emoji||'📚') + ' ' + (deck.name||'Колода');
+  const meta = document.getElementById('deckDetailMeta');
+  meta.innerHTML = `<div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:8px 14px;font-size:12px;"><span style="color:var(--text3);">Всего:</span> <b>${deckCards.length}</b></div>
+    <div style="background:var(--s1);border:1px solid var(--border);border-radius:10px;padding:8px 14px;font-size:12px;"><span style="color:var(--text3);">К повторению:</span> <b style="color:var(--orange);">${due}</b></div>
+  </div>`;
+
+  const btn = document.getElementById('deckReviewBtn');
+  btn.disabled = due === 0;
+  btn.textContent = due > 0 ? `▶ Повторить (${due})` : '✅ Всё повторено';
+
+  const list = document.getElementById('deckCardList');
+  if(!deckCards.length){
+    list.innerHTML = `<div style="padding:24px;text-align:center;color:var(--text3);font-size:13px;">Нет карточек — добавьте первую</div>`;
+  } else {
+    list.innerHTML = deckCards.map(([cardId, c])=>{
+      const state = !c.sm2||c.sm2.state==='new' ? 'new' : c.sm2.state==='learning' ? 'learning' : isDue(c.sm2) ? 'overdue' : 'review';
+      const stateLabel = {new:'🆕 Новая',learning:'📖 Учится',overdue:'⚠️ К повтору',review:'✅ Изучена'}[state];
+      const stateCls = {new:'state-new',learning:'state-learning',overdue:'state-overdue',review:'state-review'}[state];
+      return `<div class="card-list-item">
+        <div style="flex:1;min-width:0;">
+          <div class="cli-front">${escHtml(c.front)}</div>
+          <div class="cli-back">${escHtml(c.back)}</div>
+        </div>
+        <span class="cli-state ${stateCls}">${stateLabel}</span>
+        <div style="display:flex;gap:5px;margin-left:8px;">
+          <div class="deck-action-btn" onclick="openEditCard('${cardId}')">✏️</div>
+          <div class="deck-action-btn" onclick="deleteCard('${cardId}')" style="color:var(--red);">🗑</div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+
+  document.getElementById('deckDetailScreen').classList.add('open');
+}
+
+function closeDeckDetail(){ document.getElementById('deckDetailScreen').classList.remove('open'); }
+
+// ════════════════════════════════════════════════════════════
+// DECK CRUD
+// ════════════════════════════════════════════════════════════
+function openCreateDeck(){
+  _editDeckId = null;
+  document.getElementById('deckName').value = '';
+  _selDeckColor = DECK_COLORS[0];
+  _selDeckEmoji = '📚';
+  renderDeckEmojiPicker();
+  renderDeckColorPicker();
+  document.getElementById('deckEditorTitle').textContent = 'Новая колода';
+  openModal('deckEditorModal');
+}
+function openEditDeck(deckId){
+  event.stopPropagation();
+  _editDeckId = deckId;
+  const deck = decks[deckId];
+  document.getElementById('deckName').value = deck.name||'';
+  _selDeckColor = deck.color||DECK_COLORS[0];
+  _selDeckEmoji = deck.emoji||'📚';
+  renderDeckEmojiPicker();
+  renderDeckColorPicker();
+  document.getElementById('deckEditorTitle').textContent = 'Редактировать колоду';
+  openModal('deckEditorModal');
+}
+function renderDeckEmojiPicker(){
+  const el = document.getElementById('deckEmojiPicker');
+  el.innerHTML = DECK_EMOJIS.map(e=>`
+    <div onclick="selDeckEmoji('${e}')" style="width:34px;height:34px;border-radius:9px;background:${e===_selDeckEmoji?'var(--s2)':'transparent'};border:${e===_selDeckEmoji?'1.5px solid var(--accent)':'1.5px solid var(--border)'};display:flex;align-items:center;justify-content:center;font-size:18px;cursor:pointer;transition:.15s;">${e}</div>
+  `).join('');
+}
+function selDeckEmoji(e){ _selDeckEmoji=e; renderDeckEmojiPicker(); }
+function renderDeckColorPicker(){
+  const el = document.getElementById('deckColorPicker');
+  el.innerHTML = DECK_COLORS.map(c=>`
+    <div onclick="selDeckColor('${c}')" style="width:26px;height:26px;border-radius:7px;background:${c};cursor:pointer;border:2px solid ${c===_selDeckColor?'#fff':'transparent'};transform:${c===_selDeckColor?'scale(1.15)':'scale(1)'};transition:.15s;"></div>
+  `).join('');
+}
+function selDeckColor(c){ _selDeckColor=c; renderDeckColorPicker(); }
+
+function saveDeck(){
+  const name = document.getElementById('deckName').value.trim();
+  if(!name){ showToast('❌ Введите название колоды'); return; }
+  const data = { name, emoji: _selDeckEmoji, color: _selDeckColor, createdAt: _editDeckId ? (decks[_editDeckId]?.createdAt||Date.now()) : Date.now() };
+  const id = _editDeckId || 'deck_' + Date.now();
+  saveData('decks/'+id, data);
+  showToast(_editDeckId ? '✅ Колода обновлена' : '✅ Колода создана');
+  closeModal('deckEditorModal');
+}
+
+function deleteDeck(deckId){
+  if(!confirm(`Удалить колоду "${decks[deckId]?.name}"?\nВсе карточки колоды тоже удалятся!`)) return;
+  // Delete all cards in deck
+  Object.entries(cards).forEach(([cardId, c])=>{
+    if(c.deckId===deckId) db.ref('memorydeck/'+_session.accId+'/users/'+_session.userId+'/cards/'+cardId).remove();
+  });
+  db.ref('memorydeck/'+_session.accId+'/users/'+_session.userId+'/decks/'+deckId).remove();
+  showToast('🗑 Колода удалена');
+}
+
+// ════════════════════════════════════════════════════════════
+// CARD CRUD
+// ════════════════════════════════════════════════════════════
+function populateDeckSelect(selected){
+  const sel = document.getElementById('cardDeckSelect');
+  sel.innerHTML = Object.entries(decks).map(([id,d])=>`<option value="${id}" ${id===selected?'selected':''}>${d.emoji||'📚'} ${d.name}</option>`).join('');
+}
+function openCreateCard(){
+  _editCardId = null;
+  document.getElementById('cardFront').value = '';
+  document.getElementById('cardBack').value = '';
+  document.getElementById('cardTags').value = '';
+  document.getElementById('cardEditorTitle').textContent = 'Новая карточка';
+  populateDeckSelect(_detailDeckId);
+  document.getElementById('cardEditorScreen').classList.add('open');
+}
+function openEditCard(cardId){
+  _editCardId = cardId;
+  const c = cards[cardId];
+  document.getElementById('cardFront').value = c.front||'';
+  document.getElementById('cardBack').value = c.back||'';
+  document.getElementById('cardTags').value = (c.tags||[]).join(', ');
+  document.getElementById('cardEditorTitle').textContent = 'Редактировать карточку';
+  populateDeckSelect(c.deckId);
+  document.getElementById('cardEditorScreen').classList.add('open');
+}
+function closeCardEditor(){ document.getElementById('cardEditorScreen').classList.remove('open'); }
+
+function saveCard(){
+  const front = document.getElementById('cardFront').value.trim();
+  const back = document.getElementById('cardBack').value.trim();
+  const deckId = document.getElementById('cardDeckSelect').value;
+  const tags = document.getElementById('cardTags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  if(!front){ showToast('❌ Введите лицевую сторону'); return; }
+  if(!back){ showToast('❌ Введите обратную сторону'); return; }
+  if(!deckId){ showToast('❌ Выберите колоду'); return; }
+
+  const id = _editCardId || 'card_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+  const sm2 = _editCardId ? cards[_editCardId]?.sm2 : null; // preserve progress
+  const data = { front, back, deckId, tags, sm2: sm2||null, createdAt: _editCardId ? (cards[_editCardId]?.createdAt||Date.now()) : Date.now() };
+  saveData('cards/'+id, data);
+  showToast(_editCardId ? '✅ Карточка обновлена' : '✅ Карточка добавлена');
+  closeCardEditor();
+  if(_detailDeckId) openDeckDetail(_detailDeckId);
+}
+
+function deleteCard(cardId){
+  if(!confirm('Удалить карточку?')) return;
+  db.ref('memorydeck/'+_session.accId+'/users/'+_session.userId+'/cards/'+cardId).remove();
+  showToast('🗑 Карточка удалена');
+  if(_detailDeckId) setTimeout(()=>openDeckDetail(_detailDeckId), 300);
+}
+
+// ════════════════════════════════════════════════════════════
+// IMPORT / EXPORT
+// ════════════════════════════════════════════════════════════
+function importCSV(){
+  const fileInput = document.getElementById('csvFileInput');
+  const file = fileInput.files[0];
+  if(!file){ showToast('❌ Выберите файл'); return; }
+  const reader = new FileReader();
+  reader.onload = e=>{
+    const lines = e.target.result.split('\n').filter(l=>l.trim());
+    let count = 0;
+    const updates = {};
+    lines.forEach(line=>{
+      const parts = line.split(';');
+      if(parts.length < 2) return;
+      const front = parts[0].trim();
+      const back = parts[1].trim();
+      if(!front || !back) return;
+      const deckName = parts[2]?.trim() || 'Импорт';
+      // Find or auto-create deck
+      let deckId = Object.entries(decks).find(([,d])=>d.name===deckName)?.[0];
+      if(!deckId){
+        deckId = 'deck_import_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+        updates['decks/'+deckId] = { name: deckName, emoji: '📥', color: DECK_COLORS[4], createdAt: Date.now() };
+      }
+      const cardId = 'card_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+      updates['cards/'+cardId] = { front, back, deckId, tags:[], sm2:null, createdAt: Date.now() };
+      count++;
+    });
+    db.ref('memorydeck/'+_session.accId+'/users/'+_session.userId).update(updates).then(()=>{
+      showToast(`✅ Импортировано ${count} карточек`);
+      closeModal('importExportModal');
+    });
+  };
+  reader.readAsText(file, 'UTF-8');
+}
+
+function exportCSV(){
+  const rows = ['Лицевая;Обратная;Колода;Прогресс'];
+  Object.values(cards).forEach(c=>{
+    const deck = decks[c.deckId];
+    const deckName = deck?.name||'';
+    const progress = c.sm2 ? `${c.sm2.state}(${c.sm2.interval}д)` : 'новая';
+    rows.push(`"${(c.front||'').replace(/"/g,'""')}";"${(c.back||'').replace(/"/g,'""')}";"${deckName}";"${progress}"`);
+  });
+  const blob = new Blob([rows.join('\n')], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = 'memorydeck_export_'+today()+'.csv'; a.click();
+  URL.revokeObjectURL(url);
+  showToast('✅ Экспорт завершён');
+}
+
+// ════════════════════════════════════════════════════════════
+// SETTINGS
+// ════════════════════════════════════════════════════════════
+function saveStudySettings(){
+  cfg.newPerDay = parseInt(document.getElementById('cfgNewPerDay').value)||20;
+  cfg.maxReviews = parseInt(document.getElementById('cfgMaxReviews').value)||200;
+  cfg.firstInterval = parseInt(document.getElementById('cfgFirstInterval').value)||1;
+  saveData('cfg', cfg);
+  showToast('✅ Настройки сохранены');
+  closeModal('studySettingsModal');
+  renderAll();
+}
+
+function resetProgress(){
+  if(!confirm('Сбросить весь прогресс повторения?\n\nВсе карточки станут "Новыми", история стираний сотрётся.')) return;
+  const updates = {};
+  Object.keys(cards).forEach(id=>{ updates['cards/'+id+'/sm2'] = null; });
+  updates['studyLog'] = null;
+  db.ref('memorydeck/'+_session.accId+'/users/'+_session.userId).update(updates).then(()=>{
+    showToast('🔄 Прогресс сброшен');
+    studyLog = {};
+  });
+}
+
+function openStudySettings(){ openModal('studySettingsModal'); }
+function openImportExport(){ openModal('importExportModal'); }
+function openSearch(){ showToast('🔍 Поиск — в разработке'); }
+function openSettings(){ switchView('settings'); }
+
+// ════════════════════════════════════════════════════════════
+// NAV
+// ════════════════════════════════════════════════════════════
+function switchView(name){
+  ['home','decks','stats','settings'].forEach(v=>{
+    document.getElementById('view'+v[0].toUpperCase()+v.slice(1)).className = 'view' + (v===name?' active':'');
+    document.getElementById('nav-'+v).className = 'nav-item' + (v===name?' active':'');
+  });
+  if(name==='stats') renderStatsView();
+}
+
+// ════════════════════════════════════════════════════════════
+// UI HELPERS
+// ════════════════════════════════════════════════════════════
+function openModal(id){ document.getElementById(id).classList.add('open'); }
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-overlay').forEach(o=>{ o.addEventListener('click', e=>{ if(e.target===o) closeModal(o.id); }); });
+
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'), 3000);
+}
+function escHtml(s){ return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'); }
+
+// FAB — context-aware
+document.addEventListener('DOMContentLoaded', ()=>{
+  // Inject FAB
+  const fab = document.createElement('button');
+  fab.className = 'fab'; fab.textContent = '＋'; fab.id = 'mainFab';
+  fab.onclick = ()=>{
+    const active = document.querySelector('.view.active');
+    if(active?.id==='viewDecks') openCreateDeck();
+    else openCreateDeck();
+  };
+  document.getElementById('app').appendChild(fab);
+});
+
+// Keyboard in review
+document.addEventListener('keydown', e=>{
+  if(!document.getElementById('reviewScreen').classList.contains('open')) return;
+  if(e.key===' '||e.key==='Enter'){ e.preventDefault(); if(!_reviewFlipped) flipCard(); }
+  if(_reviewFlipped){
+    if(e.key==='1') gradeCard(0);
+    if(e.key==='2') gradeCard(1);
+    if(e.key==='3') gradeCard(2);
+    if(e.key==='4') gradeCard(3);
+  }
+});
+
+// ════════════════════════════════════════════════════════════
+// STARTUP
+// ════════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', checkSession);
+</script>
+</body>
+</html>
