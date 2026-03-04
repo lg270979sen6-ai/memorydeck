@@ -2316,26 +2316,33 @@ async function doApkgImport() {
       console.warn('[APKG] field name read error:', e.message);
     }
 
-    // Build a map: fieldName -> index
+    // Build a map: fieldName -> index (may be empty if schema read failed)
     const fieldIdx = {};
     fieldNames.forEach((n, i) => { fieldIdx[n.toLowerCase()] = i; });
 
-    // Helper: get field value by name (case-insensitive) or position
+    // Smart getField: by name if known, else by position
     const getField = (fields, name, pos) => {
       const idx = fieldIdx[name.toLowerCase()];
       return fields[idx !== undefined ? idx : pos] || '';
     };
 
-    // Detect field layout — standard 4000 Words deck or generic
-    const hasIPA         = fieldIdx['ipa']         !== undefined;
-    const hasTranslation = fieldIdx['translation']  !== undefined;
-    const hasMeaning     = fieldIdx['meaning']      !== undefined;
-    const hasExample     = fieldIdx['example']      !== undefined;
-    const hasSound       = fieldIdx['sound']        !== undefined;
-    const hasSoundEx     = fieldIdx['sound_example']!== undefined;
-    const hasImage       = fieldIdx['image']        !== undefined;
+    // Detect rich deck:
+    // 1. By field names (if schema was read)
+    // 2. By field count — 4000 Words deck always has 9 fields
+    // 3. By content — field[3] contains [sound:...] in 4000 Words
+    const firstRowFields = rows.length ? (rows[0][0]||'').split('\x1f') : [];
+    const fieldCount = firstRowFields.length;
+    const hasSoundInPos3 = /\[sound:/i.test(firstRowFields[3]||'');
+    const hasImageInPos2 = /<img/i.test(firstRowFields[2]||'');
 
-    const isRichDeck = hasTranslation || hasMeaning || hasIPA;
+    const hasIPA         = fieldIdx['ipa']          !== undefined;
+    const hasTranslation = fieldIdx['translation']   !== undefined;
+    const isRichDeck     = hasTranslation || hasIPA  // from schema
+                        || fieldCount >= 8            // 8-9 fields = rich deck
+                        || hasSoundInPos3             // sound in pos 3 = 4000 Words layout
+                        || hasImageInPos2;            // image in pos 2 = 4000 Words layout
+
+    console.log('[APKG] fieldCount:', fieldCount, 'isRichDeck:', isRichDeck, 'hasSoundInPos3:', hasSoundInPos3, 'hasImageInPos2:', hasImageInPos2);
 
     // Process each card
     let pi = 0;
@@ -2349,7 +2356,7 @@ async function doApkgImport() {
       if (pi === 1) {
         console.log('[APKG] fieldNames:', fieldNames);
         console.log('[APKG] fieldIdx:', JSON.stringify(fieldIdx));
-        console.log('[APKG] sample fields:', fields.slice(0,9).map((f,i)=>i+':'+f.slice(0,40)));
+        fields.forEach((f,i) => console.log(`[APKG] field[${i}]:`, f.slice(0,60)));
       }
 
       let front, back;
