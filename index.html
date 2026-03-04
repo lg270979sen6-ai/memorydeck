@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/sql-wasm.js"></script>
 <style>
@@ -1168,7 +1169,16 @@ body {
 // ═══════════════════════════════════════════════════
 //  CONFIG + STATE
 // ═══════════════════════════════════════════════════
-const FB  = 'https://family-budget-32149-default-rtdb.europe-west1.firebasedatabase.app';
+const FB_CONFIG = {
+  apiKey:            "AIzaSyBZ1b6yf1WQbhZ7lhIbeYw_fKc4k88mmFc",
+  authDomain:        "family-budget-32149.firebaseapp.com",
+  databaseURL:       "https://family-budget-32149-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:         "family-budget-32149",
+  storageBucket:     "family-budget-32149.firebasestorage.app",
+  messagingSenderId: "1015461302295",
+  appId:             "1:1015461302295:web:835d7a14a852c224534c52"
+};
+const FB  = FB_CONFIG.databaseURL;
 const VER = '3.0', PFX = 'md3_';
 const EMOJIS = ['📚','🧠','💡','🌍','🔬','📐','🎨','🎵','💪','🏛️','✈️','🍕','💻','🌿','⚽','🎭','📝','🔤','🧪','💰','🇬🇧','🇩🇪','🇯🇵','🇫🇷','🐍'];
 const COLORS = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5856d6','#30b0c7','#ff2d55','#ff6b35','#ffcc00'];
@@ -1204,63 +1214,114 @@ function sm2Calc(sm, g) {
 function nextLbl(c,g){ const s=sm2Calc(c.sm2,g); return s.interval?s.interval<30?s.interval+'д':s.interval<365?Math.round(s.interval/7)+'н':Math.round(s.interval/30)+'м':'сейчас'; }
 
 // ═══════════════════════════════════════════════════
-//  FIREBASE
+//  FIREBASE — точная копия логики из finflow
 // ═══════════════════════════════════════════════════
-function initFB() {
-  try{firebase.apps.forEach(a=>a.delete());}catch(e){}
-  firebase.initializeApp({databaseURL:FB});
-  db=firebase.database();
-  db.ref('.info/connected').on('value', s=>{
-    const on=!!s.val();
-    const el=document.getElementById('syncInd');
-    el.className='sync-indicator '+(on?'on':'off');
-    document.getElementById('syncDot').className='sync-dot';
-    document.getElementById('syncTxt').textContent=on?'Онлайн':'Офлайн';
-  });
+
+// Шаг 1: читаем аккаунты через временный Firebase app
+// (анонимная авторизация нужна для Firebase Rules)
+function loadAcc(cb) {
+  let metaApp;
+  try { metaApp = firebase.app('md_meta'); } catch(e) {
+    try {
+      Promise.all(firebase.apps.filter(a=>a.name==='md_meta').map(a=>a.delete().catch(()=>{}))).then(()=>{
+        metaApp = firebase.initializeApp(Object.assign({}, FB_CONFIG), 'md_meta');
+        _doMetaLoad(metaApp, cb);
+      });
+      return;
+    } catch(e2) {}
+  }
+  if (metaApp) _doMetaLoad(metaApp, cb);
 }
 
-function loadAcc(cb){
-  db.ref('memorydeck_meta').once('value').then(s=>{
-    allAcc={};
-    const d=s.val()||{};
-    Object.entries(d).forEach(([id,v])=>{ if(id!=='_system') allAcc[id]={name:v.name||id,color:v.color||COLORS[0],users:v.users||{}}; });
-    cb&&cb();
-  });
+function _doMetaLoad(metaApp, cb) {
+  const metaAuth = metaApp.auth();
+  const metaDb   = metaApp.database();
+
+  const doLoad = () => {
+    metaDb.ref('memorydeck_meta').once('value').then(snap => {
+      allAcc = {};
+      const data = snap.val() || {};
+      Object.entries(data).forEach(([id, v]) => {
+        if (id === '_system' || id === '_admin') return;
+        if (typeof v !== 'object' || !v) return;
+        allAcc[id] = { name: v.name||id, color: v.color||COLORS[0], users: v.users||{} };
+      });
+      cb && cb();
+    }).catch(err => {
+      console.error('loadAcc error:', err.message);
+      // Показываем ошибку в списке аккаунтов
+      const el = document.getElementById('accList');
+      if (el) el.innerHTML = `<div style="color:var(--red);padding:20px;text-align:center;font-size:13px;">❌ ${err.message}<br><br><span style="color:var(--blue);cursor:pointer;" onclick="checkSession()">Повторить</span></div>`;
+    });
+  };
+
+  // Anonymous sign-in для Firebase Rules
+  metaAuth.currentUser ? doLoad() : metaAuth.signInAnonymously().then(doLoad).catch(doLoad);
 }
 
-function startApp(accId,userId,ad,ud){
-  sess={accId,userId,ud,ad};
-  try{sessionStorage.setItem('md3_a',accId);sessionStorage.setItem('md3_u',userId);}catch(e){}
-  try{localStorage.setItem(PFX+accId+'_'+userId+'_ts',String(Date.now()));}catch(e){}
-  try{localStorage.setItem(PFX+accId+'_'+userId+'_v',VER);}catch(e){}
+// Шаг 2: после логина — инициализируем основной Firebase app
+function initMainFirebase(accId, userId) {
+  let mainApp;
+  try { mainApp = firebase.app(); } catch(e) {
+    mainApp = firebase.initializeApp(Object.assign({}, FB_CONFIG));
+  }
 
-  document.getElementById('pillAv').style.background=ud.color||COLORS[0];
-  document.getElementById('pillAv').textContent=(ud.name||'?')[0].toUpperCase();
-  document.getElementById('pillName').textContent=ud.name;
-  document.getElementById('sAccLabel').textContent=ad.name;
+  // Anonymous auth для основного app
+  const mainAuth = mainApp.auth();
+  const initDb = () => {
+    db = mainApp.database();
+    db.ref('.info/connected').on('value', s => {
+      const on = !!s.val();
+      const el = document.getElementById('syncInd');
+      if (el) {
+        el.className = 'sync-indicator '+(on?'on':'off');
+        document.getElementById('syncDot').className = 'sync-dot';
+        document.getElementById('syncTxt').textContent = on?'Онлайн':'Офлайн';
+      }
+    });
+    fbRef = db.ref('memorydeck/'+accId+'/users/'+userId);
+    fbRef.on('value', s => {
+      const d = s.val()||{};
+      decks    = d.decks    ||{};
+      cards    = d.cards    ||{};
+      cfg      = Object.assign({newPerDay:20,maxReviews:200,firstInterval:1}, d.cfg||{});
+      studyLog = d.studyLog ||{};
+      const ne=document.getElementById('cfgNew'),me=document.getElementById('cfgMax'),fe=document.getElementById('cfgFirst');
+      if(ne) ne.value=cfg.newPerDay;
+      if(me) me.value=cfg.maxReviews;
+      if(fe) fe.value=cfg.firstInterval;
+      renderAll();
+    });
+  };
+  mainAuth.currentUser ? initDb() : mainAuth.signInAnonymously().then(initDb).catch(initDb);
+}
 
-  document.getElementById('sProfCard').innerHTML=`
+function startApp(accId, userId, ad, ud) {
+  sess = {accId, userId, ud, ad};
+  try{ sessionStorage.setItem('md3_a', accId); sessionStorage.setItem('md3_u', userId); }catch(e){}
+  try{ localStorage.setItem(PFX+accId+'_'+userId+'_ts', String(Date.now())); }catch(e){}
+  try{ localStorage.setItem(PFX+accId+'_'+userId+'_v', VER); }catch(e){}
+
+  const av=document.getElementById('pillAv'); if(av){av.style.background=ud.color||COLORS[0];av.textContent=(ud.name||'?')[0].toUpperCase();}
+  const pn=document.getElementById('pillName'); if(pn) pn.textContent=ud.name;
+  const sl=document.getElementById('sAccLabel'); if(sl) sl.textContent=ad.name;
+  const sp=document.getElementById('sProfCard'); if(sp) sp.innerHTML=`
     <div class="s-av" style="background:${ud.color||COLORS[0]}">${(ud.name||'?')[0].toUpperCase()}</div>
-    <div><div class="s-name">${ud.name}</div><div class="s-acc">${ad.name} · ${{admin:'Администратор',editor:'Редактор',viewer:'Читатель'}[ud.role]||ud.role}</div></div>`;
+    <div><div class="s-name">${ud.name}</div><div class="s-acc">${ad.name} · ${{admin:'Администратор',editor:'Редактор',viewer:'Читатель'}[ud.role]||ud.role||'Пользователь'}</div></div>`;
 
-  fbRef=db.ref('memorydeck/'+accId+'/users/'+userId);
-  fbRef.on('value',s=>{
-    const d=s.val()||{};
-    decks=d.decks||{}; cards=d.cards||{};
-    cfg=Object.assign({newPerDay:20,maxReviews:200,firstInterval:1},d.cfg||{});
-    studyLog=d.studyLog||{};
-    document.getElementById('cfgNew').value=cfg.newPerDay;
-    document.getElementById('cfgMax').value=cfg.maxReviews;
-    document.getElementById('cfgFirst').value=cfg.firstInterval;
-    renderAll();
-  });
-  document.getElementById('lockScreen').style.display='none';
+  // Плавно скрываем экран входа
+  const ls = document.getElementById('lockScreen');
+  ls.style.transition='opacity .35s'; ls.style.opacity='0';
+  setTimeout(()=>{ ls.style.display='none'; ls.style.opacity=''; ls.style.transition=''; }, 350);
   document.getElementById('app').style.display='flex';
+
+  setTimeout(()=>initMainFirebase(accId, userId), 100);
 }
-const save=(p,v)=>db.ref('memorydeck/'+sess.accId+'/users/'+sess.userId+'/'+p).set(v);
+
+const save=(p,v)=>{if(db&&sess.accId)db.ref('memorydeck/'+sess.accId+'/users/'+sess.userId+'/'+p).set(v);};
 
 // ═══════════════════════════════════════════════════
-//  LOGIN
+//  LOGIN UI
 // ═══════════════════════════════════════════════════
 function goPan(n){
   [1,2,3].forEach(i=>{
@@ -1268,13 +1329,21 @@ function goPan(n){
     document.getElementById('seg'+(i-1)).className='step-seg'+(i<n?' done':i===n?' active':'');
   });
   if(n===1){pendAcc=null;pendUser=null;}
-  if(n===3){document.getElementById('passInp').value='';document.getElementById('lockErr').textContent='';setTimeout(()=>document.getElementById('passInp').focus(),300);}
+  if(n===3){
+    document.getElementById('passInp').value='';
+    document.getElementById('lockErr').textContent='';
+    setTimeout(()=>{ try{document.getElementById('passInp').focus();}catch(e){} },300);
+  }
 }
 
 function renderLockAcc(){
   const el=document.getElementById('accList');
+  if(!el) return;
   const list=Object.entries(allAcc);
-  if(!list.length){el.innerHTML='<div style="color:var(--ink4);padding:20px;text-align:center;font-size:13px;">Нет аккаунтов</div>';return;}
+  if(!list.length){
+    el.innerHTML='<div style="color:var(--ink4);padding:24px;text-align:center;font-size:13px;font-weight:600;">Нет аккаунтов.<br><span style="color:var(--ink3);font-size:12px;">Создайте их в <b>memorydeck-admin.html</b></span></div>';
+    return;
+  }
   el.innerHTML=list.map(([id,a])=>`
     <div class="pick-item fu" onclick="pickAcc('${id}')">
       <div class="pick-av" style="background:${a.color}">${(a.name||id)[0].toUpperCase()}</div>
@@ -1284,68 +1353,87 @@ function renderLockAcc(){
 }
 
 function pickAcc(id){
-  pendAcc={accId:id,ad:allAcc[id]};
+  pendAcc={accId:id, ad:allAcc[id]};
   const users=Object.entries(allAcc[id].users||{});
-  document.getElementById('userList').innerHTML=users.map(([uid,u])=>`
-    <div class="pick-item fu" onclick="pickUser('${id}','${uid}')">
-      <div class="pick-av" style="background:${u.color||COLORS[0]}">${(u.name||'?')[0].toUpperCase()}</div>
-      <div><div class="pick-name">${u.name}</div><div class="pick-sub">${{admin:'Администратор',editor:'Редактор',viewer:'Читатель'}[u.role]||u.role}</div></div>
-      <div class="pick-arrow">›</div>
-    </div>`).join('');
+  document.getElementById('userList').innerHTML=users.length
+    ? users.map(([uid,u])=>`
+      <div class="pick-item fu" onclick="pickUser('${id}','${uid}')">
+        <div class="pick-av" style="background:${u.color||COLORS[0]}">${(u.name||'?')[0].toUpperCase()}</div>
+        <div><div class="pick-name">${u.name||uid}</div><div class="pick-sub">${{admin:'Администратор',editor:'Редактор',viewer:'Читатель'}[u.role]||'Пользователь'}</div></div>
+        <div class="pick-arrow">›</div>
+      </div>`).join('')
+    : '<div style="color:var(--ink4);padding:20px;text-align:center;font-size:13px;">Нет пользователей</div>';
   goPan(2);
 }
 
-function pickUser(accId,uid){
+function pickUser(accId, uid){
   const u=allAcc[accId].users[uid];
-  pendUser={userId:uid,ud:u};
+  pendUser={userId:uid, ud:u};
   document.getElementById('passWho').innerHTML=`
     <div class="pick-av" style="background:${u.color||COLORS[0]};width:40px;height:40px;border-radius:12px;font-size:17px;">${(u.name||'?')[0].toUpperCase()}</div>
-    <div><div class="pick-name">${u.name}</div><div class="pick-sub">${allAcc[accId].name}</div></div>`;
+    <div><div class="pick-name">${u.name||uid}</div><div class="pick-sub">${allAcc[accId].name}</div></div>`;
   goPan(3);
 }
 
 function doLogin(){
-  if(!pendAcc||!pendUser)return;
-  const {accId,ad}=pendAcc, {userId,ud}=pendUser;
+  if(!pendAcc||!pendUser) return;
+  const {accId, ad}=pendAcc, {userId, ud}=pendUser;
   const entered=document.getElementById('passInp').value;
-  let stored=ud.password;
-  try{const lp=localStorage.getItem(PFX+accId+'_'+userId+'_pass');if(lp)stored=lp;}catch(e){}
-  if(entered!==stored){
+  // Поддержка локального переопределения пароля
+  const localKey=PFX+accId+'_'+userId+'_pass';
+  const localPass=(()=>{try{return localStorage.getItem(localKey);}catch(e){return null;}})();
+  const correctPass = localPass || ud.password || '';
+  if(entered !== correctPass){
     document.getElementById('lockErr').textContent='❌ Неверный пароль';
     document.getElementById('passInp').style.borderColor='var(--red)';
     setTimeout(()=>{document.getElementById('lockErr').textContent='';document.getElementById('passInp').style.borderColor='';},2500);
     return;
   }
-  startApp(accId,userId,ad,ud);
+  startApp(accId, userId, ad, ud);
 }
-document.getElementById('passInp').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
 
 function doLogout(){
-  if(!confirm('Выйти?'))return;
-  try{sessionStorage.clear();}catch(e){}
+  if(!confirm('Выйти?')) return;
+  try{sessionStorage.setItem('md3_a','');sessionStorage.setItem('md3_u','');}catch(e){}
+  try{localStorage.setItem(PFX+sess.accId+'_'+sess.userId+'_ts','0');}catch(e){}
   if(fbRef){try{fbRef.off();}catch(e){}fbRef=null;}
   sess={accId:null,userId:null,ud:null,ad:null};
   decks={};cards={};cfg={newPerDay:20,maxReviews:200,firstInterval:1};studyLog={};
   document.getElementById('app').style.display='none';
-  document.getElementById('lockScreen').style.display='flex';
-  goPan(1); loadAcc(renderLockAcc);
+  const ls=document.getElementById('lockScreen');
+  ls.style.display='flex'; ls.style.opacity='0';
+  requestAnimationFrame(()=>{ls.style.transition='opacity .3s';ls.style.opacity='1';});
+  setTimeout(()=>{ls.style.transition='';},350);
+  goPan(1);
+  loadAcc(renderLockAcc);
 }
 
 function checkSession(){
-  initFB();
+  // Показываем экран входа сразу
+  document.getElementById('lockScreen').style.display='flex';
+  const el=document.getElementById('accList');
+  if(el) el.innerHTML='<div style="text-align:center;padding:32px 0;color:var(--ink3);font-size:13px;"><div style="font-size:28px;margin-bottom:10px;">⏳</div>Загрузка...</div>';
+
+  const savedAcc  =(()=>{try{return sessionStorage.getItem('md3_a');}catch(e){return null;}})();
+  const savedUser =(()=>{try{return sessionStorage.getItem('md3_u');}catch(e){return null;}})();
+
   loadAcc(()=>{
-    renderLockAcc();
-    const sa=(()=>{try{return sessionStorage.getItem('md3_a');}catch(e){return null;}})();
-    const su=(()=>{try{return sessionStorage.getItem('md3_u');}catch(e){return null;}})();
-    if(sa&&su){
-      const ts=(()=>{try{return localStorage.getItem(PFX+sa+'_'+su+'_ts');}catch(e){return null;}})();
-      const v=(()=>{try{return localStorage.getItem(PFX+sa+'_'+su+'_v');}catch(e){return null;}})();
-      if(v===VER&&ts&&Date.now()-parseInt(ts)<24*3600*1000){
-        const ad=allAcc[sa];
-        if(ad&&ad.users&&ad.users[su]){startApp(sa,su,ad,ad.users[su]);return;}
+    // Проверяем сохранённую сессию
+    if(savedAcc && savedUser){
+      const pfx = PFX+savedAcc+'_'+savedUser+'_';
+      const ts  =(()=>{try{return localStorage.getItem(pfx+'ts');}catch(e){return null;}})();
+      const ver =(()=>{try{return localStorage.getItem(pfx+'v');}catch(e){return null;}})();
+      if(ver===VER && ts && ts!=='0' && Date.now()-parseInt(ts)<24*3600*1000){
+        const ad=allAcc[savedAcc];
+        if(ad && ad.users && ad.users[savedUser]){
+          startApp(savedAcc, savedUser, ad, ad.users[savedUser]);
+          return;
+        }
       }
     }
-    document.getElementById('lockScreen').style.display='flex';
+    // Нет сессии — показываем список аккаунтов
+    renderLockAcc();
+    goPan(1);
   });
 }
 
@@ -1917,7 +2005,11 @@ function toast(msg){
 }
 const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 
-document.addEventListener('DOMContentLoaded',checkSession);
+document.addEventListener('DOMContentLoaded', () => {
+  const pi = document.getElementById('passInp');
+  if (pi) pi.addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+  checkSession();
+});
 
 // ═══════════════════════════════════════════════════
 //  ANKI .APKG IMPORT
