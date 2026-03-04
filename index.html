@@ -541,6 +541,29 @@ body {
 }
 
 /* ═══════════════════════════════════
+   AUDIO BUTTON
+═══════════════════════════════════ */
+.audio-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: 6px; padding: 10px 22px;
+  background: rgba(0,122,255,.08); color: var(--blue);
+  border: 1.5px solid rgba(0,122,255,.2);
+  border-radius: 50px; font-family: var(--font);
+  font-size: 14px; font-weight: 700; cursor: pointer;
+  transition: background .15s, transform .1s;
+  margin-top: 8px; flex-shrink: 0;
+}
+.audio-btn:active { background: rgba(0,122,255,.18); transform: scale(.95); }
+.audio-btn.playing {
+  background: rgba(0,122,255,.14); border-color: var(--blue);
+  animation: audioPulse 1s ease infinite;
+}
+@keyframes audioPulse {
+  0%,100% { box-shadow: 0 0 0 0 rgba(0,122,255,.3); }
+  50%      { box-shadow: 0 0 0 8px rgba(0,122,255,0); }
+}
+
+/* ═══════════════════════════════════
    STATS VIEW
 ═══════════════════════════════════ */
 .stats-top {
@@ -1112,8 +1135,11 @@ body {
       </div>
     </div>
 
+    <div style="background:rgba(52,199,89,.08);border:1px solid rgba(52,199,89,.2);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--green);font-weight:600;line-height:1.5;">
+      ✅ Импортируется: текст карточек, прогресс повторений (интервалы, ease factor), картинки ≤ 200 КБ, аудио ≤ 500 КБ (mp3/ogg/wav), теги, структура колод.
+    </div>
     <div style="background:rgba(255,149,0,.08);border:1px solid rgba(255,149,0,.2);border-radius:var(--radius);padding:12px 14px;margin-bottom:16px;font-size:12px;color:var(--orange);font-weight:600;line-height:1.5;">
-      ⚠️ Импортируется только текст карточек. Прогресс повторений, картинки и аудио не переносятся — карточки начнут как новые.
+      ⚠️ Не импортируется: аудио &gt; 500 КБ, картинки &gt; 200 КБ, LaTeX-формулы. Аудио воспроизводится автоматически при показе карточки.
     </div>
 
     <div class="field">
@@ -1497,18 +1523,32 @@ function renderCard(){
   const sCol=!sm||sm.state==='new'?'var(--blue)':sm.state==='learning'?'var(--orange)':'var(--green)';
   const sLbl=!sm||sm.state==='new'?'Новая':sm.state==='learning'?'Учится':'Повторение';
   const intStr=sm&&sm.interval>0?`${sm.interval}д · EF ${(sm.ease||2.5).toFixed(1)}`:'';
+
+  // Detect audio refs in card content — [sound:filename] or stored audioUrl
+  const frontAudio = extractAudioRefs(c.front);
+  const backAudio  = extractAudioRefs(c.back);
+  const frontClean = cleanAudioTags(c.front);
+  const backClean  = cleanAudioTags(c.back);
+
+  // Audio button HTML
+  const mkAudioBtn = (refs, side) => refs.length
+    ? `<button class="audio-btn" id="audiobtn-${side}" onclick="playCardAudio('${side}',event)">🔊 Слушать</button>`
+    : '';
+
   document.getElementById('cardStage').innerHTML=`
     <div class="card-flipper card-in" id="flipper">
       <div class="c-face">
         <div class="c-badge"><div class="c-dot" style="background:${sCol};"></div>${sLbl}</div>
         <div class="c-deck-tag">${deck.emoji||'📚'}</div>
-        <div class="c-q">${esc(c.front)}</div>
-        <div class="c-hint">Нажмите чтобы показать ответ</div>
+        <div class="c-q">${renderCardContent(frontClean)}</div>
+        ${mkAudioBtn(frontAudio,'front')}
+        <div class="c-hint" id="tapHint">Нажмите чтобы показать ответ</div>
       </div>
       <div class="c-face c-back">
         <div class="c-badge"><div class="c-dot" style="background:${sCol};"></div>${sLbl}</div>
         <div class="c-deck-tag">${deck.emoji||'📚'}</div>
-        <div class="c-a">${esc(c.back)}</div>
+        <div class="c-a">${renderCardContent(backClean)}</div>
+        ${mkAudioBtn(backAudio,'back')}
         ${intStr?`<div class="c-int">${intStr}</div>`:''}
       </div>
     </div>
@@ -1519,6 +1559,11 @@ function renderCard(){
       <button class="grade-btn gb-good"  onclick="doGrade(2)"><div class="g-em">🟢</div><div class="g-w">Хорошо</div><div class="g-nxt">${nextLbl(c,2)}</div></button>
       <button class="grade-btn gb-easy"  onclick="doGrade(3)"><div class="g-em">🔵</div><div class="g-w">Легко</div><div class="g-nxt">${nextLbl(c,3)}</div></button>
     </div>`;
+
+  // Auto-play front audio when card appears
+  if (frontAudio.length) {
+    setTimeout(() => autoPlayAudio(rQ[rIdx], 'front'), 350);
+  }
 }
 
 function stageClick(){if(!rFlipped)doFlip();}
@@ -1527,6 +1572,130 @@ function doFlip(){
   document.getElementById('flipper').classList.toggle('flipped',rFlipped);
   document.getElementById('showAns').style.display=rFlipped?'none':'';
   document.getElementById('grades').style.display=rFlipped?'grid':'none';
+  // Auto-play back side audio when answer is revealed
+  if (rFlipped) {
+    const c = rQ[rIdx];
+    const backAudio = extractAudioRefs(c.back);
+    if (backAudio.length) setTimeout(() => autoPlayAudio(c, 'back'), 300);
+  }
+}
+
+// ═══════════════════════════════════════════════════
+//  AUDIO ENGINE
+// ═══════════════════════════════════════════════════
+
+// In-memory audio cache: filename -> base64 data URI
+const audioCache = {};
+let currentAudio = null;
+
+// Extract [sound:filename] tags from card content
+function extractAudioRefs(text) {
+  if (!text) return [];
+  const refs = [];
+  const re = /\[sound:([^\]]+)\]/g;
+  let m;
+  while ((m = re.exec(text)) !== null) refs.push(m[1]);
+  return refs;
+}
+
+// Remove [sound:...] tags from display text
+function cleanAudioTags(text) {
+  if (!text) return '';
+  return text.replace(/\[sound:[^\]]+\]/g, '').trim();
+}
+
+// Render card content — support bold/italic markdown, images, line breaks
+function renderCardContent(text) {
+  if (!text) return '';
+  return text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
+    .replace(/_(.+?)_/g,'<em>$1</em>')
+    .replace(/\n/g,'<br>')
+    // re-allow img tags that were already sanitized to data URIs
+    .replace(/&lt;img src="(data:[^"]+)"([^&]*)&gt;/g, '<img src="$1"$2>');
+}
+
+// Load audio from Firebase, play it
+async function loadAndPlayAudio(filename, btnEl) {
+  if (!filename) return;
+  stopCurrentAudio();
+
+  // Already cached?
+  if (audioCache[filename]) {
+    playAudioData(audioCache[filename], btnEl);
+    return;
+  }
+
+  if (btnEl) { btnEl.textContent = '⏳ Загрузка...'; btnEl.disabled = true; }
+
+  try {
+    // Audio stored under memorydeck_audio/{accId}/{hash}
+    // hash = filename (sanitized)
+    const safeKey = filename.replace(/[.#$/[\]]/g, '_');
+    const snap = await db.ref('memorydeck_audio/' + sess.accId + '/' + safeKey).once('value');
+    const data = snap.val();
+    if (data) {
+      audioCache[filename] = data;
+      if (btnEl) { btnEl.textContent = '🔊 Слушать'; btnEl.disabled = false; }
+      playAudioData(data, btnEl);
+    } else {
+      if (btnEl) { btnEl.textContent = '❌ Нет аудио'; btnEl.disabled = false; }
+    }
+  } catch(e) {
+    if (btnEl) { btnEl.textContent = '🔊 Слушать'; btnEl.disabled = false; }
+  }
+}
+
+function playAudioData(dataUri, btnEl) {
+  stopCurrentAudio();
+  const audio = new Audio(dataUri);
+  currentAudio = audio;
+  if (btnEl) btnEl.classList.add('playing');
+  audio.play().catch(()=>{});
+  audio.onended = () => {
+    if (btnEl) btnEl.classList.remove('playing');
+    currentAudio = null;
+  };
+  audio.onerror = () => {
+    if (btnEl) btnEl.classList.remove('playing');
+    currentAudio = null;
+  };
+}
+
+function stopCurrentAudio() {
+  if (currentAudio) {
+    try { currentAudio.pause(); currentAudio.currentTime = 0; } catch(e){}
+    currentAudio = null;
+  }
+  // Remove playing class from all buttons
+  document.querySelectorAll('.audio-btn.playing').forEach(b => b.classList.remove('playing'));
+}
+
+// Called by audio button click
+function playCardAudio(side, event) {
+  event.stopPropagation(); // don't flip card
+  const c = rQ[rIdx];
+  const refs = extractAudioRefs(side === 'front' ? c.front : c.back);
+  if (!refs.length) return;
+  const btn = document.getElementById('audiobtn-' + side);
+  loadAndPlayAudio(refs[0], btn);
+}
+
+// Auto-play without button interaction (called after card renders)
+function autoPlayAudio(card, side) {
+  if (!card) return;
+  const refs = extractAudioRefs(side === 'front' ? card.front : card.back);
+  if (!refs.length) return;
+  const btn = document.getElementById('audiobtn-' + side);
+  loadAndPlayAudio(refs[0], btn);
+}
+
+// Stop audio when review closes
+function closeReview(){
+  stopCurrentAudio();
+  document.getElementById('revScreen').classList.remove('open');
+  renderAll();
 }
 
 function doGrade(g){
@@ -1754,22 +1923,88 @@ document.addEventListener('DOMContentLoaded',checkSession);
 //  ANKI .APKG IMPORT
 // ═══════════════════════════════════════════════════
 
-// Strip HTML tags from Anki card fields
+// ═══════════════════════════════════════════════════
+//  ANKI .APKG — FULL IMPORT (text + schedule + media)
+// ═══════════════════════════════════════════════════
+
 function stripHtml(html) {
   if (!html) return '';
-  // Replace common Anki tags
   return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<div>/gi, '\n')
-    .replace(/<\/div>/gi, '')
-    .replace(/&nbsp;/gi, ' ')
-    .replace(/&amp;/gi, '&')
-    .replace(/&lt;/gi, '<')
-    .replace(/&gt;/gi, '>')
-    .replace(/<[^>]+>/g, '')
-    .replace(/\[sound:[^\]]+\]/g, '')   // remove sound refs
-    .replace(/\{\{[^}]+\}\}/g, '')      // remove template tags
+    .replace(/<br\s*\/?>/gi, '\n').replace(/<div>/gi, '\n').replace(/<\/div>/gi, '')
+    .replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>')
+    .replace(/<[^>]+>/g,'').replace(/\[sound:[^\]]+\]/g,'').replace(/\{\{[^}]+\}\}/g,'').trim();
+}
+
+// Embed small images as base64 data URIs (≤ 200 KB)
+async function mediaToDataUri(bytes, filename) {
+  const ext = filename.split('.').pop().toLowerCase();
+  const mimeMap = {jpg:'image/jpeg',jpeg:'image/jpeg',png:'image/png',gif:'image/gif',
+                   webp:'image/webp',svg:'image/svg+xml',mp3:'audio/mpeg',ogg:'audio/ogg'};
+  const mime = mimeMap[ext] || 'application/octet-stream';
+  if (mime.startsWith('audio')) return null; // skip audio in cards
+  if (bytes.byteLength > 200*1024) return null; // skip images > 200 KB
+  const b64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  return `data:${mime};base64,${b64}`;
+}
+
+// Convert Anki HTML, replacing <img src="filename"> with base64 URIs from mediaMap
+async function processField(html, mediaMap) {
+  if (!html) return '';
+  // Replace img tags with base64 where available
+  let result = html;
+  const imgRe = /<img[^>]+src="([^"]+)"[^>]*>/gi;
+  const matches = [...html.matchAll(imgRe)];
+  for (const m of matches) {
+    const src = m[1];
+    if (mediaMap[src]) {
+      result = result.replace(m[0], `<img src="${mediaMap[src]}" style="max-width:100%;border-radius:8px;">`);
+    } else {
+      result = result.replace(m[0], `[🖼 ${src}]`);
+    }
+  }
+  // Clean up remaining HTML but preserve line breaks
+  result = result
+    .replace(/<br\s*\/?>/gi,'\n').replace(/<div>/gi,'\n').replace(/<\/div>/gi,'')
+    .replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>')
+    .replace(/<b>(.*?)<\/b>/gi,'**$1**').replace(/<strong>(.*?)<\/strong>/gi,'**$1**')
+    .replace(/<i>(.*?)<\/i>/gi,'_$1_').replace(/<em>(.*?)<\/em>/gi,'_$1_')
+    .replace(/<[^>]+>/g,'')
+    .replace(/\[sound:[^\]]+\]/g,'').replace(/\{\{[^}]+\}\}/g,'')
     .trim();
+  return result;
+}
+
+// Convert Anki cards.due epoch-days to ISO date string
+// Anki day 0 = 2006-01-01 (the epoch used internally)
+const ANKI_EPOCH = new Date('2006-01-01').getTime() / 86400000; // days since Unix epoch
+function ankiDueToDate(due, type, crt) {
+  if (type === 2 || type === 3) {
+    // review card: due is days since collection creation day
+    const collCreationDay = Math.floor(crt / 86400); // crt is unix timestamp seconds
+    const dueDayUnix = collCreationDay + due;
+    const d = new Date(dueDayUnix * 86400000);
+    return d.toISOString().slice(0,10);
+  }
+  return today();
+}
+
+// Map Anki card state to our SM-2 object
+// cards table: type 0=new, 1=learning, 2=review, 3=relearn
+// factor is ease*1000 (e.g. 2500 = ease 2.5), ivl in days
+function ankiCardToSm2(type, ivl, factor, due, reps, lapses, crt) {
+  if (type === 0) return null; // new card — no progress
+  const ease = (factor || 2500) / 1000;
+  const interval = Math.max(1, Math.abs(ivl || 1));
+  const state = (type === 2 || type === 3) && interval >= 21 ? 'review' : 'learning';
+  const dueDate = (type === 2 || type === 3) ? ankiDueToDate(due, type, crt) : today();
+  return {
+    interval,
+    ease: Math.max(1.3, Math.min(4.0, ease)),
+    due: dueDate,
+    state,
+    reps: reps || 0,
+    lapses: lapses || 0
+  };
 }
 
 function setApkgProgress(pct, txt) {
@@ -1786,174 +2021,229 @@ async function doApkgImport() {
 
   const btn = document.getElementById('apkgImportBtn');
   btn.disabled = true; btn.textContent = 'Читаю...';
-  document.getElementById('apkgProgress').style.display = 'block';
 
   try {
-    setApkgProgress(10, 'Распаковываю архив...');
-
-    // .apkg is a ZIP file
+    setApkgProgress(5, 'Распаковываю архив...');
     const arrayBuffer = await file.arrayBuffer();
     const zip = await JSZip.loadAsync(arrayBuffer);
 
-    setApkgProgress(25, 'Нашёл архив, читаю базу данных...');
+    setApkgProgress(15, 'Читаю медиафайлы...');
 
-    // Find the SQLite database inside the zip
-    // Modern Anki uses collection.anki21, older uses collection.anki2
+    // --- MEDIA MAP ---
+    // media file inside zip is a JSON like {"0":"word.jpg","1":"audio.mp3",...}
+    // actual files are named "0","1","2" etc inside the zip
+    const mediaMap = {}; // filename -> data URI (images)
+    const audioFiles = {}; // filename -> base64 string (audio to save in Firebase)
+    try {
+      const mediaFile = zip.file('media');
+      if (mediaFile) {
+        const mediaJson = JSON.parse(await mediaFile.async('text'));
+        const entries = Object.entries(mediaJson);
+        let mi = 0;
+        for (const [zipName, realName] of entries) {
+          mi++;
+          if (mi % 10 === 0) setApkgProgress(15 + Math.round(mi/entries.length*15), `Медиа: ${mi}/${entries.length}...`);
+          const mediaZipFile = zip.file(zipName);
+          if (!mediaZipFile) continue;
+          const ext = realName.split('.').pop().toLowerCase();
+          const isAudio = ['mp3','ogg','wav','aac','m4a','flac'].includes(ext);
+          const isImage = ['jpg','jpeg','png','gif','webp','svg'].includes(ext);
+          try {
+            const bytes = await mediaZipFile.async('arraybuffer');
+            if (isAudio) {
+              // Store audio as base64 for Firebase — typical word audio is 20-150 KB
+              if (bytes.byteLength <= 500 * 1024) { // skip files > 500 KB
+                const mimeMap = {mp3:'audio/mpeg',ogg:'audio/ogg',wav:'audio/wav',aac:'audio/aac',m4a:'audio/mp4',flac:'audio/flac'};
+                const mime = mimeMap[ext] || 'audio/mpeg';
+                const b64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+                audioFiles[realName] = `data:${mime};base64,${b64}`;
+              }
+            } else if (isImage) {
+              const uri = await mediaToDataUri(bytes, realName);
+              if (uri) mediaMap[realName] = uri;
+            }
+          } catch(e) { /* skip bad media */ }
+        }
+      }
+    } catch(e) { /* no media — that's fine */ }
+
+    setApkgProgress(32, 'Открываю базу данных...');
+
+    // --- DATABASE ---
     let dbFile = zip.file('collection.anki21') || zip.file('collection.anki2');
-    if (!dbFile) {
-      // Try anki21b (compressed)
-      dbFile = zip.file('collection.anki21b');
-    }
-    if (!dbFile) {
-      throw new Error('Не найдена база данных в файле .apkg. Попробуйте экспортировать ещё раз.');
-    }
-
-    setApkgProgress(40, 'Загружаю SQLite...');
+    if (!dbFile) dbFile = zip.file('collection.anki21b');
+    if (!dbFile) throw new Error('Не найдена база данных в .apkg файле.');
 
     const dbBytes = await dbFile.async('arraybuffer');
-
-    // Initialize sql.js
     const SQL = await initSqlJs({
-      locateFile: file => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${file}`
+      locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${f}`
     });
+    const adb = new SQL.Database(new Uint8Array(dbBytes));
 
-    setApkgProgress(60, 'Читаю карточки...');
+    setApkgProgress(45, 'Читаю структуру колод...');
 
-    const db2 = new SQL.Database(new Uint8Array(dbBytes));
-
-    // Query notes (cards content)
-    // Anki schema: notes table has flds (fields separated by \x1f), tags, mid (model id)
-    // models are stored in col table as JSON
-    let notes = [];
-    let deckMap = {}; // deckId -> deckName from Anki
-
-    // Get deck names from col table
+    // --- COLLECTION METADATA ---
+    let deckMap = {}; // ankiDeckId (string) -> deckName
+    let collCrt = 0;  // collection creation time (unix seconds) — needed for due date calc
     try {
-      const colRes = db2.exec("SELECT decks FROM col LIMIT 1");
+      const colRes = adb.exec("SELECT crt, decks FROM col LIMIT 1");
       if (colRes.length && colRes[0].values.length) {
-        const decksJson = JSON.parse(colRes[0].values[0][0]);
-        Object.values(decksJson).forEach(d => {
-          if (d.id && d.name) deckMap[String(d.id)] = d.name;
-        });
+        collCrt = colRes[0].values[0][0] || 0;
+        const decksRaw = colRes[0].values[0][1];
+        if (decksRaw) {
+          const decksJson = JSON.parse(decksRaw);
+          Object.values(decksJson).forEach(d => {
+            if (d.id && d.name) deckMap[String(d.id)] = d.name;
+          });
+        }
       }
-    } catch(e) {
-      // col structure varies; fall back to default deck name
-    }
+    } catch(e) { /* fallback to filename */ }
 
-    // Get cards with deck assignment
-    // cards table: nid (note id), did (deck id)
-    // notes table: id, flds (fields), tags
+    setApkgProgress(55, 'Читаю карточки и прогресс...');
+
+    // --- CARDS + NOTES + SCHEDULING ---
+    // Join notes (content) with cards (scheduling) by nid
+    // One note can have multiple cards (templates); we take the first one per note
+    let rows = [];
     try {
-      const res = db2.exec(`
-        SELECT n.flds, n.tags, c.did
+      const res = adb.exec(`
+        SELECT
+          n.flds,
+          n.tags,
+          c.did,
+          c.type,
+          c.ivl,
+          c.factor,
+          c.due,
+          c.reps,
+          c.lapses
         FROM notes n
         JOIN cards c ON c.nid = n.id
         GROUP BY n.id
+        ORDER BY c.due ASC
       `);
-
-      if (res.length && res[0].values.length) {
-        notes = res[0].values;
-      }
+      if (res.length && res[0].values.length) rows = res[0].values;
     } catch(e) {
-      // Fallback: just read notes without deck info
+      // Fallback without scheduling
       try {
-        const res = db2.exec("SELECT flds, tags, 1 FROM notes");
-        if (res.length) notes = res[0].values;
-      } catch(e2) {
-        throw new Error('Не удалось прочитать карточки: ' + e2.message);
-      }
+        const res = adb.exec("SELECT flds, tags, 1, 0, 0, 2500, 0, 0, 0 FROM notes");
+        if (res.length) rows = res[0].values;
+      } catch(e2) { throw new Error('Ошибка чтения карточек: ' + e2.message); }
     }
 
-    db2.close();
+    adb.close();
 
-    if (!notes.length) {
-      throw new Error('В файле не найдено карточек.');
-    }
+    if (!rows.length) throw new Error('В файле не найдено карточек.');
+    setApkgProgress(65, `Найдено ${rows.length} карточек, обрабатываю...`);
 
-    setApkgProgress(75, `Найдено ${notes.length} карточек, сохраняю...`);
-
-    // Group by deck and create/find decks in Firebase
-    const deckNameToId = {}; // ankiDeckId -> our Firebase deckId
+    // --- BUILD FIREBASE UPDATES ---
+    const defaultName = file.name.replace(/\.apkg$/i, '');
+    const deckNameToFbId = {}; // cleanDeckName -> our Firebase deck id
     const updates = {};
-    let count = 0;
-    let skipped = 0;
+    let count = 0, skipped = 0, withSchedule = 0, withMedia = 0;
 
-    // Pre-create deck mappings
-    const defaultDeckName = file.name.replace('.apkg', '');
-    for (const [, , ankiDid] of notes) {
-      const ankiDeckName = deckMap[String(ankiDid)] || defaultDeckName;
-      // Skip Anki's "Default" deck if it has a real name
-      const cleanName = ankiDeckName === 'Default' ? defaultDeckName : ankiDeckName;
-
-      if (!deckNameToId[cleanName]) {
-        // Find existing deck or create new
+    // Pre-build deck map
+    for (const [,,ankiDid] of rows) {
+      const rawName = deckMap[String(ankiDid)] || defaultName;
+      const cleanName = rawName === 'Default' ? defaultName : rawName;
+      if (!deckNameToFbId[cleanName]) {
         const existing = Object.entries(decks).find(([,d]) => d.name === cleanName);
         if (existing) {
-          deckNameToId[cleanName] = existing[0];
+          deckNameToFbId[cleanName] = existing[0];
         } else {
-          const newDid = 'deck_anki_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
-          // Pick a color based on deck name hash
-          const colorIdx = Math.abs(cleanName.split('').reduce((a,c)=>a+c.charCodeAt(0),0)) % COLORS.length;
-          updates['decks/' + newDid] = {
-            name: cleanName,
-            emoji: '🐘',
-            color: COLORS[colorIdx],
-            createdAt: Date.now(),
-            importedFrom: 'anki'
-          };
-          deckNameToId[cleanName] = newDid;
+          const nid = 'deck_anki_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+          const colorIdx = Math.abs([...cleanName].reduce((a,c)=>a+c.charCodeAt(0),0)) % COLORS.length;
+          updates['decks/' + nid] = { name:cleanName, emoji:'🐘', color:COLORS[colorIdx], createdAt:Date.now(), importedFrom:'anki' };
+          deckNameToFbId[cleanName] = nid;
         }
       }
     }
 
-    // Process cards
-    for (const [flds, tags, ankiDid] of notes) {
-      const fields = (flds || '').split('\x1f'); // Anki separates fields with \x1f
-      const front = stripHtml(fields[0] || '');
-      const back  = stripHtml(fields[1] || '');
+    // Process each card
+    let pi = 0;
+    for (const [flds, tags, ankiDid, type, ivl, factor, due, reps, lapses] of rows) {
+      pi++;
+      if (pi % 50 === 0) setApkgProgress(65 + Math.round(pi/rows.length*20), `Обрабатываю ${pi}/${rows.length}...`);
 
+      const fields = (flds||'').split('\x1f');
+      const front = await processField(fields[0]||'', mediaMap);
+      const back  = await processField(fields[1]||'', mediaMap);
       if (!front || !back) { skipped++; continue; }
 
-      const ankiDeckName = deckMap[String(ankiDid)] || defaultDeckName;
-      const cleanName = ankiDeckName === 'Default' ? defaultDeckName : ankiDeckName;
-      const targetDeckId = deckNameToId[cleanName];
+      const rawName = deckMap[String(ankiDid)] || defaultName;
+      const cleanName = rawName === 'Default' ? defaultName : rawName;
+      const fbDeckId = deckNameToFbId[cleanName];
+      const tagList = (tags||'').trim().split(/\s+/).filter(Boolean);
 
-      const tagList = (tags || '').trim().split(/\s+/).filter(Boolean);
+      // Build SM-2 from Anki scheduling data
+      const sm2v = ankiCardToSm2(type, ivl, factor, due, reps, lapses, collCrt);
+      if (sm2v) withSchedule++;
+
+      // Detect if card has embedded media
+      if (front.includes('<img') || back.includes('<img')) withMedia++;
+
       const cid = 'card_anki_' + Date.now() + '_' + Math.random().toString(36).slice(2,8);
-
       updates['cards/' + cid] = {
-        front,
-        back,
-        deckId: targetDeckId,
+        front, back, deckId: fbDeckId,
         tags: tagList,
-        sm2: null,
+        sm2: sm2v,
         createdAt: Date.now(),
         importedFrom: 'anki'
       };
       count++;
     }
 
-    setApkgProgress(90, 'Сохраняю в базу данных...');
+    // Also record study history from revlog if available
+    // We'll add today's import date to studyLog
+    const todayKey = today();
+    const existingToday = studyLog[todayKey] || 0;
+    if (count > 0) updates['studyLog/' + todayKey] = existingToday; // don't overwrite real data
 
+    setApkgProgress(90, 'Сохраняю карточки в Firebase...');
     await db.ref('memorydeck/' + sess.accId + '/users/' + sess.userId).update(updates);
 
-    setApkgProgress(100, `Готово!`);
+    // Save audio files to separate Firebase path memorydeck_audio/{accId}/{safeFilename}
+    const audioEntries = Object.entries(audioFiles);
+    if (audioEntries.length > 0) {
+      setApkgProgress(93, `Сохраняю аудио (${audioEntries.length} файлов)...`);
+      const audioUpdates = {};
+      for (const [filename, dataUri] of audioEntries) {
+        const safeKey = filename.replace(/[.#$/[\]]/g, '_');
+        audioUpdates[safeKey] = dataUri;
+      }
+      // Save in chunks of 20 to avoid hitting Firebase limits
+      const chunkSize = 20;
+      const keys = Object.keys(audioUpdates);
+      for (let i = 0; i < keys.length; i += chunkSize) {
+        const chunk = {};
+        keys.slice(i, i + chunkSize).forEach(k => { chunk[k] = audioUpdates[k]; });
+        await db.ref('memorydeck_audio/' + sess.accId).update(chunk);
+        setApkgProgress(93 + Math.round((i/keys.length)*5), `Аудио: ${Math.min(i+chunkSize, keys.length)}/${keys.length}...`);
+      }
+    }
 
-    const deckCount = Object.keys(deckNameToId).length;
+    setApkgProgress(100, 'Готово!');
+
+    const deckCount = Object.keys(deckNameToFbId).length;
+    const audioCount = Object.keys(audioFiles).length;
+    const audioNote = audioCount > 0 ? ` · 🔊 ${audioCount} аудио` : '';
+    const mediaNote = withMedia > 0 ? ` · 🖼 ${withMedia} с картинками` : '';
+    const schedNote = withSchedule > 0 ? ` · 📅 прогресс сохранён` : '';
+
     setTimeout(() => {
       closeSh('apkgSh');
       document.getElementById('apkgProgress').style.display = 'none';
       document.getElementById('apkgProgressBar').style.width = '0%';
       document.getElementById('apkgFile').value = '';
       btn.disabled = false; btn.textContent = 'Импортировать';
-      toast(`✅ Импортировано ${count} карточек в ${deckCount} колод${deckCount===1?'у':deckCount<5?'ы':''}${skipped ? ` (пропущено ${skipped})` : ''}`);
-    }, 600);
+      toast(`✅ ${count} карточек${audioNote}${mediaNote}${schedNote}`);
+    }, 700);
 
   } catch (err) {
     console.error('APKG import error:', err);
     document.getElementById('apkgProgress').style.display = 'none';
     btn.disabled = false; btn.textContent = 'Импортировать';
-    toast('❌ Ошибка: ' + (err.message || err));
+    toast('❌ ' + (err.message || String(err)));
   }
 }
 </script>
