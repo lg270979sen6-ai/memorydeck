@@ -432,27 +432,27 @@ body {
 .rev-count { font-family: var(--mono); font-size: 12px; color: var(--ink3); flex-shrink: 0; }
 
 /* Card */
-.card-stage { flex: 1; display: flex; flex-direction: column; perspective: 1200px; }
+.card-stage { flex: 1; display: flex; flex-direction: column; }
 .card-flipper {
-  flex: 1; transform-style: preserve-3d;
-  transition: transform .5s cubic-bezier(.4,0,.2,1);
-  position: relative; cursor: pointer;
+  flex: 1; position: relative; cursor: pointer;
 }
-.card-flipper.flipped { transform: rotateY(180deg); }
 .c-face {
   position: absolute; inset: 0;
-  backface-visibility: hidden;
   background: var(--card); border-radius: var(--radius-xl);
   box-shadow: var(--shadow);
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
   padding: 28px 24px; text-align: center;
   border: 1px solid var(--border);
+  overflow-y: auto;
+  transition: opacity .25s;
 }
 .c-back {
-  transform: rotateY(180deg);
   background: linear-gradient(160deg, #f8f9ff 0%, #f0f4ff 100%);
+  display: none;
 }
+.card-flipper.flipped .c-face:not(.c-back) { display: none; }
+.card-flipper.flipped .c-back { display: flex; }
 .c-badge {
   position: absolute; top: 14px; left: 16px;
   display: flex; align-items: center; gap: 5px;
@@ -1724,18 +1724,20 @@ function renderCardContent(text) {
   if (!text) return '';
   const hasHtml = text.includes('<div') || text.includes('<img') || text.includes('anki-');
   let t = hasHtml ? text : text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-  // Convert markdown
-  t = t.replace(/\*\*(.+?)\*\*/g,'<strong style="font-weight:800">$1</strong>');
-  t = t.replace(/_(.+?)_/g,'<em style="font-style:italic;opacity:.8">$1</em>');
-  t = t.replace(/\n/g,'<br>');
-  if (!hasHtml) return t;
-  // Inject inline styles for anki classes — guaranteed to work regardless of CSS cascade
-  t = t.replace(/class="anki-word"/g,   'style="display:block;font-size:30px;font-weight:800;color:#111;margin-bottom:4px;"');
-  t = t.replace(/class="anki-ipa"/g,    'style="display:block;font-size:16px;color:#007aff;font-style:italic;font-weight:400;margin-bottom:8px;"');
-  t = t.replace(/class="anki-translation"/g, 'style="display:block;font-size:24px;font-weight:700;color:#34c759;margin:8px 0;"');
-  t = t.replace(/class="anki-meaning"/g,'style="display:block;font-size:14px;font-weight:400;color:#555;line-height:1.6;margin:8px 0;background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:7px 10px;border-radius:0 8px 8px 0;text-align:left;"');
-  t = t.replace(/class="anki-example"/g,'style="display:block;font-size:13px;font-weight:400;color:#888;font-style:italic;margin:4px 0;line-height:1.5;text-align:left;"');
-  t = t.replace(/class="anki-img"/g,    'style="display:block;text-align:center;margin:8px 0;"');
+  // Step 1: inject inline styles FIRST (before markdown, so we don't break tag attributes)
+  if (hasHtml) {
+    t = t.replace(/class="anki-word"/g,        'style="display:block;font-size:30px;font-weight:800;color:#111;margin:0 0 4px 0;"');
+    t = t.replace(/class="anki-ipa"/g,         'style="display:block;font-size:16px;color:#007aff;font-style:italic;font-weight:400;margin:0 0 8px 0;"');
+    t = t.replace(/class="anki-translation"/g, 'style="display:block;font-size:24px;font-weight:700;color:#34c759;margin:8px 0;"');
+    t = t.replace(/class="anki-meaning"/g,     'style="display:block;font-size:14px;font-weight:400;color:#444;line-height:1.6;margin:8px 0;background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:7px 10px;border-radius:0 8px 8px 0;text-align:left;"');
+    t = t.replace(/class="anki-example"/g,     'style="display:block;font-size:13px;font-weight:400;color:#666;font-style:italic;margin:4px 0;line-height:1.5;text-align:left;"');
+    t = t.replace(/class="anki-img"/g,         'style="display:block;text-align:center;margin:8px 0;"');
+  }
+  // Step 2: convert markdown ** and _ to HTML
+  t = t.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;font-style:normal;">$1</strong>');
+  t = t.replace(/_([^_]+)_/g, '<em style="font-style:italic;opacity:.85;">$1</em>');
+  // Step 3: newlines to <br>
+  t = t.replace(/\n/g, '<br>');
   return t;
 }
 
