@@ -1609,6 +1609,14 @@ function startReview(deckId=null){
   renderCard();
 }
 
+function showRaw() {
+  const c = rQ[rIdx];
+  if (!c) return;
+  const msg = `=== FRONT (${c.front?.length} chars) ===\n${c.front}\n\n=== BACK (${c.back?.length} chars) ===\n${c.back}`;
+  console.log(msg);
+  alert(msg.slice(0, 1000));
+}
+
 function renderCard(){
   if(rIdx>=rQ.length){showDone();return;}
   rFlipped=false;
@@ -1649,6 +1657,7 @@ function renderCard(){
       </div>
     </div>
     <button class="show-ans" id="showAns" onclick="doFlip()">Показать ответ</button>
+    <button onclick="showRaw()" style="position:fixed;bottom:4px;right:4px;font-size:10px;opacity:.3;background:none;border:none;color:var(--ink3);cursor:pointer;z-index:999;">raw</button>
     <div class="grades" id="grades" style="display:none;">
       <button class="grade-btn gb-again" onclick="doGrade(0)"><div class="g-em">🔴</div><div class="g-w">Снова</div><div class="g-nxt">${nextLbl(c,0)}</div></button>
       <button class="grade-btn gb-hard"  onclick="doGrade(1)"><div class="g-em">🟠</div><div class="g-w">Трудно</div><div class="g-nxt">${nextLbl(c,1)}</div></button>
