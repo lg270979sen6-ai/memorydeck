@@ -1616,6 +1616,25 @@ function startReview(deckId=null){
   renderCard();
 }
 
+async function loadCardImages() {
+  // Find all img tags with non-data src (filename references)
+  const imgs = document.querySelectorAll('#cardStage img[src]:not([src^="data:"])');
+  for (const img of imgs) {
+    const filename = img.getAttribute('src');
+    if (!filename) continue;
+    const safeKey = filename.replace(/[.#$/[\]]/g, '_');
+    try {
+      const snap = await db.ref('memorydeck_audio/' + sess.accId + '/' + safeKey).once('value');
+      if (snap.val()) {
+        img.src = snap.val();
+        img.style.cssText = 'max-width:100%;max-height:200px;border-radius:10px;object-fit:contain;display:block;margin:8px auto;';
+      } else {
+        img.style.display = 'none'; // hide broken images silently
+      }
+    } catch(e) { img.style.display = 'none'; }
+  }
+}
+
 function showRaw() {
   const c = rQ[rIdx];
   if (!c) return;
@@ -1649,6 +1668,7 @@ function renderCard(){
     ? `<button class="audio-btn" id="audiobtn-${side}" onclick="playCardAudio('${side}',event)">🔊 Слушать</button>`
     : '';
 
+  // After rendering, load images from Firebase
   document.getElementById('cardStage').innerHTML=`
     <div class="card-flipper card-in" id="flipper">
       <div class="c-face">
@@ -1674,6 +1694,9 @@ function renderCard(){
       <button class="grade-btn gb-good"  onclick="doGrade(2)"><div class="g-em">🟢</div><div class="g-w">Хорошо</div><div class="g-nxt">${nextLbl(c,2)}</div></button>
       <button class="grade-btn gb-easy"  onclick="doGrade(3)"><div class="g-em">🔵</div><div class="g-w">Легко</div><div class="g-nxt">${nextLbl(c,3)}</div></button>
     </div>`;
+
+  // Load images from Firebase for this card
+  loadCardImages();
 
   // Auto-play front audio when card appears
   if (frontAudio.length) {
@@ -1729,8 +1752,8 @@ function renderCardContent(text) {
     t = t.replace(/class="anki-word"/g,        'style="display:block;font-size:30px;font-weight:800;color:#111;margin:0 0 4px 0;"');
     t = t.replace(/class="anki-ipa"/g,         'style="display:block;font-size:16px;color:#007aff;font-style:italic;font-weight:400;margin:0 0 8px 0;"');
     t = t.replace(/class="anki-translation"/g, 'style="display:block;font-size:24px;font-weight:700;color:#34c759;margin:8px 0;"');
-    t = t.replace(/class="anki-meaning"/g,     'style="display:block;font-size:14px;font-weight:400;color:#444;line-height:1.6;margin:8px 0;background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:7px 10px;border-radius:0 8px 8px 0;text-align:left;"');
-    t = t.replace(/class="anki-example"/g,     'style="display:block;font-size:13px;font-weight:400;color:#666;font-style:italic;margin:4px 0;line-height:1.5;text-align:left;"');
+    t = t.replace(/class="anki-meaning"/g,     'style="display:block;font-size:15px;font-weight:400;color:#333;line-height:1.6;margin:8px 0;background:rgba(0,122,255,.08);border-left:3px solid #007aff;padding:8px 12px;border-radius:0 8px 8px 0;text-align:left;"');
+    t = t.replace(/class="anki-example"/g,     'style="display:block;font-size:16px;font-weight:500;color:#222;font-style:normal;margin:8px 0;line-height:1.6;text-align:left;padding:0 2px;"');
     t = t.replace(/class="anki-img"/g,         'style="display:block;text-align:center;margin:8px 0;"');
   }
   // Step 2: convert markdown ** and _ to HTML
@@ -2473,7 +2496,11 @@ async function doApkgImport() {
     setApkgProgress(90, 'Сохраняю карточки в Firebase...');
     await db.ref('memorydeck/' + sess.accId + '/users/' + sess.userId).update(updates);
 
-    // Save audio files to separate Firebase path memorydeck_audio/{accId}/{safeFilename}
+    // Save audio AND images to Firebase path memorydeck_audio/{accId}/{safeFilename}
+    // Merge images into audioFiles for saving
+    Object.entries(mediaMap).forEach(([filename, dataUri]) => {
+      if (!audioFiles[filename]) audioFiles[filename] = dataUri;
+    });
     const audioEntries = Object.entries(audioFiles);
     if (audioEntries.length > 0) {
       setApkgProgress(93, `Сохраняю аудио (${audioEntries.length} файлов)...`);
