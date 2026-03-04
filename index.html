@@ -544,7 +544,13 @@ body {
 /* ═══════════════════════════════════
    AUDIO BUTTON
 ═══════════════════════════════════ */
-.audio-btn {
+.anki-word { font-size: 32px; font-weight: 700; color: var(--ink1); margin-bottom: 4px; }
+.anki-ipa  { font-size: 18px; color: var(--blue); font-style: italic; margin-bottom: 8px; }
+.anki-translation { font-size: 24px; font-weight: 600; color: var(--green); margin: 8px 0; }
+.anki-meaning     { font-size: 15px; color: var(--ink2); line-height: 1.5; margin: 6px 0; }
+.anki-example     { font-size: 14px; color: var(--ink3); font-style: italic; margin: 4px 0; line-height: 1.5; }
+.anki-example::before { content: ''; }
+.c-body img { max-width: 100%; max-height: 200px; border-radius: 10px; object-fit: contain; margin: 8px auto; display: block; }
   display: inline-flex; align-items: center; justify-content: center;
   gap: 6px; padding: 10px 22px;
   background: rgba(0,122,255,.08); color: var(--blue);
@@ -1074,6 +1080,7 @@ body {
       <button class="sbtn sbtn-cancel" onclick="closeSh('deckEdSh')">Отмена</button>
       <button class="sbtn sbtn-ok" onclick="saveDeck()">Сохранить</button>
     </div>
+    <button id="dDeleteBtn" onclick="deleteDeck()" style="display:none;width:100%;margin-top:10px;padding:13px;border-radius:14px;border:none;background:rgba(255,59,48,.1);color:#ff3b30;font-family:inherit;font-size:15px;font-weight:600;cursor:pointer;">🗑 Удалить колоду</button>
   </div>
 </div>
 
@@ -1864,7 +1871,22 @@ function openDeckEd(id){
   document.getElementById('dName').value=d?.name||'';
   dEmoji=d?.emoji||'📚'; dColor=d?.color||COLORS[0];
   renderDEmojis(); renderDColors();
+  document.getElementById('dDeleteBtn').style.display=id?'block':'none';
   openSh('deckEdSh');
+}
+function deleteDeck(){
+  if(!eDeckId) return;
+  const d=decks[eDeckId];
+  const cnt=Object.values(cards).filter(c=>c.deckId===eDeckId).length;
+  if(!confirm(`Удалить колоду «${d?.name}»?\n\nВместе с ней будут удалены ${cnt} карточек.`)) return;
+  // Delete all cards in this deck
+  const cardUpdates={};
+  Object.entries(cards).forEach(([cid,c])=>{ if(c.deckId===eDeckId) cardUpdates['cards/'+cid]=null; });
+  cardUpdates['decks/'+eDeckId]=null;
+  save('decks/'+eDeckId, null);
+  Object.entries(cards).forEach(([cid,c])=>{ if(c.deckId===eDeckId) save('cards/'+cid, null); });
+  toast('🗑 Колода удалена');
+  closeSh('deckEdSh');
 }
 function renderDEmojis(){
   document.getElementById('dEmojis').innerHTML=EMOJIS.map(e=>`
@@ -2251,6 +2273,41 @@ async function doApkgImport() {
       }
     }
 
+    // --- READ FIELD NAMES from Anki col.models ---
+    let fieldNames = []; // ordered field names from Anki note type
+    try {
+      const modRes = adb.exec("SELECT models FROM col LIMIT 1");
+      if (modRes.length && modRes[0].values.length) {
+        const modJson = JSON.parse(modRes[0].values[0][0] || '{}');
+        // Take the first note type's field names
+        const firstModel = Object.values(modJson)[0];
+        if (firstModel && firstModel.flds) {
+          fieldNames = firstModel.flds.map(f => f.name);
+        }
+      }
+    } catch(e) { /* fallback to positional */ }
+
+    // Build a map: fieldName -> index
+    const fieldIdx = {};
+    fieldNames.forEach((n, i) => { fieldIdx[n.toLowerCase()] = i; });
+
+    // Helper: get field value by name (case-insensitive) or position
+    const getField = (fields, name, pos) => {
+      const idx = fieldIdx[name.toLowerCase()];
+      return fields[idx !== undefined ? idx : pos] || '';
+    };
+
+    // Detect field layout — standard 4000 Words deck or generic
+    const hasIPA         = fieldIdx['ipa']         !== undefined;
+    const hasTranslation = fieldIdx['translation']  !== undefined;
+    const hasMeaning     = fieldIdx['meaning']      !== undefined;
+    const hasExample     = fieldIdx['example']      !== undefined;
+    const hasSound       = fieldIdx['sound']        !== undefined;
+    const hasSoundEx     = fieldIdx['sound_example']!== undefined;
+    const hasImage       = fieldIdx['image']        !== undefined;
+
+    const isRichDeck = hasTranslation || hasMeaning || hasIPA;
+
     // Process each card
     let pi = 0;
     for (const [flds, tags, ankiDid, type, ivl, factor, due, reps, lapses] of rows) {
@@ -2258,8 +2315,44 @@ async function doApkgImport() {
       if (pi % 50 === 0) setApkgProgress(65 + Math.round(pi/rows.length*20), `Обрабатываю ${pi}/${rows.length}...`);
 
       const fields = (flds||'').split('\x1f');
-      const front = await processField(fields[0]||'', mediaMap);
-      const back  = await processField(fields[1]||'', mediaMap);
+
+      let front, back;
+
+      if (isRichDeck) {
+        // Rich deck: Word + IPA + Sound + Example on front
+        //            Translation + Meaning + Image + Sound_Example on back
+        const word        = await processField(getField(fields,'word',0), mediaMap);
+        const ipa         = await processField(getField(fields,'ipa',1), mediaMap);
+        const sound       = await processField(getField(fields,'sound',2), mediaMap);
+        const translation = await processField(getField(fields,'translation',3), mediaMap);
+        const meaning     = await processField(getField(fields,'meaning',4), mediaMap);
+        const example     = await processField(getField(fields,'example',5), mediaMap);
+        const image       = await processField(getField(fields,'image',6), mediaMap);
+        const soundEx     = await processField(getField(fields,'sound_example',7), mediaMap);
+
+        // Build front: Word + IPA + Sound + Example
+        const frontParts = [];
+        if (word)    frontParts.push(`<div class="anki-word">${word}</div>`);
+        if (ipa)     frontParts.push(`<div class="anki-ipa">${ipa}</div>`);
+        if (sound)   frontParts.push(sound);   // [sound:x] tag — handled by audio engine
+        if (example) frontParts.push(`<div class="anki-example">→ ${example}</div>`);
+        front = frontParts.join('\n');
+
+        // Build back: Translation + Meaning + Image + Example + Sound_Example
+        const backParts = [];
+        if (word)        backParts.push(`<div class="anki-word">${word}</div>`);
+        if (image)       backParts.push(image);  // <img> tag
+        if (translation) backParts.push(`<div class="anki-translation">${translation}</div>`);
+        if (meaning)     backParts.push(`<div class="anki-meaning">📖 ${meaning}</div>`);
+        if (example)     backParts.push(`<div class="anki-example">→ ${example}</div>`);
+        if (soundEx)     backParts.push(soundEx);
+        back = backParts.join('\n');
+      } else {
+        // Generic deck: field[0] = front, field[1] = back
+        front = await processField(fields[0]||'', mediaMap);
+        back  = await processField(fields[1]||'', mediaMap);
+      }
+
       if (!front || !back) { skipped++; continue; }
 
       const rawName = deckMap[String(ankiDid)] || defaultName;
