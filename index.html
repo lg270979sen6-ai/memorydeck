@@ -1722,24 +1722,21 @@ function cleanAudioTags(text) {
 // Render card content — support bold/italic markdown, images, line breaks
 function renderCardContent(text) {
   if (!text) return '';
-  // Always apply markdown first (** and _)
-  // Then decide HTML-escape or not based on content
-  const hasHtmlTags = /<(?:div|span|img|br|strong|em|b|i)[\s\/>]/i.test(text)
-                   || text.includes('<img ') || text.includes('<div ')
-                   || text.includes('<div>') || text.includes('anki-');
-  if (hasHtmlTags) {
-    // Already contains HTML — render as-is + convert markdown
-    return text
-      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-      .replace(/_(.+?)_/g, '<em>$1</em>')
-      .replace(/\n/g, '<br>');
-  }
-  // Plain text — escape HTML, then convert markdown to tags
-  return text
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
-    .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
-    .replace(/_(.+?)_/g,'<em>$1</em>')
-    .replace(/\n/g,'<br>');
+  const hasHtml = text.includes('<div') || text.includes('<img') || text.includes('anki-');
+  let t = hasHtml ? text : text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+  // Convert markdown
+  t = t.replace(/\*\*(.+?)\*\*/g,'<strong style="font-weight:800">$1</strong>');
+  t = t.replace(/_(.+?)_/g,'<em style="font-style:italic;opacity:.8">$1</em>');
+  t = t.replace(/\n/g,'<br>');
+  if (!hasHtml) return t;
+  // Inject inline styles for anki classes — guaranteed to work regardless of CSS cascade
+  t = t.replace(/class="anki-word"/g,   'style="display:block;font-size:30px;font-weight:800;color:#111;margin-bottom:4px;"');
+  t = t.replace(/class="anki-ipa"/g,    'style="display:block;font-size:16px;color:#007aff;font-style:italic;font-weight:400;margin-bottom:8px;"');
+  t = t.replace(/class="anki-translation"/g, 'style="display:block;font-size:24px;font-weight:700;color:#34c759;margin:8px 0;"');
+  t = t.replace(/class="anki-meaning"/g,'style="display:block;font-size:14px;font-weight:400;color:#555;line-height:1.6;margin:8px 0;background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:7px 10px;border-radius:0 8px 8px 0;text-align:left;"');
+  t = t.replace(/class="anki-example"/g,'style="display:block;font-size:13px;font-weight:400;color:#888;font-style:italic;margin:4px 0;line-height:1.5;text-align:left;"');
+  t = t.replace(/class="anki-img"/g,    'style="display:block;text-align:center;margin:8px 0;"');
+  return t;
 }
 
 // Load audio from Firebase, play it
