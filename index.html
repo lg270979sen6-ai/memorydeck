@@ -466,21 +466,18 @@ body {
   line-height: 1.4; letter-spacing: -.2px; color: var(--ink);
   max-width: 380px;
 }
-.c-q:has(.anki-word), .c-a:has(.anki-word) {
-  font-size: inherit; font-weight: inherit; color: inherit;
-}
 .c-a {
   font-size: 18px; font-weight: 600;
   line-height: 1.55; color: var(--ink2);
   max-width: 380px;
 }
-.anki-word { font-size: 32px !important; font-weight: 700 !important; color: var(--ink1) !important; margin-bottom: 4px; display: block; }
-.anki-ipa  { font-size: 17px !important; color: var(--blue) !important; font-style: italic !important; font-weight: 400 !important; margin-bottom: 8px; display: block; }
-.anki-translation { font-size: 26px !important; font-weight: 600 !important; color: var(--green) !important; margin: 8px 0; display: block; }
-.anki-meaning { font-size: 14px !important; font-weight: 400 !important; color: var(--ink2) !important; line-height: 1.5; margin: 8px 0; background: rgba(0,122,255,.06); border-left: 3px solid var(--blue); padding: 7px 10px; border-radius: 0 8px 8px 0; display: block; }
-.anki-example { font-size: 13px !important; font-weight: 400 !important; color: var(--ink3) !important; font-style: italic !important; margin: 4px 0; line-height: 1.5; display: block; }
-.anki-img { text-align: center; margin: 8px 0; display: block; }
-.anki-img img, .c-body img { max-width: 100%; max-height: 200px; border-radius: 10px; object-fit: contain; display: block; margin: 0 auto; }
+.anki-word { font-size: 32px !important; font-weight: 800 !important; color: var(--ink1) !important; margin: 0 0 6px 0 !important; display: block !important; letter-spacing: -0.5px; }
+.anki-ipa  { font-size: 17px !important; color: var(--blue) !important; font-style: italic !important; font-weight: 400 !important; margin: 0 0 8px 0 !important; display: block !important; }
+.anki-translation { font-size: 26px !important; font-weight: 700 !important; color: var(--green) !important; margin: 6px 0 !important; display: block !important; }
+.anki-meaning { font-size: 14px !important; font-weight: 400 !important; color: var(--ink2) !important; line-height: 1.6 !important; margin: 8px 0 !important; background: rgba(0,122,255,.07) !important; border-left: 3px solid var(--blue) !important; padding: 7px 10px !important; border-radius: 0 8px 8px 0 !important; display: block !important; }
+.anki-example { font-size: 13px !important; font-weight: 400 !important; color: var(--ink3) !important; font-style: italic !important; margin: 4px 0 !important; line-height: 1.5 !important; display: block !important; }
+.anki-img { text-align: center !important; margin: 8px 0 !important; display: block !important; }
+.anki-img img, .c-body img { max-width: 100% !important; max-height: 200px !important; border-radius: 10px !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
 .c-int {
   font-family: var(--mono); font-size: 11px;
   color: var(--ink4); margin-top: 10px;
@@ -1885,8 +1882,8 @@ function openDeckDetail(id){
   document.getElementById('ddCards').innerHTML=dc.length?dc.map(([cid,c])=>`
     <div class="card-row">
       <div class="card-state-pip" style="background:${pipCol(c.sm2)};"></div>
-      <div class="card-front-t">${esc(c.front)}</div>
-      <div class="card-back-t">${esc(c.back)}</div>
+      <div class="card-front-t">${esc(stripHtml(c.front))}</div>
+      <div class="card-back-t">${esc(stripHtml(c.back))}</div>
       <div class="hbtn" onclick="openCardEd('${cid}')" style="background:transparent;border:none;color:var(--ink3);">✏️</div>
       <div class="row-del" onclick="deleteCard('${cid}')">🗑</div>
     </div>`).join('')
