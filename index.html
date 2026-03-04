@@ -1702,13 +1702,19 @@ function cleanAudioTags(text) {
 // Render card content — support bold/italic markdown, images, line breaks
 function renderCardContent(text) {
   if (!text) return '';
+  // Rich HTML from Anki import — render directly (safe tags only)
+  if (/<(div|span|img|br|strong|em|b|i)[\b\s>/]/i.test(text)) {
+    return text
+      .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+      .replace(/_(.+?)_/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>');
+  }
+  // Plain text — escape then markdown
   return text
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
     .replace(/_(.+?)_/g,'<em>$1</em>')
-    .replace(/\n/g,'<br>')
-    // re-allow img tags that were already sanitized to data URIs
-    .replace(/&lt;img src="(data:[^"]+)"([^&]*)&gt;/g, '<img src="$1"$2>');
+    .replace(/\n/g,'<br>');
 }
 
 // Load audio from Firebase, play it
@@ -2064,27 +2070,33 @@ async function mediaToDataUri(bytes, filename) {
 // Convert Anki HTML, replacing <img src="filename"> with base64 URIs from mediaMap
 async function processField(html, mediaMap) {
   if (!html) return '';
-  // Replace img tags with base64 where available
   let result = html;
+
+  // Replace img tags with base64 where available
   const imgRe = /<img[^>]+src="([^"]+)"[^>]*>/gi;
   const matches = [...html.matchAll(imgRe)];
   for (const m of matches) {
     const src = m[1];
     if (mediaMap[src]) {
-      result = result.replace(m[0], `<img src="${mediaMap[src]}" style="max-width:100%;border-radius:8px;">`);
+      result = result.replace(m[0], `<img src="${mediaMap[src]}" style="max-width:100%;max-height:180px;border-radius:8px;display:block;margin:6px auto;">`);
     } else {
-      result = result.replace(m[0], `[🖼 ${src}]`);
+      result = result.replace(m[0], ''); // hide missing images silently
     }
   }
-  // Clean up remaining HTML but preserve line breaks
+
+  // Clean HTML but preserve [sound:] tags and line structure
   result = result
-    .replace(/<br\s*\/?>/gi,'\n').replace(/<div>/gi,'\n').replace(/<\/div>/gi,'')
-    .replace(/&nbsp;/gi,' ').replace(/&amp;/gi,'&').replace(/&lt;/gi,'<').replace(/&gt;/gi,'>')
-    .replace(/<b>(.*?)<\/b>/gi,'**$1**').replace(/<strong>(.*?)<\/strong>/gi,'**$1**')
-    .replace(/<i>(.*?)<\/i>/gi,'_$1_').replace(/<em>(.*?)<\/em>/gi,'_$1_')
-    .replace(/<[^>]+>/g,'')
-    .replace(/\[sound:[^\]]+\]/g,'').replace(/\{\{[^}]+\}\}/g,'')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<div>/gi, '\n').replace(/<\/div>/gi, '')
+    .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
+    .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
+    .replace(/<b>(.*?)<\/b>/gi, '**$1**').replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
+    .replace(/<i>(.*?)<\/i>/gi, '_$1_').replace(/<em>(.*?)<\/em>/gi, '_$1_')
+    .replace(/<[^>]+>/g, '')           // strip remaining HTML tags
+    .replace(/\{\{[^}]+\}\}/g, '')     // strip {{unfilled}} template vars
     .trim();
+
+  // NOTE: [sound:filename] tags are PRESERVED — audio engine handles them
   return result;
 }
 
