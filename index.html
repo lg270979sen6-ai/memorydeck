@@ -2285,19 +2285,36 @@ async function doApkgImport() {
       }
     }
 
-    // --- READ FIELD NAMES from Anki col.models ---
+    // --- READ FIELD NAMES from Anki col.models (anki2) or notetypes (anki21) ---
     let fieldNames = []; // ordered field names from Anki note type
     try {
-      const modRes = adb.exec("SELECT models FROM col LIMIT 1");
-      if (modRes.length && modRes[0].values.length) {
-        const modJson = JSON.parse(modRes[0].values[0][0] || '{}');
-        // Take the first note type's field names
-        const firstModel = Object.values(modJson)[0];
-        if (firstModel && firstModel.flds) {
-          fieldNames = firstModel.flds.map(f => f.name);
+      // Try anki21 format first (notetypes table)
+      const ntRes = adb.exec("SELECT name FROM sqlite_master WHERE type='table'");
+      const tables = ntRes.length ? ntRes[0].values.map(r=>r[0]) : [];
+      console.log('[APKG] tables:', tables);
+
+      if (tables.includes('notetypes')) {
+        // Anki 21+ format
+        const ntFlds = adb.exec("SELECT nt.name, f.name, f.ord FROM notetypes nt JOIN fields f ON f.ntid = nt.id ORDER BY f.ord");
+        if (ntFlds.length && ntFlds[0].values.length) {
+          fieldNames = ntFlds[0].values.map(r => r[1]);
+          console.log('[APKG] fields from notetypes:', fieldNames);
+        }
+      } else if (tables.includes('col')) {
+        // Legacy anki2 format — models JSON in col table
+        const modRes = adb.exec("SELECT models FROM col LIMIT 1");
+        if (modRes.length && modRes[0].values.length) {
+          const modJson = JSON.parse(modRes[0].values[0][0] || '{}');
+          const firstModel = Object.values(modJson)[0];
+          if (firstModel && firstModel.flds) {
+            fieldNames = firstModel.flds.map(f => f.name);
+            console.log('[APKG] fields from col.models:', fieldNames);
+          }
         }
       }
-    } catch(e) { /* fallback to positional */ }
+    } catch(e) {
+      console.warn('[APKG] field name read error:', e.message);
+    }
 
     // Build a map: fieldName -> index
     const fieldIdx = {};
@@ -2328,39 +2345,48 @@ async function doApkgImport() {
 
       const fields = (flds||'').split('\x1f');
 
+      // Debug first card
+      if (pi === 1) {
+        console.log('[APKG] fieldNames:', fieldNames);
+        console.log('[APKG] fieldIdx:', JSON.stringify(fieldIdx));
+        console.log('[APKG] sample fields:', fields.slice(0,9).map((f,i)=>i+':'+f.slice(0,40)));
+      }
+
       let front, back;
 
       if (isRichDeck) {
-        // Rich deck: Word + IPA + Sound + Example on front
-        //            Translation + Meaning + Image + Sound_Example on back
-        const word        = await processField(getField(fields,'word',0), mediaMap);
-        const ipa         = await processField(getField(fields,'ipa',1), mediaMap);
-        const sound       = await processField(getField(fields,'sound',2), mediaMap);
-        const translation = await processField(getField(fields,'translation',3), mediaMap);
-        const meaning     = await processField(getField(fields,'meaning',4), mediaMap);
-        const example     = await processField(getField(fields,'example',5), mediaMap);
-        const image       = await processField(getField(fields,'image',6), mediaMap);
-        const soundEx     = await processField(getField(fields,'sound_example',7), mediaMap);
+        // Fields by NAME (case-insensitive) with fallback to position from screenshot:
+        // 0:Word 1:Translation 2:Image 3:Sound 4:Sound_Meaning 5:Sound_Example 6:Meaning 7:Example 8:IPA
+        const word        = await processField(getField(fields, 'word',         0), mediaMap);
+        const translation = await processField(getField(fields, 'translation',  1), mediaMap);
+        const image       = await processField(getField(fields, 'image',        2), mediaMap);
+        const sound       = await processField(getField(fields, 'sound',        3), mediaMap);
+        const soundMeaning= await processField(getField(fields, 'sound_meaning',4), mediaMap);
+        const soundEx     = await processField(getField(fields, 'sound_example',5), mediaMap);
+        const meaning     = await processField(getField(fields, 'meaning',      6), mediaMap);
+        const example     = await processField(getField(fields, 'example',      7), mediaMap);
+        const ipa         = await processField(getField(fields, 'ipa',          8), mediaMap);
 
-        // Build front: Word + IPA + Sound + Example
+        if (pi === 1) console.log('[APKG] parsed: word='+word.slice(0,20)+' ipa='+ipa.slice(0,20)+' sound='+sound.slice(0,30)+' transl='+translation.slice(0,20));
+
+        // FRONT: Word + IPA + Sound (autoplay) + Example
         const frontParts = [];
         if (word)    frontParts.push(`<div class="anki-word">${word}</div>`);
-        if (ipa)     frontParts.push(`<div class="anki-ipa">${ipa}</div>`);
-        if (sound)   frontParts.push(sound);   // [sound:x] tag — handled by audio engine
+        if (ipa)     frontParts.push(`<div class="anki-ipa">[${ipa}]</div>`);
+        if (sound)   frontParts.push(sound);  // keeps [sound:file.mp3] for audio engine
         if (example) frontParts.push(`<div class="anki-example">→ ${example}</div>`);
         front = frontParts.join('\n');
 
-        // Build back: Translation + Meaning + Image + Example + Sound_Example
+        // BACK: Word + Image + Translation + Meaning + Example + Sound_Example
         const backParts = [];
         if (word)        backParts.push(`<div class="anki-word">${word}</div>`);
-        if (image)       backParts.push(image);  // <img> tag
+        if (image)       backParts.push(`<div class="anki-img">${image}</div>`);
         if (translation) backParts.push(`<div class="anki-translation">${translation}</div>`);
         if (meaning)     backParts.push(`<div class="anki-meaning">📖 ${meaning}</div>`);
         if (example)     backParts.push(`<div class="anki-example">→ ${example}</div>`);
-        if (soundEx)     backParts.push(soundEx);
+        if (soundEx)     backParts.push(soundEx);  // [sound:x.mp3]
         back = backParts.join('\n');
       } else {
-        // Generic deck: field[0] = front, field[1] = back
         front = await processField(fields[0]||'', mediaMap);
         back  = await processField(fields[1]||'', mediaMap);
       }
