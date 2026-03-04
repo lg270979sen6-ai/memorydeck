@@ -1712,14 +1712,19 @@ function cleanAudioTags(text) {
 // Render card content — support bold/italic markdown, images, line breaks
 function renderCardContent(text) {
   if (!text) return '';
-  // If contains HTML tags → render as HTML (Anki rich cards)
-  if (/<(?:div|span|img|br|strong|em|b|i)[\s\/>]/i.test(text) || text.includes('<img ') || text.includes('<div ')) {
+  // Always apply markdown first (** and _)
+  // Then decide HTML-escape or not based on content
+  const hasHtmlTags = /<(?:div|span|img|br|strong|em|b|i)[\s\/>]/i.test(text)
+                   || text.includes('<img ') || text.includes('<div ')
+                   || text.includes('<div>') || text.includes('anki-');
+  if (hasHtmlTags) {
+    // Already contains HTML — render as-is + convert markdown
     return text
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/_(.+?)_/g, '<em>$1</em>')
       .replace(/\n/g, '<br>');
   }
-  // Plain text — escape then render markdown
+  // Plain text — escape HTML, then convert markdown to tags
   return text
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
@@ -2072,8 +2077,15 @@ async function mediaToDataUri(bytes, filename) {
                    webp:'image/webp',svg:'image/svg+xml',mp3:'audio/mpeg',ogg:'audio/ogg'};
   const mime = mimeMap[ext] || 'application/octet-stream';
   if (mime.startsWith('audio')) return null; // skip audio in cards
-  if (bytes.byteLength > 800*1024) return null; // skip images > 800 KB
-  const b64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  if (bytes.byteLength > 2*1024*1024) return null; // skip images > 2 MB
+  // chunked btoa to avoid call stack overflow on large files
+        const uint8 = new Uint8Array(bytes);
+        let b64 = '';
+        const chunk = 8192;
+        for (let i = 0; i < uint8.length; i += chunk) {
+          b64 += String.fromCharCode(...uint8.subarray(i, i + chunk));
+        }
+        b64 = btoa(b64);
   return `data:${mime};base64,${b64}`;
 }
 
@@ -2192,7 +2204,11 @@ async function doApkgImport() {
               if (bytes.byteLength <= 500 * 1024) { // skip files > 500 KB
                 const mimeMap = {mp3:'audio/mpeg',ogg:'audio/ogg',wav:'audio/wav',aac:'audio/aac',m4a:'audio/mp4',flac:'audio/flac'};
                 const mime = mimeMap[ext] || 'audio/mpeg';
-                const b64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+                // chunked btoa for audio
+                const ua = new Uint8Array(bytes);
+                let b64 = '';
+                for (let i=0;i<ua.length;i+=8192) b64+=String.fromCharCode(...ua.subarray(i,i+8192));
+                b64 = btoa(b64);
                 audioFiles[realName] = `data:${mime};base64,${b64}`;
               }
             } else if (isImage) {
@@ -2385,20 +2401,7 @@ async function doApkgImport() {
         const example     = await processField(getField(fields, 'example',      7), mediaMap);
         const ipa         = await processField(getField(fields, 'ipa',          8), mediaMap);
 
-        if (pi === 1) {
-          console.log('[APKG] word:', word.slice(0,30));
-          console.log('[APKG] translation:', translation.slice(0,30));
-          console.log('[APKG] image raw field:', (fields[fieldIdx['image']!==undefined?fieldIdx['image']:2]||'').slice(0,80));
-          console.log('[APKG] image processed:', image.slice(0,80));
-          console.log('[APKG] meaning raw field:', (fields[fieldIdx['meaning']!==undefined?fieldIdx['meaning']:6]||'').slice(0,80));
-          console.log('[APKG] meaning processed:', meaning.slice(0,80));
-          console.log('[APKG] sound:', sound.slice(0,40));
-          console.log('[APKG] ipa:', ipa.slice(0,30));
-          console.log('[APKG] example:', example.slice(0,60));
-          console.log('[APKG] mediaMap keys:', Object.keys(mediaMap).slice(0,5));
-          console.log('[APKG] front:', front ? front.slice(0,120) : 'EMPTY');
-          console.log('[APKG] back:', back ? back.slice(0,120) : 'EMPTY');
-        }
+        // debug moved below after front/back are built
 
         // FRONT: Word + IPA + Sound (autoplay) + Example
         const frontParts = [];
@@ -2417,6 +2420,11 @@ async function doApkgImport() {
         if (example)     backParts.push(`<div class="anki-example">→ ${example}</div>`);
         if (soundEx)     backParts.push(soundEx);  // [sound:x.mp3]
         back = backParts.join('\n');
+        if (pi === 1) {
+          console.log('[APKG] FINAL front:', front ? front.slice(0,200) : 'EMPTY!');
+          console.log('[APKG] FINAL back:', back ? back.slice(0,200) : 'EMPTY!');
+          console.log('[APKG] mediaMap size:', Object.keys(mediaMap).length, 'keys:', Object.keys(mediaMap).slice(0,3));
+        }
       } else {
         front = await processField(fields[0]||'', mediaMap);
         back  = await processField(fields[1]||'', mediaMap);
