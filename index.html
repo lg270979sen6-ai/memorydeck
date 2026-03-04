@@ -547,10 +547,11 @@ body {
 .anki-word { font-size: 32px; font-weight: 700; color: var(--ink1); margin-bottom: 4px; }
 .anki-ipa  { font-size: 18px; color: var(--blue); font-style: italic; margin-bottom: 8px; }
 .anki-translation { font-size: 24px; font-weight: 600; color: var(--green); margin: 8px 0; }
-.anki-meaning     { font-size: 15px; color: var(--ink2); line-height: 1.5; margin: 6px 0; }
+.anki-meaning     { font-size: 15px; color: var(--ink2); line-height: 1.5; margin: 6px 0; background: rgba(0,0,0,.04); border-left: 3px solid var(--blue); padding: 6px 10px; border-radius: 0 8px 8px 0; }
 .anki-example     { font-size: 14px; color: var(--ink3); font-style: italic; margin: 4px 0; line-height: 1.5; }
-.anki-example::before { content: ''; }
-.c-body img { max-width: 100%; max-height: 200px; border-radius: 10px; object-fit: contain; margin: 8px auto; display: block; }
+.anki-img         { text-align: center; margin: 8px 0; }
+.anki-img img     { max-width: 100%; max-height: 200px; border-radius: 10px; object-fit: contain; display: inline-block; }
+.c-body img       { max-width: 100%; max-height: 200px; border-radius: 10px; object-fit: contain; margin: 8px auto; display: block; }
   display: inline-flex; align-items: center; justify-content: center;
   gap: 6px; padding: 10px 22px;
   background: rgba(0,122,255,.08); color: var(--blue);
@@ -1702,14 +1703,14 @@ function cleanAudioTags(text) {
 // Render card content — support bold/italic markdown, images, line breaks
 function renderCardContent(text) {
   if (!text) return '';
-  // Rich HTML from Anki import — render directly (safe tags only)
-  if (/<(div|span|img|br|strong|em|b|i)[\b\s>/]/i.test(text)) {
+  // If contains HTML tags → render as HTML (Anki rich cards)
+  if (/<(?:div|span|img|br|strong|em|b|i)[\s\/>]/i.test(text) || text.includes('<img ') || text.includes('<div ')) {
     return text
       .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
       .replace(/_(.+?)_/g, '<em>$1</em>')
       .replace(/\n/g, '<br>');
   }
-  // Plain text — escape then markdown
+  // Plain text — escape then render markdown
   return text
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
     .replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>')
@@ -2062,7 +2063,7 @@ async function mediaToDataUri(bytes, filename) {
                    webp:'image/webp',svg:'image/svg+xml',mp3:'audio/mpeg',ogg:'audio/ogg'};
   const mime = mimeMap[ext] || 'application/octet-stream';
   if (mime.startsWith('audio')) return null; // skip audio in cards
-  if (bytes.byteLength > 200*1024) return null; // skip images > 200 KB
+  if (bytes.byteLength > 800*1024) return null; // skip images > 800 KB
   const b64 = btoa(String.fromCharCode(...new Uint8Array(bytes)));
   return `data:${mime};base64,${b64}`;
 }
@@ -2078,9 +2079,10 @@ async function processField(html, mediaMap) {
   for (const m of matches) {
     const src = m[1];
     if (mediaMap[src]) {
-      result = result.replace(m[0], `<img src="${mediaMap[src]}" style="max-width:100%;max-height:180px;border-radius:8px;display:block;margin:6px auto;">`);
+      result = result.replace(m[0], `<img src="${mediaMap[src]}" style="max-width:100%;max-height:220px;border-radius:10px;display:block;margin:8px auto;">`);
     } else {
-      result = result.replace(m[0], ''); // hide missing images silently
+      // Keep a visible placeholder so user knows image was present but too large/missing
+      result = result.replace(m[0], `<div style="color:#8899bb;font-size:12px;text-align:center;padding:4px;">🖼 ${src}</div>`);
     }
   }
 
@@ -2374,7 +2376,20 @@ async function doApkgImport() {
         const example     = await processField(getField(fields, 'example',      7), mediaMap);
         const ipa         = await processField(getField(fields, 'ipa',          8), mediaMap);
 
-        if (pi === 1) console.log('[APKG] parsed: word='+word.slice(0,20)+' ipa='+ipa.slice(0,20)+' sound='+sound.slice(0,30)+' transl='+translation.slice(0,20));
+        if (pi === 1) {
+          console.log('[APKG] word:', word.slice(0,30));
+          console.log('[APKG] translation:', translation.slice(0,30));
+          console.log('[APKG] image raw field:', (fields[fieldIdx['image']!==undefined?fieldIdx['image']:2]||'').slice(0,80));
+          console.log('[APKG] image processed:', image.slice(0,80));
+          console.log('[APKG] meaning raw field:', (fields[fieldIdx['meaning']!==undefined?fieldIdx['meaning']:6]||'').slice(0,80));
+          console.log('[APKG] meaning processed:', meaning.slice(0,80));
+          console.log('[APKG] sound:', sound.slice(0,40));
+          console.log('[APKG] ipa:', ipa.slice(0,30));
+          console.log('[APKG] example:', example.slice(0,60));
+          console.log('[APKG] mediaMap keys:', Object.keys(mediaMap).slice(0,5));
+          console.log('[APKG] front:', front ? front.slice(0,120) : 'EMPTY');
+          console.log('[APKG] back:', back ? back.slice(0,120) : 'EMPTY');
+        }
 
         // FRONT: Word + IPA + Sound (autoplay) + Example
         const frontParts = [];
