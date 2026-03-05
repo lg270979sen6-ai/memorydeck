@@ -2121,34 +2121,41 @@ async function mediaToDataUri(bytes, filename) {
   return `data:${mime};base64,${b64}`;
 }
 
-// Convert Anki HTML, replacing <img src="filename"> with base64 URIs from mediaMap
+// Convert Anki HTML field to clean text/HTML for storage
 async function processField(html, mediaMap) {
   if (!html) return '';
   let result = html;
 
-  // Replace img tags with base64 where available
+  // 1. Replace <img src="filename"> — use filename as placeholder for Firebase lookup later
+  //    We store just the filename, loadCardImages() will replace with real data URI on display
   const imgRe = /<img[^>]+src="([^"]+)"[^>]*>/gi;
-  const matches = [...html.matchAll(imgRe)];
-  for (const m of matches) {
+  const imgMatches = [...html.matchAll(imgRe)];
+  for (const m of imgMatches) {
     const src = m[1];
-    if (mediaMap[src]) {
-      result = result.replace(m[0], `<img src="${mediaMap[src]}" style="max-width:100%;max-height:220px;border-radius:10px;display:block;margin:8px auto;">`);
-    } else {
-      // Keep a visible placeholder so user knows image was present but too large/missing
-      result = result.replace(m[0], `<div style="color:#8899bb;font-size:12px;text-align:center;padding:4px;">🖼 ${src}</div>`);
-    }
+    if (src.startsWith('data:')) continue; // already a data URI
+    // Store as <img src="filename.jpg"> — will be resolved from Firebase at display time
+    result = result.replace(m[0], `<img src="${src}" data-anki-img="1" style="max-width:100%;max-height:200px;border-radius:10px;display:block;margin:8px auto;">`);
   }
 
-  // Clean HTML but preserve [sound:] tags and line structure
+  // 2. Convert HTML formatting to markdown (safe for text storage)
   result = result
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<div>/gi, '\n').replace(/<\/div>/gi, '')
     .replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&')
     .replace(/&lt;/gi, '<').replace(/&gt;/gi, '>')
     .replace(/<b>(.*?)<\/b>/gi, '**$1**').replace(/<strong>(.*?)<\/strong>/gi, '**$1**')
-    .replace(/<i>(.*?)<\/i>/gi, '_$1_').replace(/<em>(.*?)<\/em>/gi, '_$1_')
-    .replace(/<[^>]+>/g, '')           // strip remaining HTML tags
-    .replace(/\{\{[^}]+\}\}/g, '')     // strip {{unfilled}} template vars
+    .replace(/<i>(.*?)<\/i>/gi, '_$1_').replace(/<em>(.*?)<\/em>/gi, '_$1_');
+
+  // 3. Strip remaining HTML tags BUT preserve <img> tags we just set
+  // Split on img tags, strip HTML from text parts only
+  const parts = result.split(/(<img[^>]+>)/gi);
+  result = parts.map((part, i) => {
+    if (part.match(/^<img/i)) return part; // keep img tags
+    return part.replace(/<[^>]+>/g, ''); // strip other tags
+  }).join('');
+
+  result = result
+    .replace(/\{\{[^}]+\}\}/g, '') // strip {{unfilled}} template vars
     .trim();
 
   // NOTE: [sound:filename] tags are PRESERVED — audio engine handles them
