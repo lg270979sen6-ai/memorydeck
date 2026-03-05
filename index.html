@@ -940,8 +940,112 @@ body {
 .empty-sub { font-size: 14px; font-weight: 500; }
 
 /* ═══════════════════════════════════
-   ANIMATIONS
+   DECK OPTIONS OVERLAY
 ═══════════════════════════════════ */
+.dopt-overlay {
+  position: fixed; inset: 0; z-index: 400;
+  background: var(--bg);
+  display: none; flex-direction: column; overflow: hidden;
+}
+.dopt-overlay.open { display: flex; }
+.dopt-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: calc(var(--safe-t) + 12px) 16px 12px;
+  background: rgba(255,255,255,.92);
+  backdrop-filter: saturate(180%) blur(20px);
+  border-bottom: .5px solid var(--border);
+  flex-shrink: 0;
+}
+.dopt-body {
+  flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch;
+  padding: 16px 16px calc(var(--safe-b) + 24px);
+}
+.dopt-section {
+  background: var(--card); border-radius: var(--radius-lg);
+  border: 1px solid var(--border); overflow: hidden;
+  box-shadow: var(--shadow-sm); margin-bottom: 14px;
+}
+.dopt-section-title {
+  font-size: 12px; font-weight: 800; color: var(--ink3);
+  letter-spacing: .07em; text-transform: uppercase;
+  padding: 12px 16px 6px;
+}
+.dopt-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 11px 16px; border-bottom: .5px solid var(--border);
+}
+.dopt-row:last-child { border-bottom: none; }
+.dopt-lbl {
+  flex: 1; font-size: 14px; font-weight: 600; color: var(--ink);
+}
+.dopt-hint {
+  font-size: 11px; color: var(--ink3); font-weight: 500; margin-top: 1px;
+}
+.dopt-input {
+  width: 90px; padding: 7px 10px; text-align: right;
+  background: var(--bg); border: 1.5px solid var(--border2);
+  border-radius: 10px; font-family: var(--font);
+  font-size: 14px; font-weight: 700; color: var(--ink);
+  outline: none;
+}
+.dopt-input:focus { border-color: var(--blue); }
+.dopt-select {
+  padding: 7px 10px;
+  background: var(--bg); border: 1.5px solid var(--border2);
+  border-radius: 10px; font-family: var(--font);
+  font-size: 13px; font-weight: 600; color: var(--ink);
+  outline: none; max-width: 160px;
+}
+.dopt-toggle {
+  position: relative; width: 51px; height: 31px; flex-shrink: 0;
+}
+.dopt-toggle input { opacity: 0; width: 0; height: 0; }
+.dopt-toggle-track {
+  position: absolute; inset: 0; border-radius: 16px;
+  background: var(--bg2); transition: background .2s; cursor: pointer;
+}
+.dopt-toggle input:checked + .dopt-toggle-track { background: var(--blue); }
+.dopt-toggle-thumb {
+  position: absolute; top: 3px; left: 3px;
+  width: 25px; height: 25px; border-radius: 50%;
+  background: white; box-shadow: 0 2px 6px rgba(0,0,0,.25);
+  transition: left .2s; pointer-events: none;
+}
+.dopt-toggle input:checked ~ .dopt-toggle-thumb { left: 23px; }
+.dopt-steps-input {
+  width: 100%; padding: 9px 12px;
+  background: var(--bg); border: 1.5px solid var(--border2);
+  border-radius: 10px; font-family: var(--font);
+  font-size: 14px; font-weight: 600; color: var(--ink);
+  outline: none;
+}
+.dopt-steps-input:focus { border-color: var(--blue); }
+.dopt-algo-btn {
+  flex: 1; padding: 9px 4px; border-radius: 10px;
+  border: 2px solid var(--border2); background: var(--card);
+  color: var(--ink2); font-family: var(--font);
+  font-size: 13px; font-weight: 700; cursor: pointer; transition: .15s;
+}
+.dopt-algo-btn.active-sm2  { border-color: var(--blue);   background: var(--blue);   color: #fff; }
+.dopt-algo-btn.active-fsrs { border-color: var(--purple); background: var(--purple); color: #fff; }
+.dopt-params-area {
+  width: 100%; padding: 9px 12px; min-height: 60px;
+  background: var(--bg); border: 1.5px solid var(--border2);
+  border-radius: 10px; font-family: var(--mono);
+  font-size: 12px; font-weight: 500; color: var(--ink2);
+  outline: none; resize: none; line-height: 1.5;
+}
+.dopt-params-area:focus { border-color: var(--purple); }
+.dopt-retention-wrap {
+  display: flex; align-items: center; gap: 10px; flex: 1;
+}
+.dopt-retention-wrap input[type=range] {
+  flex: 1; accent-color: var(--purple);
+}
+.dopt-badge {
+  font-family: var(--mono); font-size: 13px; font-weight: 700;
+  color: var(--purple); min-width: 38px; text-align: right;
+}
 @keyframes fadeUp {
   from { opacity:0; transform:translateY(10px); }
   to   { opacity:1; transform:none; }
@@ -1145,8 +1249,198 @@ body {
   <div class="overlay-body" id="ddCards"></div>
 </div>
 
+<!-- DECK OPTIONS OVERLAY -->
+<div class="dopt-overlay" id="deckOptOv">
+  <div class="dopt-header">
+    <div class="rev-close" onclick="closeDeckOpt()">✕</div>
+    <div class="overlay-title" id="doptTitle">Параметры обучения</div>
+    <button onclick="saveDeckOpt()" style="padding:8px 18px;border-radius:var(--radius-sm);background:var(--blue);color:#fff;border:none;font-family:var(--font);font-size:14px;font-weight:800;cursor:pointer;">Сохранить</button>
+  </div>
+  <div class="dopt-body">
+
+    <!-- Алгоритм -->
+    <div class="dopt-section">
+      <div class="dopt-section-title">Алгоритм повторений</div>
+      <div class="dopt-row" style="flex-direction:column;align-items:stretch;gap:8px;padding:12px 16px;">
+        <div style="display:flex;gap:8px;">
+          <button class="dopt-algo-btn active-sm2" id="doptAlgoSM2"  onclick="doptPickAlgo('sm2')">SM-2</button>
+          <button class="dopt-algo-btn"             id="doptAlgoFSRS" onclick="doptPickAlgo('fsrs')">FSRS-4.5</button>
+        </div>
+        <div style="font-size:12px;color:var(--ink3);font-weight:500;" id="doptAlgoDesc">Классический алгоритм SuperMemo. Надёжен и прост.</div>
+      </div>
+    </div>
+
+    <!-- Ежедневный лимит -->
+    <div class="dopt-section">
+      <div class="dopt-section-title">Ежедневный лимит</div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Новых карточек в день<div class="dopt-hint">0 = использовать глобальный лимит</div></div>
+        <input class="dopt-input" type="number" id="doptNewDay" min="0" max="9999" value="5">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Максимум повторений в день</div>
+        <input class="dopt-input" type="number" id="doptMaxRev" min="0" max="9999" value="100">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Лимиты начинаются сверху<div class="dopt-hint">Считать лимиты с начала сессии</div></div>
+        <label class="dopt-toggle">
+          <input type="checkbox" id="doptLimTop">
+          <div class="dopt-toggle-track"></div>
+          <div class="dopt-toggle-thumb"></div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Новые карточки -->
+    <div class="dopt-section">
+      <div class="dopt-section-title">Новые карточки</div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Шаги изучаемых<div class="dopt-hint">Интервалы до первого повторения (напр: 1m 10m)</div></div>
+        <input class="dopt-steps-input" type="text" id="doptLearnSteps" value="1m 10m" style="width:110px;">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Порядок добавления</div>
+        <select class="dopt-select" id="doptNewOrder">
+          <option value="sequential">Последовательный (сначала старые)</option>
+          <option value="random">Случайный</option>
+        </select>
+      </div>
+      <div class="dopt-row" id="doptFirstIntRow">
+        <div class="dopt-lbl">Интервал после «Хорошо» (дни)</div>
+        <input class="dopt-input" type="number" id="doptFirstInt" min="1" max="30" value="1">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Интервал «Легко» (дни)</div>
+        <input class="dopt-input" type="number" id="doptEasyInt" min="1" max="365" value="4">
+      </div>
+    </div>
+
+    <!-- Забытые карточки -->
+    <div class="dopt-section">
+      <div class="dopt-section-title">Забытое</div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Шаги переучиваемых<div class="dopt-hint">После «Снова» (напр: 10m)</div></div>
+        <input class="dopt-steps-input" type="text" id="doptRelearSteps" value="10m" style="width:110px;">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Порог «Приставучих» карточек<div class="dopt-hint">Сколько ошибок до пометки</div></div>
+        <input class="dopt-input" type="number" id="doptLeechThresh" min="1" max="20" value="8">
+      </div>
+      <div class="dopt-row" id="doptLapsePctRow">
+        <div class="dopt-lbl">Штраф за забывание (%)<div class="dopt-hint">Снижение интервала при ошибке</div></div>
+        <input class="dopt-input" type="number" id="doptLapsePct" min="0" max="100" value="50">
+      </div>
+    </div>
+
+    <!-- Порядок показа -->
+    <div class="dopt-section">
+      <div class="dopt-section-title">Порядок показа</div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Порядок новых</div>
+        <select class="dopt-select" id="doptNewSort">
+          <option value="card_type">По типу карточки</option>
+          <option value="due_date">По сроку</option>
+          <option value="random">Случайный</option>
+        </select>
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Порядок повторяемых</div>
+        <select class="dopt-select" id="doptRevSort">
+          <option value="due_random">По сроку, затем случайный</option>
+          <option value="due">Строго по сроку</option>
+          <option value="random">Случайный</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Таймер -->
+    <div class="dopt-section">
+      <div class="dopt-section-title">Таймер</div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Максимум секунд для ответа<div class="dopt-hint">0 = без таймера</div></div>
+        <input class="dopt-input" type="number" id="doptTimerSec" min="0" max="600" value="60">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Показывать время ответа</div>
+        <label class="dopt-toggle">
+          <input type="checkbox" id="doptShowTimer">
+          <div class="dopt-toggle-track"></div>
+          <div class="dopt-toggle-thumb"></div>
+        </label>
+      </div>
+    </div>
+
+    <!-- Откладывание -->
+    <div class="dopt-section">
+      <div class="dopt-section-title">Откладывание</div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Откладывать новые связанные до завтра</div>
+        <label class="dopt-toggle">
+          <input type="checkbox" id="doptBuryNew">
+          <div class="dopt-toggle-track"></div>
+          <div class="dopt-toggle-thumb"></div>
+        </label>
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Откладывать повторяемые до завтра</div>
+        <label class="dopt-toggle">
+          <input type="checkbox" id="doptBuryRev">
+          <div class="dopt-toggle-track"></div>
+          <div class="dopt-toggle-thumb"></div>
+        </label>
+      </div>
+    </div>
+
+    <!-- FSRS секция -->
+    <div class="dopt-section" id="doptFSRSSection" style="display:none;">
+      <div class="dopt-section-title">FSRS-4.5</div>
+      <div class="dopt-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+        <div class="dopt-lbl">Желаемое усвоение</div>
+        <div class="dopt-retention-wrap">
+          <input type="range" id="doptRetSlider" min="70" max="99" value="90"
+            oninput="document.getElementById('doptRetVal').textContent=this.value+'%'">
+          <span class="dopt-badge" id="doptRetVal">90%</span>
+        </div>
+      </div>
+      <div class="dopt-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+        <div class="dopt-lbl">Параметры FSRS w[0..16]<div class="dopt-hint">17 чисел через запятую — изменяйте осторожно</div></div>
+        <textarea class="dopt-params-area" id="doptFSRSParams" rows="3">0.4072,1.1829,3.1262,15.4722,7.2102,0.5316,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898</textarea>
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Исторический уровень усвоения</div>
+        <input class="dopt-input" type="number" id="doptHistRet" min="50" max="100" value="90">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Максимальный интервал (дни)</div>
+        <input class="dopt-input" type="number" id="doptMaxInterval" min="1" max="36500" value="36500">
+      </div>
+    </div>
+
+    <!-- Звук -->
+    <div class="dopt-section">
+      <div class="dopt-section-title">Звук</div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Воспроизводить звук автоматически</div>
+        <label class="dopt-toggle">
+          <input type="checkbox" id="doptAutoAudio" checked>
+          <div class="dopt-toggle-track"></div>
+          <div class="dopt-toggle-thumb"></div>
+        </label>
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Пропускать вопрос при воспроизведении ответа</div>
+        <label class="dopt-toggle">
+          <input type="checkbox" id="doptSkipQ">
+          <div class="dopt-toggle-track"></div>
+          <div class="dopt-toggle-thumb"></div>
+        </label>
+      </div>
+    </div>
+
+  </div>
+</div>
+
 <!-- CARD EDITOR -->
-<div class="editor" id="cardEdOv">
   <div class="editor-header">
     <div class="rev-close" onclick="closeCardEd()">✕</div>
     <div class="editor-title" id="ceTitle">Новая карточка</div>
@@ -1530,36 +1824,38 @@ function fmtInterval(days) {
 // ═══════════════════════════════════════════════════
 const SM2_Q = [0, 2, 4, 5]; // Again/Hard/Good/Easy → SM-2 quality (0-5)
 
-function sm2Calc(sm, g) {
+function sm2Calc(sm, g, deckOpt) {
   const s = sm ? {...sm} : {interval:0, ease:2.5, due:today(), state:'new', reps:0, lapses:0};
   const q = SM2_Q[g]; // SM-2 quality 0-5
+  const firstInt  = deckOpt?.firstInt  || cfg.firstInterval || 1;
+  const easyInt   = deckOpt?.easyInt   || 4;
+  const lapsePct  = deckOpt?.lapsePct  ?? 50;
 
   if (q < 3) {
     // Forgotten / hard — reset to relearning
     s.reps = 0;
-    if (g === 0) { s.lapses = (s.lapses||0) + 1; s.interval = 1; }
-    else          { s.interval = Math.max(1, Math.round(s.interval * 0.5)); } // Hard: half interval
+    if (g === 0) {
+      s.lapses = (s.lapses||0) + 1;
+      s.interval = Math.max(1, Math.round(s.interval * (1 - lapsePct / 100)));
+    } else {
+      s.interval = Math.max(1, Math.round(s.interval * 0.5));
+    }
     s.state = 'learning';
     s.due = addD(today(), s.interval);
-    // EF adjustment for Hard (g=1)
     if (g === 1) s.ease = Math.max(1.3, s.ease - 0.15);
-    // EF adjustment for Again (g=0)
     if (g === 0) s.ease = Math.max(1.3, s.ease - 0.20);
   } else {
-    // Remembered
     let newInterval;
     if (s.reps === 0) {
-      newInterval = (g === 3) ? 4 : (cfg.firstInterval || 1); // Easy=4, Good=firstInterval
+      newInterval = (g === 3) ? easyInt : firstInt;
     } else if (s.reps === 1) {
       newInterval = 6;
     } else {
       newInterval = Math.round(s.interval * s.ease);
     }
-    // Easy bonus: multiply by easy bonus factor (1.3 like Anki)
     if (g === 3) newInterval = Math.round(newInterval * 1.3);
     s.interval = Math.max(1, newInterval);
     s.reps++;
-    // EF update: EF' = EF + (0.1 - (5-q) * (0.08 + (5-q) * 0.02))
     s.ease = Math.max(1.3, s.ease + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
     s.state = s.interval >= 21 ? 'review' : 'learning';
     s.due = addD(today(), s.interval);
@@ -1685,17 +1981,51 @@ function fsrsCalc(sm, g) {
   };
 }
 
-// ═══════════════════════════════════════════════════
-//  UNIFIED CALC — delegates to SM-2 or FSRS
-// ═══════════════════════════════════════════════════
-function getAlgo() { return cfg.algo || 'sm2'; }
+// FSRS with custom retention target and max interval from deck options
+function fsrsCalcWithRetention(sm, g, retTarget, deckOpt) {
+  const maxInt = deckOpt?.maxInterval || 36500;
+  // Parse custom w params if provided
+  let wParams = FSRS_W;
+  if (deckOpt?.fsrsParams) {
+    const parsed = deckOpt.fsrsParams.split(',').map(Number).filter(n => !isNaN(n));
+    if (parsed.length === 17) wParams = parsed;
+  }
+  // We use same logic as fsrsCalc but with custom retention
+  const result = fsrsCalc(sm, g); // compute stability etc
+  // Recompute interval with custom retention target
+  const S = result.stability;
+  const decay    = FSRS_DECAY;
+  const factor   = Math.pow(retTarget, 1 / decay) - 1;
+  const customInt = g === 0 ? 1 : Math.max(1, Math.min(maxInt, Math.round(S * (Math.pow(retTarget, 1/decay) - 1) / FSRS_FACTOR)));
+  return { ...result, interval: customInt, due: addD(today(), customInt) };
+}
 
-function schedCalc(sm, g) {
-  return getAlgo() === 'fsrs' ? fsrsCalc(sm, g) : sm2Calc(sm, g);
+
+//  deckOpt can override global cfg
+// ═══════════════════════════════════════════════════
+function getAlgo(deckOpt) {
+  return (deckOpt?.algo) || cfg.algo || 'sm2';
+}
+
+function schedCalc(sm, g, deckOpt) {
+  const algo = getAlgo(deckOpt);
+  if (algo === 'fsrs') {
+    // Override FSRS target retention from deck options
+    const prevRetention = FSRS_R_TARGET;
+    if (deckOpt?.fsrsRetention) {
+      // Temporarily set target — we'll use a local override
+      const ret = deckOpt.fsrsRetention / 100;
+      return fsrsCalcWithRetention(sm, g, ret, deckOpt);
+    }
+    return fsrsCalc(sm, g);
+  }
+  // SM-2 with deck-specific firstInt and easyInt
+  return sm2Calc(sm, g, deckOpt);
 }
 
 function nextLbl(c, g) {
-  const s = schedCalc(c.sm2, g);
+  const deckOpt = c.deckId ? getEffectiveOpt(c.deckId) : null;
+  const s = schedCalc(c.sm2, g, deckOpt);
   return fmtInterval(s.interval);
 }
 
@@ -2105,15 +2435,32 @@ function updateBadge(){
 function buildQ(deckId=null){
   const t=today(), k=PFX+'new_'+t;
   const shown=(()=>{try{return parseInt(localStorage.getItem(k)||'0');}catch(e){return 0;}})();
+  // Get effective limits: deck opt > global cfg
+  const opt = deckId ? getDeckOpt(deckId) : null;
+  const maxNew = opt ? (opt.newPerDay || cfg.newPerDay) : cfg.newPerDay;
+  const maxRev = opt ? (opt.maxReviews || cfg.maxReviews) : cfg.maxReviews;
+
   let nw=[],rv=[],ln=[];
   Object.entries(cards).forEach(([id,c])=>{
     if(deckId&&c.deckId!==deckId)return;
     const sm=c.sm2;
     if(!sm||sm.state==='new')nw.push({id,...c});
-    else if(sm.due<=t){if(sm.state==='learning')ln.push({id,...c});else rv.push({id,...c});}
+    else if(sm.due<=t){if(sm.state==='learning'||sm.state==='relearning')ln.push({id,...c});else rv.push({id,...c});}
   });
+
+  // Sort new cards by deck option
+  const newOrder = opt?.newOrder || 'sequential';
+  if (newOrder === 'random') nw = nw.sort(()=>Math.random()-.5);
+  // else sequential — keep insertion order
+
+  // Sort reviews by deck option
+  const revSort = opt?.revSort || 'due_random';
+  if (revSort === 'random')       rv = rv.sort(()=>Math.random()-.5);
+  else if (revSort === 'due')     rv = rv.sort((a,b)=>(a.sm2?.due||'').localeCompare(b.sm2?.due||''));
+  else /* due_random */           { rv = rv.sort((a,b)=>(a.sm2?.due||'').localeCompare(b.sm2?.due||'')); rv = rv.sort((a,b)=>a.sm2?.due===b.sm2?.due?Math.random()-.5:0); }
+
   const sh=a=>a.sort(()=>Math.random()-.5);
-  return [...sh(ln),...sh(rv).slice(0,cfg.maxReviews),...sh(nw).slice(0,Math.max(0,cfg.newPerDay-shown))];
+  return [...sh(ln),...rv.slice(0,maxRev),...nw.slice(0,Math.max(0,maxNew-shown))];
 }
 
 function startReview(deckId=null){
@@ -2198,9 +2545,10 @@ function renderCard(){
   const deck=decks[c.deckId]||{}, sm=c.sm2;
   const sCol=!sm||sm.state==='new'?'var(--blue)':sm.state==='learning'?'var(--orange)':'var(--green)';
   const sLbl=!sm||sm.state==='new'?'Новая':sm.state==='learning'?'Учится':'Повторение';
+  const deckOpt = c.deckId ? getEffectiveOpt(c.deckId) : null;
   let intStr = '';
   if (sm && sm.interval > 0) {
-    if (getAlgo() === 'fsrs') {
+    if (getAlgo(deckOpt) === 'fsrs') {
       intStr = `${sm.interval}д · S=${(sm.stability||0).toFixed(1)} D=${(sm.difficulty||5).toFixed(1)}`;
     } else {
       intStr = `${sm.interval}д · EF ${(sm.ease||2.5).toFixed(1)}`;
@@ -2397,7 +2745,9 @@ function closeReview(){
 }
 
 function doGrade(g){
-  const c=rQ[rIdx], ns=schedCalc(c.sm2,g);
+  const c=rQ[rIdx];
+  const deckOpt = c.deckId ? getEffectiveOpt(c.deckId) : null;
+  const ns=schedCalc(c.sm2,g,deckOpt);
   save('cards/'+c.id+'/sm2',ns);
   ['again','hard','good','easy'].forEach((k,i)=>{if(i===g)rStats[k]++;});
   if(g===0)rQ.splice(Math.min(rIdx+5,rQ.length),0,{...c,sm2:ns});
@@ -2443,12 +2793,18 @@ function openDeckDetail(id){
   eDetailDeck=id;
   const d=decks[id], dc=Object.entries(cards).filter(([,c])=>c.deckId===id);
   const due=dc.filter(([,c])=>isDue(c.sm2)).length;
+  const opt = getDeckOpt(id);
+  const algoTag = opt.algo === 'fsrs'
+    ? `<span style="background:rgba(175,82,222,.1);color:var(--purple);padding:3px 8px;border-radius:8px;font-size:11px;font-weight:700;">FSRS-4.5</span>`
+    : `<span style="background:rgba(0,122,255,.08);color:var(--blue);padding:3px 8px;border-radius:8px;font-size:11px;font-weight:700;">SM-2</span>`;
   document.getElementById('ddTitle').textContent=(d.emoji||'📚')+' '+d.name;
   document.getElementById('ddMeta').innerHTML=`
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <span style="background:${d.color||COLORS[0]}18;color:${d.color||COLORS[0]};padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;">${dc.length} карточек</span>
       <span style="background:rgba(255,149,0,.1);color:var(--orange);padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;">${due} к повтору</span>
+      ${algoTag}
       <button onclick="openTemplateEd()" style="padding:6px 12px;border-radius:10px;background:var(--bg2);border:.5px solid var(--border);font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;">🎨 Шаблон</button>
+      <button onclick="openDeckOpt('${id}')" style="padding:6px 12px;border-radius:10px;background:var(--bg2);border:.5px solid var(--border);font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;">⚙️ Параметры</button>
       <button onclick="startReview('${id}')" style="margin-left:auto;padding:8px 16px;border-radius:10px;background:var(--blue);color:white;border:none;font-family:var(--font);font-size:13px;font-weight:800;cursor:pointer;"${due===0?' disabled style="opacity:.4;cursor:default;"':''}>▶ Повторить</button>
     </div>`;
   const pipCol=sm=>!sm||sm.state==='new'?'var(--blue)':sm.state==='learning'?'var(--orange)':isDue(sm)?'var(--red)':'var(--green)';
@@ -2509,6 +2865,159 @@ function saveDeck(){
   save('decks/'+id,{name,emoji:dEmoji,color:dColor,createdAt:eDeckId?(decks[eDeckId]?.createdAt||Date.now()):Date.now()});
   toast(eDeckId?'✅ Колода обновлена':'✅ Колода создана');
   closeSh('deckEdSh');
+}
+
+// ═══════════════════════════════════════════════════
+//  DECK OPTIONS (per-deck learning parameters)
+// ═══════════════════════════════════════════════════
+let doptDeckId = null;
+
+// Default deck options matching Anki screenshot
+const DECK_OPT_DEFAULTS = {
+  algo:         'sm2',
+  newPerDay:    5,
+  maxReviews:   100,
+  limTop:       false,
+  learnSteps:   '1m 10m',
+  newOrder:     'sequential',
+  firstInt:     1,
+  easyInt:      4,
+  relearnSteps: '10m',
+  leechThresh:  8,
+  lapsePct:     50,
+  newSort:      'card_type',
+  revSort:      'due_random',
+  timerSec:     60,
+  showTimer:    false,
+  buryNew:      false,
+  buryRev:      false,
+  autoAudio:    true,
+  skipQ:        false,
+  // FSRS
+  fsrsEnabled:  true,
+  fsrsRetention:90,
+  fsrsParams:   '0.4072,1.1829,3.1262,15.4722,7.2102,0.5316,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898',
+  fsrsHistRet:  90,
+  maxInterval:  36500,
+};
+
+function getDeckOpt(deckId) {
+  const d = decks[deckId];
+  return Object.assign({}, DECK_OPT_DEFAULTS, d?.opt || {});
+}
+
+function openDeckOpt(deckId) {
+  doptDeckId = deckId;
+  const opt = getDeckOpt(deckId);
+  const dname = decks[deckId]?.name || 'Колода';
+  document.getElementById('doptTitle').textContent = '⚙️ ' + dname;
+
+  // Populate fields
+  document.getElementById('doptNewDay').value      = opt.newPerDay;
+  document.getElementById('doptMaxRev').value      = opt.maxReviews;
+  document.getElementById('doptLimTop').checked    = opt.limTop;
+  document.getElementById('doptLearnSteps').value  = opt.learnSteps;
+  document.getElementById('doptNewOrder').value    = opt.newOrder;
+  document.getElementById('doptFirstInt').value    = opt.firstInt;
+  document.getElementById('doptEasyInt').value     = opt.easyInt;
+  document.getElementById('doptRelearSteps').value = opt.relearnSteps;
+  document.getElementById('doptLeechThresh').value = opt.leechThresh;
+  document.getElementById('doptLapsePct').value    = opt.lapsePct;
+  document.getElementById('doptNewSort').value     = opt.newSort;
+  document.getElementById('doptRevSort').value     = opt.revSort;
+  document.getElementById('doptTimerSec').value    = opt.timerSec;
+  document.getElementById('doptShowTimer').checked = opt.showTimer;
+  document.getElementById('doptBuryNew').checked   = opt.buryNew;
+  document.getElementById('doptBuryRev').checked   = opt.buryRev;
+  document.getElementById('doptAutoAudio').checked = opt.autoAudio;
+  document.getElementById('doptSkipQ').checked     = opt.skipQ;
+  // FSRS
+  const retSlider = document.getElementById('doptRetSlider');
+  retSlider.value = opt.fsrsRetention;
+  document.getElementById('doptRetVal').textContent = opt.fsrsRetention + '%';
+  document.getElementById('doptFSRSParams').value  = opt.fsrsParams;
+  document.getElementById('doptHistRet').value     = opt.fsrsHistRet;
+  document.getElementById('doptMaxInterval').value = opt.maxInterval;
+
+  doptPickAlgo(opt.algo, false); // update UI without changing opt
+  document.getElementById('deckOptOv').classList.add('open');
+}
+
+function closeDeckOpt() {
+  document.getElementById('deckOptOv').classList.remove('open');
+}
+
+function saveDeckOpt() {
+  if (!doptDeckId) return;
+  const algo = document.getElementById('doptAlgoSM2').classList.contains('active-sm2') ? 'sm2' : 'fsrs';
+  const opt = {
+    algo,
+    newPerDay:    parseInt(document.getElementById('doptNewDay').value)      || 5,
+    maxReviews:   parseInt(document.getElementById('doptMaxRev').value)      || 100,
+    limTop:       document.getElementById('doptLimTop').checked,
+    learnSteps:   document.getElementById('doptLearnSteps').value.trim()     || '1m 10m',
+    newOrder:     document.getElementById('doptNewOrder').value,
+    firstInt:     parseInt(document.getElementById('doptFirstInt').value)    || 1,
+    easyInt:      parseInt(document.getElementById('doptEasyInt').value)     || 4,
+    relearnSteps: document.getElementById('doptRelearSteps').value.trim()    || '10m',
+    leechThresh:  parseInt(document.getElementById('doptLeechThresh').value) || 8,
+    lapsePct:     parseInt(document.getElementById('doptLapsePct').value)    || 50,
+    newSort:      document.getElementById('doptNewSort').value,
+    revSort:      document.getElementById('doptRevSort').value,
+    timerSec:     parseInt(document.getElementById('doptTimerSec').value)    || 0,
+    showTimer:    document.getElementById('doptShowTimer').checked,
+    buryNew:      document.getElementById('doptBuryNew').checked,
+    buryRev:      document.getElementById('doptBuryRev').checked,
+    autoAudio:    document.getElementById('doptAutoAudio').checked,
+    skipQ:        document.getElementById('doptSkipQ').checked,
+    fsrsRetention:parseInt(document.getElementById('doptRetSlider').value)   || 90,
+    fsrsParams:   document.getElementById('doptFSRSParams').value.trim(),
+    fsrsHistRet:  parseInt(document.getElementById('doptHistRet').value)     || 90,
+    maxInterval:  parseInt(document.getElementById('doptMaxInterval').value) || 36500,
+  };
+  // Merge with existing deck, preserving name/emoji/color/createdAt
+  const existing = decks[doptDeckId] || {};
+  save('decks/' + doptDeckId, { ...existing, opt });
+  toast('✅ Параметры сохранены');
+  closeDeckOpt();
+}
+
+function doptPickAlgo(algo, updateField = true) {
+  const isSM2  = algo === 'sm2';
+  const btnSM2 = document.getElementById('doptAlgoSM2');
+  const btnFS  = document.getElementById('doptAlgoFSRS');
+  const desc   = document.getElementById('doptAlgoDesc');
+  const fsrsSec = document.getElementById('doptFSRSSection');
+  const firstRow = document.getElementById('doptFirstIntRow');
+  const lapseRow = document.getElementById('doptLapsePctRow');
+  if (!btnSM2) return;
+  btnSM2.className = 'dopt-algo-btn' + (isSM2  ? ' active-sm2'  : '');
+  btnFS.className  = 'dopt-algo-btn' + (!isSM2 ? ' active-fsrs' : '');
+  if (desc) desc.textContent = isSM2
+    ? 'Классический алгоритм SuperMemo. Надёжен и прост.'
+    : 'FSRS-4.5 — современный алгоритм на основе нейросетей. Точнее прогнозирует забывание.';
+  if (fsrsSec) fsrsSec.style.display = isSM2 ? 'none' : '';
+  if (firstRow) firstRow.style.display = isSM2 ? '' : 'none';
+  if (lapseRow) lapseRow.style.display = isSM2 ? '' : 'none';
+}
+
+// ── Wire deck options into review engine ───────────────────
+// Returns effective options for current review deck (falls back to global cfg)
+function getEffectiveOpt(deckId) {
+  if (!deckId) return null;
+  const d = decks[deckId];
+  if (!d || !d.opt) return null;
+  return d.opt;
+}
+
+// Parse step strings like "1m 10m 1d" into minutes array
+function parseSteps(str) {
+  if (!str) return [1, 10];
+  return str.trim().split(/\s+/).map(s => {
+    const n = parseFloat(s);
+    if (s.endsWith('d')) return n * 1440;
+    return n; // minutes by default
+  }).filter(n => !isNaN(n) && n > 0);
 }
 
 // ═══════════════════════════════════════════════════
