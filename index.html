@@ -1757,6 +1757,11 @@ function renderCardContent(text) {
     t = t.replace(/class="anki-img"/g,         'style="display:block;text-align:center;margin:8px 0;"');
   }
   // Step 2: convert markdown ** and _ to HTML
+  // Fix broken img tags: remnants like: 0038.jpg" data-anki-img="1" style="...">
+  // Reconstruct them back to proper <img> tags
+  t = t.replace(/([\w.]+\.(?:jpg|jpeg|png|gif|webp))"\s+data-anki-img="1"[^>]*>/gi,
+    '<img src="$1" data-anki-img="1" style="max-width:100%;max-height:200px;border-radius:10px;display:block;margin:8px auto;">');
+
   t = t.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;font-style:normal;">$1</strong>');
   t = t.replace(/_([^_]+)_/g, '<em style="font-style:italic;opacity:.85;">$1</em>');
   // Step 3: newlines to <br>
