@@ -1072,15 +1072,24 @@ body {
     <div class="editor-title" id="ceTitle">Новая карточка</div>
     <button class="editor-save" onclick="saveCard()">Сохранить</button>
   </div>
-  <div class="editor-body" id="cardEdBody">
-    <!-- Fields rendered by JS based on template -->
+  <div style="display:flex;border-bottom:.5px solid var(--border);background:var(--card);flex-shrink:0;">
+    <button id="ceTab0" onclick="switchCeTab(0)" class="tmpl-tab tmpl-tab-active">Поля</button>
+    <button id="ceTab1" onclick="switchCeTab(1)" class="tmpl-tab">▶ Лицевая</button>
+    <button id="ceTab2" onclick="switchCeTab(2)" class="tmpl-tab">▶ Тыльная</button>
   </div>
-  <div style="padding:0 16px 16px;">
-    <div class="field"><label>Колода</label><select id="cDeck"></select></div>
-    <div class="field"><label>Теги (через запятую)</label><input id="cTags" placeholder="биология, экзамен"></div>
-    <button id="ceDeleteBtn" onclick="deleteCurrentCard()" style="display:none;width:100%;padding:13px;border-radius:14px;border:none;background:rgba(255,59,48,.08);color:#ff3b30;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer;margin-top:4px;">🗑 Удалить карточку</button>
+  <div id="cePanel0" class="editor-body" style="padding:0;">
+    <div id="cardEdBody"></div>
+    <div style="padding:0 16px 16px;">
+      <div class="field"><label>Колода</label><select id="cDeck"></select></div>
+      <div class="field"><label>Теги</label><input id="cTags" placeholder="через запятую"></div>
+      <button id="ceDeleteBtn" onclick="deleteCurrentCard()" style="display:none;width:100%;padding:13px;border-radius:14px;border:none;background:rgba(255,59,48,.08);color:#ff3b30;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer;">🗑 Удалить карточку</button>
+    </div>
   </div>
+  <div id="cePanel1" style="display:none;flex:1;overflow-y:auto;padding:16px;"></div>
+  <div id="cePanel2" style="display:none;flex:1;overflow-y:auto;padding:16px;"></div>
 </div>
+<input type="file" id="ceImgInput" accept="image/*" style="display:none" onchange="handleCeImage(this)">
+<input type="file" id="ceSndInput" accept="audio/*" style="display:none" onchange="handleCeSound(this)">
 
 <!-- CARD TEMPLATE EDITOR -->
 <div class="overlay" id="templateEdOv" style="display:none;flex-direction:column;background:var(--bg);">
@@ -1749,30 +1758,41 @@ function startReview(deckId=null){
 }
 
 async function loadCardImages() {
-  // Search all imgs with data-anki-img in cardStage (including hidden c-back)
   const stage = document.getElementById('cardStage');
   if (!stage) return;
-  const imgs = stage.querySelectorAll('img[data-anki-img]');
-  console.log('[IMG] querySelectorAll img[data-anki-img]:', imgs.length);
-  // Also log ALL imgs in stage for debugging
-  const allImgs = stage.querySelectorAll('img');
-  console.log('[IMG] ALL imgs in cardStage:', allImgs.length, [...allImgs].map(i=>i.getAttribute('src')||'no-src').join(', '));
-
+  
+  // Find ALL img tags - some may not have data-anki-img if from old format
+  const imgs = stage.querySelectorAll('img');
+  console.log('[IMG] total imgs in stage:', imgs.length);
+  
   for (const img of imgs) {
-    const src = img.getAttribute('src') || '';
+    let src = img.getAttribute('src') || '';
+    // Skip already loaded data URIs
+    if (src.startsWith('data:') || src.startsWith('http')) continue;
+    // Extract filename from src (handles normal src="filename.jpg")
     const m = src.match(/([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))/i);
     if (!m) continue;
     const filename = m[1];
-    const safeKey = filename.replace(/[.#$/[\]]/g, '_');
-    console.log('[IMG] loading:', filename, 'key:', safeKey);
+    const safeKey = filename.replace(/[.#$\/\[\]]/g, '_');
+    console.log('[IMG] loading:', filename, '→', safeKey);
     try {
       const snap = await db.ref('memorydeck_audio/' + sess.accId + '/' + safeKey).once('value');
-      console.log('[IMG] firebase:', snap.val() ? 'FOUND len='+(snap.val().length) : 'NOT FOUND');
       if (snap.val()) {
         img.src = snap.val();
         img.style.cssText = 'max-width:100%;max-height:200px;border-radius:10px;object-fit:contain;display:block;margin:8px auto;';
+        console.log('[IMG] ✅ loaded:', filename);
       } else {
-        img.parentElement && (img.parentElement.style.display = 'none');
+        console.log('[IMG] ❌ not found in Firebase:', safeKey);
+        // Try without extension replacement (some keys stored differently)
+        const altKey = filename.replace(/\./g, '_');
+        const snap2 = await db.ref('memorydeck_audio/' + sess.accId + '/' + altKey).once('value');
+        if (snap2.val()) {
+          img.src = snap2.val();
+          img.style.cssText = 'max-width:100%;max-height:200px;border-radius:10px;object-fit:contain;display:block;margin:8px auto;';
+          console.log('[IMG] ✅ loaded via altKey:', altKey);
+        } else {
+          img.style.display = 'none';
+        }
       }
     } catch(e) { console.log('[IMG] err:', e.message); }
   }
@@ -1781,10 +1801,23 @@ async function loadCardImages() {
 function showRaw() {
   const c = rQ[rIdx];
   if (!c) return;
-  const msg = `=== FRONT (${c.front?.length} chars) ===\n${c.front}\n\n=== BACK (${c.back?.length} chars) ===\n${c.back}`;
+  // Extract image filename from back
+  const imgM = (c.back||'').match(/\[img:([\w.\-]+)\]/) || (c.back||'').match(/src="([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))"/i);
+  const imgFile = imgM ? imgM[1] : null;
+  const safeKey = imgFile ? imgFile.replace(/[.#$\/\[\]]/g,'_') : null;
+  
+  let msg = `FRONT: ${c.front?.slice(0,200)}\n\nBACK: ${c.back?.slice(0,300)}`;
+  if (imgFile) {
+    msg += `\n\nIMG file: ${imgFile}\nFirebase key: memorydeck_audio/${sess.accId}/${safeKey}`;
+    // Check Firebase
+    db.ref('memorydeck_audio/'+sess.accId+'/'+safeKey).once('value').then(s => {
+      toast(s.val() ? `✅ IMG в Firebase (${Math.round(s.val().length/1024)}KB)` : `❌ IMG не найден: ${safeKey}`);
+    });
+  }
   console.log(msg);
-  alert(msg.slice(0, 1000));
+  alert(msg.slice(0,800));
 }
+
 
 function renderCard(){
   if(rIdx>=rQ.length){showDone();return;}
@@ -1841,7 +1874,7 @@ function renderCard(){
     </div>`;
 
   // Load images from Firebase — setTimeout ensures DOM is fully rendered
-  setTimeout(loadCardImages, 50);
+  setTimeout(loadCardImages, 200);
 
   // Auto-play front audio when card appears
   if (frontAudio.length) {
@@ -1860,7 +1893,7 @@ function doFlip(){
     const c = rQ[rIdx];
     const backAudio = extractAudioRefs(c.back);
     if (backAudio.length) setTimeout(() => autoPlayAudio(c, 'back'), 300);
-    setTimeout(loadCardImages, 100); // load back-side images
+    setTimeout(loadCardImages, 200); // load back-side images
   }
 }
 
@@ -2110,125 +2143,203 @@ function saveDeck(){
 // ═══════════════════════════════════════════════════
 //  CARD EDITOR
 // ═══════════════════════════════════════════════════
-// Parse card front/back HTML into field values
+// ═══════════════════════════════════════════════════
+//  CARD EDITOR — Anki-style with rich text + preview
+// ═══════════════════════════════════════════════════
+
+// Field definitions
+const CARD_ED_FIELDS = [
+  { id:'word',         label:'Word',          hint:'Лицевая + Тыльная', type:'text',      placeholder:'approach' },
+  { id:'ipa',          label:'IPA',           hint:'Лицевая',           type:'text',      placeholder:'əˈprəʊtʃ' },
+  { id:'translation',  label:'Translation',   hint:'Тыльная',           type:'text',      placeholder:'приближаться' },
+  { id:'meaning',      label:'Meaning',       hint:'Тыльная',           type:'rich',      placeholder:'To approach means to move close...' },
+  { id:'example',      label:'Example',       hint:'Лицевая + Тыльная', type:'rich',      placeholder:'The boy approached his school.' },
+  { id:'image',        label:'Image',         hint:'Тыльная',           type:'image',     placeholder:'02_0022.jpg' },
+  { id:'sound',        label:'Sound',         hint:'Лицевая',           type:'sound',     placeholder:'02_0022.mp3' },
+  { id:'sound_example',label:'Sound Example', hint:'Тыльная',           type:'sound',     placeholder:'02_0022_example.mp3' },
+];
+
+// Parse card HTML into field values
 function parseCardFields(front, back) {
-  const get = (html, cls) => {
-    const m = html.match(new RegExp(`<div[^>]*class="anki-${cls}"[^>]*>([\\s\\S]*?)<\\/div>`,'i'));
-    return m ? m[1].trim() : '';
+  const getDiv = (html, cls) => {
+    const m = html.match(new RegExp('<div[^>]*class="anki-'+cls+'"[^>]*>([\\s\\S]*?)<\\/div>','i'));
+    return m ? m[1].replace(/^📖\s*/,'').trim() : '';
   };
-  const getImg = html => {
+  const getImgFile = html => {
     const m = html.match(/\[img:([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))\]/i)
-           || html.match(/<div[^>]*class="anki-img"[^>]*>\s*\[img:([\w.\-]+)\]/i)
-           || html.match(/class="anki-img"[^>]*>[\s\S]*?src="([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))"/i);
+           || html.match(/data-anki-img[^>]*>.*?src="([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))"/i)
+           || html.match(/class="anki-img"[^>]*>[^<]*<img[^>]*src="([\w.\-]+)"/i);
     return m ? m[1] : '';
   };
-  const getSound = (html, pos) => {
-    const all = [...html.matchAll(/\[sound:([^\]]+)\]/g)].map(m=>m[1]);
-    return all[pos] || '';
-  };
+  const getSounds = html => [...html.matchAll(/\[sound:([^\]]+)\]/g)].map(m=>m[1]);
+  const fSounds = getSounds(front), bSounds = getSounds(back);
   return {
-    word:         get(front,'word') || get(back,'word'),
-    ipa:          get(front,'ipa'),
-    translation:  get(back,'translation'),
-    meaning:      get(back,'meaning').replace(/^📖\s*/,''),
-    example:      get(front,'example') || get(back,'example'),
-    image:        getImg(back),
-    sound:        getSound(front,0),
-    sound_example:getSound(back,0),
+    word:         getDiv(front,'word') || getDiv(back,'word'),
+    ipa:          getDiv(front,'ipa'),
+    translation:  getDiv(back,'translation'),
+    meaning:      getDiv(back,'meaning'),
+    example:      getDiv(front,'example') || getDiv(back,'example'),
+    image:        getImgFile(back),
+    sound:        fSounds[0]||'',
+    sound_example:bSounds[0]||'',
   };
 }
 
-// Build card front/back from field values
 function buildCardFromFields(vals) {
-  const ex = vals.example ? `→ ${vals.example}` : '';
+  const ex = (vals.example||'').replace(/^→\s*/,'');
   const front = [
-    vals.word    ? `<div class="anki-word">${vals.word}</div>` : '',
-    vals.ipa     ? `<div class="anki-ipa">[${vals.ipa.replace(/^\[|\]$/g,'')}]</div>` : '',
-    vals.sound   ? `[sound:${vals.sound}]` : '',
-    ex           ? `<div class="anki-example">${ex}</div>` : '',
+    vals.word        ? `<div class="anki-word">${vals.word}</div>` : '',
+    vals.ipa         ? `<div class="anki-ipa">[${vals.ipa.replace(/^\[|\]$/g,'')}]</div>` : '',
+    vals.sound       ? `[sound:${vals.sound}]` : '',
+    ex               ? `<div class="anki-example">→ ${ex}</div>` : '',
   ].filter(Boolean).join('\n');
   const back = [
     vals.word        ? `<div class="anki-word">${vals.word}</div>` : '',
     vals.image       ? `<div class="anki-img">[img:${vals.image}]</div>` : '',
     vals.translation ? `<div class="anki-translation">${vals.translation}</div>` : '',
     vals.meaning     ? `<div class="anki-meaning">📖 ${vals.meaning}</div>` : '',
-    ex               ? `<div class="anki-example">${ex}</div>` : '',
+    ex               ? `<div class="anki-example">→ ${ex}</div>` : '',
     vals.sound_example ? `[sound:${vals.sound_example}]` : '',
   ].filter(Boolean).join('\n');
   return {front, back};
 }
 
-// Field definitions for the editor UI
-const CARD_ED_FIELDS = [
-  { id:'word',         label:'Word (слово)',           placeholder:'approach',        hint:'Лицевая + Тыльная' },
-  { id:'ipa',          label:'IPA (транскрипция)',     placeholder:'əˈprəʊtʃ',       hint:'Лицевая' },
-  { id:'translation',  label:'Translation (перевод)',  placeholder:'приближаться',    hint:'Тыльная' },
-  { id:'meaning',      label:'Meaning (значение)',     placeholder:'To approach means to move close...', hint:'Тыльная', multiline:true },
-  { id:'example',      label:'Example (пример)',       placeholder:'The boy approached his school.',    hint:'Лицевая + Тыльная', multiline:true },
-  { id:'image',        label:'Image (картинка)',       placeholder:'filename.jpg',    hint:'Тыльная', isImage:true },
-  { id:'sound',        label:'Sound (звук слова)',     placeholder:'word.mp3',        hint:'Лицевая', isSound:true },
-  { id:'sound_example',label:'Sound Example',          placeholder:'example.mp3',     hint:'Тыльная', isSound:true },
-];
+let ceCurrentTab = 0;
+let ceImgTarget = null; // which field is receiving image upload
+let ceSndTarget = null;
+let ceImageCache = {}; // filename -> dataUri (for preview)
 
-function openCardEd(id){
+function switchCeTab(n) {
+  ceCurrentTab = n;
+  [0,1,2].forEach(i => {
+    document.getElementById('ceTab'+i).classList.toggle('tmpl-tab-active', i===n);
+    document.getElementById('cePanel'+i).style.display = i===n ? (i===0?'block':'flex') : 'none';
+  });
+  if (n===1) renderCePreview('front', 'cePanel1');
+  if (n===2) renderCePreview('back', 'cePanel2');
+}
+
+function getCeVals() {
+  const vals = {};
+  const allFields = [...CARD_ED_FIELDS, ...loadTemplate().filter(f=>!CARD_ED_FIELDS.find(b=>b.id===f.id)).map(f=>({id:f.id,type:'rich'}))];
+  allFields.forEach(f => {
+    const el = document.getElementById('ce_'+f.id);
+    if (!el) return;
+    if (f.type==='rich') vals[f.id] = el.innerHTML.replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').trim();
+    else vals[f.id] = (el.value||'').trim();
+  });
+  return vals;
+}
+
+function renderCePreview(side, panelId) {
+  const panel = document.getElementById(panelId);
+  const vals = getCeVals();
+  const {front, back} = buildCardFromFields(vals);
+  const text = side==='front' ? front : back;
+  const bg = side==='back' ? 'background:linear-gradient(160deg,#f8f9ff,#f0f4ff);' : 'background:var(--card);';
+
+  let html2 = `<div style="font-size:11px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;">${side==='front'?'Лицевая':'Тыльная'} сторона</div>
+  <div style="${bg}border:1px solid var(--border);border-radius:20px;padding:28px 20px;min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 20px rgba(0,0,0,.06);text-align:center;width:100%;box-sizing:border-box;">
+    ${renderCardWithTemplate(text, side)}
+  </div>`;
+  panel.innerHTML = html2;
+  // Load images in preview
+  panel.querySelectorAll('img[data-anki-img]').forEach(img => {
+    const fn = img.getAttribute('src');
+    if (!fn || fn.startsWith('data:')) return;
+    // Check cache first
+    if (ceImageCache[fn]) { img.src = ceImageCache[fn]; img.style.cssText='max-width:100%;max-height:180px;border-radius:10px;'; return; }
+    const key = fn.replace(/[.#$/[\\]]/g,'_');
+    db.ref('memorydeck_audio/'+sess.accId+'/'+key).once('value').then(s => {
+      if (s.val()) { img.src=s.val(); ceImageCache[fn]=s.val(); img.style.cssText='max-width:100%;max-height:180px;border-radius:10px;'; }
+    });
+  });
+}
+
+function openCardEd(id) {
   eCardId = id;
+  ceImageCache = {};
+  ceCurrentTab = 0;
   const c = id ? cards[id] : null;
-  document.getElementById('ceTitle').textContent = id ? 'Редактировать карточку' : 'Новая карточка';
+  document.getElementById('ceTitle').textContent = id ? 'Редактировать' : 'Новая карточка';
   document.getElementById('ceDeleteBtn').style.display = id ? 'block' : 'none';
+  switchCeTab(0);
 
-  // Parse existing card fields or use empty
   const vals = c ? parseCardFields(c.front||'', c.back||'') : {};
+  const customFields = loadTemplate().filter(f=>!CARD_ED_FIELDS.find(b=>b.id===f.id));
 
-  // Get custom fields from template (fields not in CARD_ED_FIELDS)
-  const builtinIds = new Set(CARD_ED_FIELDS.map(f=>f.id));
-  const customTmplFields = loadTemplate().filter(f => !builtinIds.has(f.id));
-  const allEdFields = [...CARD_ED_FIELDS, ...customTmplFields.map(f => ({
-    id: f.id, label: f.label, placeholder: f.defaultValue||'', hint: 'Пользовательское', multiline: true
-  }))];
-
-  // Render field editors
   const body = document.getElementById('cardEdBody');
-  body.innerHTML = allEdFields.map(f => {
-    const val = vals[f.id] || '';
-    if (f.isImage) return `
-      <div class="field">
-        <label>${f.label} <span style="font-size:11px;color:var(--ink4);font-weight:400;">${f.hint}</span></label>
-        <div id="ce_image_wrap" style="${val?'':'display:none'};text-align:center;margin-bottom:10px;">
-          <img id="ce_image_img" src="${val||''}" data-anki-img="1" style="max-width:100%;max-height:180px;border-radius:12px;object-fit:contain;box-shadow:0 2px 12px rgba(0,0,0,.1);">
-        </div>
-        <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder}">
-        <div style="font-size:12px;color:var(--ink4);margin-top:3px;">Имя файла из импорта (напр. 02_0022.jpg)</div>
-      </div>`;
-    if (f.isSound) return `
-      <div class="field">
-        <label>${f.label} <span style="font-size:11px;color:var(--ink4);font-weight:400;">${f.hint}</span></label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder}" style="flex:1;">
-          <button onclick="previewSound(document.getElementById('ce_${f.id}').value)" style="padding:8px 12px;border-radius:10px;border:.5px solid var(--border);background:var(--bg2);font-size:16px;cursor:pointer;flex-shrink:0;">🔊</button>
-        </div>
-      </div>`;
-    if (f.multiline) return `
-      <div class="field">
-        <label>${f.label} <span style="font-size:11px;color:var(--ink4);font-weight:400;">${f.hint}</span></label>
-        <textarea id="ce_${f.id}" placeholder="${f.placeholder}" style="min-height:70px;">${val}</textarea>
-      </div>`;
-    return `
-      <div class="field">
-        <label>${f.label} <span style="font-size:11px;color:var(--ink4);font-weight:400;">${f.hint}</span></label>
-        <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder}">
-      </div>`;
-  }).join('');
+  body.innerHTML = [...CARD_ED_FIELDS, ...customFields.map(f=>({id:f.id,label:f.label,hint:'Доп. поле',type:'rich',placeholder:''}))]
+    .map(f => {
+      const val = vals[f.id]||'';
+      const labelHtml = `<label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:800;color:var(--ink3);letter-spacing:.06em;text-transform:uppercase;margin-bottom:6px;">
+        ${f.label} <span style="font-size:10px;font-weight:500;color:var(--ink4);text-transform:none;letter-spacing:0;">${f.hint||''}</span>
+      </label>`;
 
-  // Load image preview from Firebase
+      if (f.type==='image') return `
+        <div class="field" style="margin-bottom:14px;padding:12px 16px;border-bottom:.5px solid var(--border);">
+          ${labelHtml}
+          <div id="ce_image_preview" style="${val?'':'display:none;'}text-align:center;margin-bottom:10px;">
+            <img id="ce_image_preview_img" data-anki-img="1" src="${val||''}"
+              style="max-width:100%;max-height:160px;border-radius:12px;box-shadow:0 2px 12px rgba(0,0,0,.1);">
+          </div>
+          <div style="display:flex;gap:8px;">
+            <input id="ce_image" value="${val}" placeholder="${f.placeholder}"
+              oninput="ceImageInputChanged(this.value)"
+              style="flex:1;padding:9px 12px;border-radius:10px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
+            <button onclick="ceImgTarget='image';document.getElementById('ceImgInput').click()"
+              style="padding:8px 12px;border-radius:10px;border:.5px solid var(--border);background:var(--bg2);font-size:18px;cursor:pointer;flex-shrink:0;" title="Загрузить картинку">🖼️</button>
+          </div>
+        </div>`;
+
+      if (f.type==='sound') return `
+        <div class="field" style="margin-bottom:14px;padding:12px 16px;border-bottom:.5px solid var(--border);">
+          ${labelHtml}
+          <div style="display:flex;gap:8px;">
+            <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder}"
+              style="flex:1;padding:9px 12px;border-radius:10px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
+            <button onclick="cePlaySound('ce_${f.id}')"
+              style="padding:8px 12px;border-radius:10px;border:.5px solid var(--border);background:var(--bg2);font-size:18px;cursor:pointer;flex-shrink:0;" title="Воспроизвести">🔊</button>
+            <button onclick="ceSndTarget='ce_${f.id}';document.getElementById('ceSndInput').click()"
+              style="padding:8px 12px;border-radius:10px;border:.5px solid var(--border);background:var(--bg2);font-size:18px;cursor:pointer;flex-shrink:0;" title="Загрузить звук">📁</button>
+          </div>
+        </div>`;
+
+      if (f.type==='rich') return `
+        <div class="field" style="margin-bottom:14px;padding:12px 16px;border-bottom:.5px solid var(--border);">
+          ${labelHtml}
+          <div style="display:flex;gap:3px;flex-wrap:wrap;padding:6px 8px;background:var(--bg2);border-radius:8px 8px 0 0;border:.5px solid var(--border);">
+            <button onmousedown="event.preventDefault();document.execCommand('bold')" style="width:28px;height:28px;border:none;background:none;border-radius:5px;font-weight:700;font-size:13px;cursor:pointer;color:var(--ink);">B</button>
+            <button onmousedown="event.preventDefault();document.execCommand('italic')" style="width:28px;height:28px;border:none;background:none;border-radius:5px;font-style:italic;font-size:13px;cursor:pointer;color:var(--ink);">I</button>
+            <button onmousedown="event.preventDefault();document.execCommand('underline')" style="width:28px;height:28px;border:none;background:none;border-radius:5px;text-decoration:underline;font-size:13px;cursor:pointer;color:var(--ink);">U</button>
+            <div style="width:.5px;background:var(--border);margin:3px 2px;"></div>
+            <select onchange="event.preventDefault();ceRichFontSize(this,'${f.id}')" style="height:28px;border-radius:5px;border:.5px solid var(--border);background:var(--card);font-size:11px;padding:0 2px;">
+              <option>12</option><option>14</option><option selected>16</option><option>18</option><option>20</option><option>24</option><option>28</option><option>32</option>
+            </select>
+            <input type="color" onchange="event.preventDefault();document.execCommand('foreColor',false,this.value)"
+              style="width:28px;height:28px;border:none;border-radius:5px;cursor:pointer;padding:1px;background:none;" title="Цвет">
+          </div>
+          <div id="ce_${f.id}" contenteditable="true" oninput="void 0"
+            style="min-height:60px;padding:10px;border:.5px solid var(--border);border-top:none;border-radius:0 0 8px 8px;background:var(--card);font-size:15px;outline:none;line-height:1.5;text-align:left;">${val}</div>
+        </div>`;
+
+      // default: simple text
+      return `
+        <div class="field" style="margin-bottom:14px;padding:12px 16px;border-bottom:.5px solid var(--border);">
+          ${labelHtml}
+          <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder||''}"
+            style="width:100%;padding:9px 12px;border-radius:10px;border:.5px solid var(--border);font-size:15px;background:var(--bg);box-sizing:border-box;">
+        </div>`;
+    }).join('');
+
+  // Load image from Firebase for preview
   if (vals.image) {
-    const safeKey = vals.image.replace(/[.#$/[\]]/g,'_');
-    db.ref('memorydeck_audio/'+sess.accId+'/'+safeKey).once('value').then(snap => {
-      if (snap.val()) {
-        const img = document.getElementById('ce_image_img');
-        if (img) { img.src = snap.val(); }
-        const wrap = document.getElementById('ce_image_wrap');
-        if (wrap) wrap.style.display = '';
-      }
+    const key = vals.image.replace(/[.#$/[\]]/g,'_');
+    db.ref('memorydeck_audio/'+sess.accId+'/'+key).once('value').then(snap => {
+      if (!snap.val()) return;
+      ceImageCache[vals.image] = snap.val();
+      const img = document.getElementById('ce_image_preview_img');
+      if (img) { img.src = snap.val(); document.getElementById('ce_image_preview').style.display=''; }
     });
   }
 
@@ -2238,59 +2349,105 @@ function openCardEd(id){
   document.getElementById('cardEdOv').classList.add('open');
 }
 
-function closeCardEd(){ document.getElementById('cardEdOv').classList.remove('open'); }
+function closeCardEd() { document.getElementById('cardEdOv').classList.remove('open'); }
 
-function previewSound(filename) {
-  const safeKey = filename.replace(/[.#$/[\]]/g,'_');
-  db.ref('memorydeck_audio/'+sess.accId+'/'+safeKey).once('value').then(snap => {
-    if (snap.val()) { new Audio(snap.val()).play(); }
-    else toast('🔊 Аудио не найдено в базе');
+function ceRichFontSize(sel, fieldId) {
+  const el = document.getElementById('ce_'+fieldId);
+  if (el) { el.focus(); document.execCommand('fontSize',false,'7'); el.querySelectorAll('font[size="7"]').forEach(f=>{f.removeAttribute('size');f.style.fontSize=sel.value+'px';}); }
+}
+
+function ceImageInputChanged(val) {
+  const prev = document.getElementById('ce_image_preview');
+  const img  = document.getElementById('ce_image_preview_img');
+  if (!val) { if(prev) prev.style.display='none'; return; }
+  if (ceImageCache[val]) { if(img) img.src=ceImageCache[val]; if(prev) prev.style.display=''; return; }
+  const key = val.replace(/[.#$/[\]]/g,'_');
+  db.ref('memorydeck_audio/'+sess.accId+'/'+key).once('value').then(snap => {
+    if (snap.val()) { ceImageCache[val]=snap.val(); if(img) img.src=snap.val(); if(prev) prev.style.display=''; }
+    else { if(prev) prev.style.display='none'; toast('🖼 Картинка не найдена в базе'); }
   });
 }
 
-function saveCard(){
+function cePlaySound(inputId) {
+  const val = (document.getElementById(inputId)||{}).value;
+  if (!val) return;
+  const key = val.replace(/[.#$/[\]]/g,'_');
+  db.ref('memorydeck_audio/'+sess.accId+'/'+key).once('value').then(snap => {
+    if (snap.val()) new Audio(snap.val()).play();
+    else toast('🔊 Аудио не найдено');
+  });
+}
+
+function handleCeImage(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const dataUri = e.target.result;
+    const key = file.name.replace(/[.#$/[\]]/g,'_');
+    // Save to Firebase
+    const updates = {}; updates[key] = dataUri;
+    db.ref('memorydeck_audio/'+sess.accId).update(updates).then(()=>toast('✅ Картинка загружена'));
+    ceImageCache[file.name] = dataUri;
+    // Update field
+    const inp = document.getElementById('ce_image'); if(inp) inp.value = file.name;
+    const img = document.getElementById('ce_image_preview_img'); if(img) img.src=dataUri;
+    const prev= document.getElementById('ce_image_preview'); if(prev) prev.style.display='';
+  };
+  reader.readAsDataURL(file);
+  input.value='';
+}
+
+function handleCeSound(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const key = file.name.replace(/[.#$/[\]]/g,'_');
+    const updates = {}; updates[key] = e.target.result;
+    db.ref('memorydeck_audio/'+sess.accId).update(updates).then(()=>toast('✅ Аудио загружено'));
+    const inp = document.getElementById(ceSndTarget||'ce_sound'); if(inp) inp.value=file.name;
+  };
+  reader.readAsDataURL(file);
+  input.value='';
+}
+
+function saveCard() {
   const getVal = id => {
-    const el = document.getElementById('ce_'+id);
-    return el ? (el.value||el.textContent||'').trim() : '';
+    const el = document.getElementById('ce_'+id); if (!el) return '';
+    return el.getAttribute('contenteditable')!==null
+      ? el.innerText.trim()
+      : (el.value||'').trim();
   };
   const vals = {};
-  const builtinIds2 = new Set(CARD_ED_FIELDS.map(f=>f.id));
-  const saveFields = [...CARD_ED_FIELDS, ...loadTemplate().filter(f=>!builtinIds2.has(f.id))];
-  saveFields.forEach(f => { vals[f.id] = getVal(f.id); });
+  [...CARD_ED_FIELDS, ...loadTemplate().filter(f=>!CARD_ED_FIELDS.find(b=>b.id===f.id))]
+    .forEach(f => { vals[f.id] = getVal(f.id); });
   if (!vals.word) { toast('❌ Введите слово'); return; }
   const deckId = document.getElementById('cDeck').value;
   if (!deckId) { toast('❌ Выберите колоду'); return; }
-  const {front, back} = buildCardFromFields(vals);
+  const {front,back} = buildCardFromFields(vals);
   const tags = document.getElementById('cTags').value.split(',').map(t=>t.trim()).filter(Boolean);
   const id = eCardId||'card_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
   save('cards/'+id,{front,back,deckId,tags,sm2:eCardId?cards[eCardId]?.sm2:null,createdAt:eCardId?(cards[eCardId]?.createdAt||Date.now()):Date.now()});
   toast(eCardId?'✅ Обновлено':'✅ Карточка добавлена');
   closeCardEd();
-  if(eDetailDeck) setTimeout(()=>openDeckDetail(eDetailDeck),300);
+  if (eDetailDeck) setTimeout(()=>openDeckDetail(eDetailDeck),300);
 }
 
 function deleteCurrentCard() {
-  if (!eCardId) return;
-  if (!confirm('Удалить карточку?')) return;
+  if (!eCardId||!confirm('Удалить карточку?')) return;
   db.ref('memorydeck/'+sess.accId+'/users/'+sess.userId+'/cards/'+eCardId).remove();
-  toast('🗑 Удалено');
-  closeCardEd();
-  if(eDetailDeck) setTimeout(()=>openDeckDetail(eDetailDeck),300);
+  toast('🗑 Удалено'); closeCardEd();
+  if (eDetailDeck) setTimeout(()=>openDeckDetail(eDetailDeck),300);
 }
-
-function deleteCard(id){
-  if(!confirm('Удалить карточку?'))return;
+function deleteCard(id) {
+  if (!confirm('Удалить карточку?')) return;
   db.ref('memorydeck/'+sess.accId+'/users/'+sess.userId+'/cards/'+id).remove();
   toast('🗑 Удалено');
-  if(eDetailDeck)setTimeout(()=>openDeckDetail(eDetailDeck),300);
+  if (eDetailDeck) setTimeout(()=>openDeckDetail(eDetailDeck),300);
 }
+function editCurrentCard() { const c=rQ[rIdx]; if(c) openCardEd(c.id); }
+function previewSound(f) { cePlaySound('ce_sound'); }
 
-function editCurrentCard() {
-  const c = rQ[rIdx];
-  if (!c) return;
-  openCardEd(c.id);
-}
-
+// ════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════
 //  SETTINGS
 // ═══════════════════════════════════════════════════
