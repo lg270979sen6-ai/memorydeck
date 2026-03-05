@@ -1831,7 +1831,8 @@ function renderCard(){
     </div>
     <button class="show-ans" id="showAns" onclick="doFlip()">Показать ответ</button>
     <button onclick="showRaw()" style="position:fixed;bottom:4px;right:4px;font-size:10px;opacity:.3;background:none;border:none;color:var(--ink3);cursor:pointer;z-index:999;">raw</button>
-    <button onclick="editCurrentCard()" style="position:fixed;bottom:6px;left:50%;transform:translateX(-50%);padding:6px 16px;border-radius:20px;background:rgba(0,0,0,.06);border:none;font-size:12px;font-weight:600;color:var(--ink3);cursor:pointer;z-index:999;">✏️ Редактировать</button>
+    <button onclick="event.stopPropagation();editCurrentCard()" title="Редактировать карточку"
+      style="position:absolute;top:14px;right:16px;width:32px;height:32px;border-radius:9px;background:rgba(0,0,0,.06);border:none;font-size:15px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center;">✏️</button>
     <div class="grades" id="grades" style="display:none;">
       <button class="grade-btn gb-again" onclick="doGrade(0)"><div class="g-em">🔴</div><div class="g-w">Снова</div><div class="g-nxt">${nextLbl(c,0)}</div></button>
       <button class="grade-btn gb-hard"  onclick="doGrade(1)"><div class="g-em">🟠</div><div class="g-w">Трудно</div><div class="g-nxt">${nextLbl(c,1)}</div></button>
@@ -2178,19 +2179,24 @@ function openCardEd(id){
   // Parse existing card fields or use empty
   const vals = c ? parseCardFields(c.front||'', c.back||'') : {};
 
+  // Get custom fields from template (fields not in CARD_ED_FIELDS)
+  const builtinIds = new Set(CARD_ED_FIELDS.map(f=>f.id));
+  const customTmplFields = loadTemplate().filter(f => !builtinIds.has(f.id));
+  const allEdFields = [...CARD_ED_FIELDS, ...customTmplFields.map(f => ({
+    id: f.id, label: f.label, placeholder: f.defaultValue||'', hint: 'Пользовательское', multiline: true
+  }))];
+
   // Render field editors
   const body = document.getElementById('cardEdBody');
-  body.innerHTML = CARD_ED_FIELDS.map(f => {
+  body.innerHTML = allEdFields.map(f => {
     const val = vals[f.id] || '';
     if (f.isImage) return `
       <div class="field">
         <label>${f.label} <span style="font-size:11px;color:var(--ink4);font-weight:400;">${f.hint}</span></label>
-        <div style="display:flex;gap:8px;align-items:center;">
-          <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder}" style="flex:1;">
-          <div id="ce_${f.id}_prev" style="${val?'':'display:none'};width:48px;height:48px;border-radius:8px;overflow:hidden;background:var(--bg2);">
-            ${val?`<img id="ce_${f.id}_img" src="${val}" style="width:100%;height:100%;object-fit:cover;" data-anki-img="1">`:''}
-          </div>
+        <div id="ce_image_wrap" style="${val?'':'display:none'};text-align:center;margin-bottom:10px;">
+          <img id="ce_image_img" src="${val||''}" data-anki-img="1" style="max-width:100%;max-height:180px;border-radius:12px;object-fit:contain;box-shadow:0 2px 12px rgba(0,0,0,.1);">
         </div>
+        <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder}">
         <div style="font-size:12px;color:var(--ink4);margin-top:3px;">Имя файла из импорта (напр. 02_0022.jpg)</div>
       </div>`;
     if (f.isSound) return `
@@ -2198,7 +2204,7 @@ function openCardEd(id){
         <label>${f.label} <span style="font-size:11px;color:var(--ink4);font-weight:400;">${f.hint}</span></label>
         <div style="display:flex;gap:8px;align-items:center;">
           <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder}" style="flex:1;">
-          ${val?`<button onclick="previewSound('${val}')" style="padding:6px 10px;border-radius:8px;border:.5px solid var(--border);background:var(--bg2);font-size:14px;cursor:pointer;">🔊</button>`:''}
+          <button onclick="previewSound(document.getElementById('ce_${f.id}').value)" style="padding:8px 12px;border-radius:10px;border:.5px solid var(--border);background:var(--bg2);font-size:16px;cursor:pointer;flex-shrink:0;">🔊</button>
         </div>
       </div>`;
     if (f.multiline) return `
@@ -2219,9 +2225,9 @@ function openCardEd(id){
     db.ref('memorydeck_audio/'+sess.accId+'/'+safeKey).once('value').then(snap => {
       if (snap.val()) {
         const img = document.getElementById('ce_image_img');
-        if (img) img.src = snap.val();
-        const prev = document.getElementById('ce_image_prev');
-        if (prev) prev.style.display = '';
+        if (img) { img.src = snap.val(); }
+        const wrap = document.getElementById('ce_image_wrap');
+        if (wrap) wrap.style.display = '';
       }
     });
   }
@@ -2248,7 +2254,9 @@ function saveCard(){
     return el ? (el.value||el.textContent||'').trim() : '';
   };
   const vals = {};
-  CARD_ED_FIELDS.forEach(f => { vals[f.id] = getVal(f.id); });
+  const builtinIds2 = new Set(CARD_ED_FIELDS.map(f=>f.id));
+  const saveFields = [...CARD_ED_FIELDS, ...loadTemplate().filter(f=>!builtinIds2.has(f.id))];
+  saveFields.forEach(f => { vals[f.id] = getVal(f.id); });
   if (!vals.word) { toast('❌ Введите слово'); return; }
   const deckId = document.getElementById('cDeck').value;
   if (!deckId) { toast('❌ Выберите колоду'); return; }
@@ -3081,11 +3089,12 @@ function renderCardWithTemplate(text, side) {
 
   let t = text.replace(/\[sound:[^\]]+\]/g, '').trim();
 
-  // Convert [img:filename] to img tag
-  t = t.replace(/\[img:([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))\]/gi,
+  // Fix old broken format FIRST (before [img:] conversion):
+  // e.g. `02_0037.jpg" data-anki-img="1" ...>` missing the `<img src="`
+  t = t.replace(/(?<![="\/\w])([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))"[^<>]*data-anki-img[^<>]*>/gi,
     '<img src="$1" data-anki-img="1">');
-  // Fix old broken format
-  t = t.replace(/([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))"[^<>]*data-anki-img[^<>]*>/gi,
+  // Convert [img:filename] placeholder to img tag
+  t = t.replace(/\[img:([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))\]/gi,
     '<img src="$1" data-anki-img="1">');
 
   // Apply styles from template to each field
