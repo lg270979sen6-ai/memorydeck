@@ -405,72 +405,146 @@ body {
   position: fixed; inset: 0; z-index: 200;
   background: var(--bg);
   display: none; flex-direction: column;
-  padding: calc(var(--safe-t) + 14px) 16px calc(var(--safe-b) + 16px);
+  padding: 0 0 calc(var(--safe-b) + 8px);
 }
 .review.open { display: flex; }
 
+/* Compact header */
 .rev-header {
-  display: flex; align-items: center; gap: 12px; margin-bottom: 14px;
+  display: flex; align-items: center; gap: 10px;
+  padding: calc(var(--safe-t) + 10px) 14px 10px;
+  flex-shrink: 0;
 }
 .rev-close {
-  width: 38px; height: 38px; border-radius: 11px;
-  background: var(--card); border: 1px solid var(--border);
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--card); border: .5px solid var(--border);
   display: flex; align-items: center; justify-content: center;
-  font-size: 17px; cursor: pointer; color: var(--ink3);
-  box-shadow: var(--shadow-sm); flex-shrink: 0;
-  transition: background .12s;
+  font-size: 16px; cursor: pointer; color: var(--ink3);
+  flex-shrink: 0; transition: background .12s;
 }
 .rev-close:active { background: var(--bg2); }
 .rev-prog-track {
-  flex: 1; height: 8px; background: var(--bg2);
-  border-radius: 4px; overflow: hidden;
+  flex: 1; height: 6px; background: var(--bg2);
+  border-radius: 3px; overflow: hidden;
 }
 .rev-prog-fill {
-  height: 100%; background: var(--blue); border-radius: 4px;
+  height: 100%; background: linear-gradient(90deg, var(--blue), #5b9bff);
+  border-radius: 3px;
   transition: width .4s cubic-bezier(.4,0,.2,1);
 }
 .rev-count { font-family: var(--mono); font-size: 12px; color: var(--ink3); flex-shrink: 0; }
 
-/* Card */
-.card-stage { flex: 1; display: flex; flex-direction: column; }
+/* Card stage — fills all remaining space */
+.card-stage { flex: 1; display: flex; flex-direction: column; padding: 0 14px 8px; min-height: 0; }
 .card-flipper {
   flex: 1; position: relative; cursor: pointer;
 }
 .c-face {
   position: absolute; inset: 0;
-  background: var(--card); border-radius: var(--radius-xl);
-  box-shadow: var(--shadow);
+  background: var(--card); border-radius: 22px;
+  box-shadow: 0 4px 24px rgba(0,0,0,.08), 0 1px 4px rgba(0,0,0,.04);
   display: flex; flex-direction: column;
   align-items: center; justify-content: center;
-  padding: 28px 24px; text-align: center;
-  border: 1px solid var(--border);
+  padding: 48px 22px 24px; text-align: center;
+  border: .5px solid var(--border);
   overflow-y: auto;
-  transition: opacity .25s;
+  transition: opacity .2s;
 }
 .c-back {
-  background: linear-gradient(160deg, #f8f9ff 0%, #f0f4ff 100%);
+  background: linear-gradient(160deg, #f8f9ff 0%, #eef2ff 100%);
   display: none;
 }
 .card-flipper.flipped .c-face:not(.c-back) { display: none; }
 .card-flipper.flipped .c-back { display: flex; }
+
+/* Status badge — top left */
 .c-badge {
-  position: absolute; top: 14px; left: 16px;
+  position: absolute; top: 14px; left: 14px;
   display: flex; align-items: center; gap: 5px;
-  font-size: 11px; font-weight: 700; color: var(--ink3);
-  letter-spacing: .04em; text-transform: uppercase;
+  font-size: 10px; font-weight: 700; color: var(--ink4);
+  letter-spacing: .06em; text-transform: uppercase;
+  background: var(--bg2); border-radius: 8px; padding: 4px 8px;
 }
-.c-dot { width: 7px; height: 7px; border-radius: 50%; }
-.c-deck-tag { position: absolute; top: 14px; right: 16px; font-size: 14px; }
+.c-dot { width: 6px; height: 6px; border-radius: 50%; }
+
+/* Edit button — top right, small and clean */
+.c-edit-btn {
+  position: absolute; top: 12px; right: 14px;
+  width: 30px; height: 30px; border-radius: 9px;
+  background: var(--bg2); border: .5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; cursor: pointer; color: var(--ink3);
+  transition: background .12s;
+}
+.c-edit-btn:active { background: var(--border); }
+
+.c-deck-tag { display: none; } /* hidden — shown in badge instead */
+
 .c-q {
   font-size: 22px; font-weight: 700;
   line-height: 1.4; letter-spacing: -.2px; color: var(--ink);
-  max-width: 380px;
+  width: 100%;
 }
 .c-a {
-  font-size: 18px; font-weight: 600;
-  line-height: 1.55; color: var(--ink2);
-  max-width: 380px;
+  font-size: 18px; font-weight: 500;
+  line-height: 1.6; color: var(--ink2);
+  width: 100%;
 }
+.anki-img img, .c-body img {
+  max-width: 100% !important; max-height: 220px !important;
+  border-radius: 14px !important; object-fit: contain !important;
+  display: block !important; margin: 4px auto !important;
+  box-shadow: 0 2px 12px rgba(0,0,0,.1) !important;
+}
+.c-int {
+  font-family: var(--mono); font-size: 11px;
+  color: var(--ink4); margin-top: 8px; letter-spacing: .02em;
+}
+.c-hint {
+  position: absolute; bottom: 14px;
+  font-size: 11px; color: var(--ink4); font-weight: 600;
+  letter-spacing: .03em;
+}
+
+/* Show answer button */
+.show-ans {
+  width: 100%; padding: 17px;
+  background: var(--blue);
+  border: none; border-radius: 16px;
+  color: white;
+  font-family: var(--font); font-size: 16px; font-weight: 700;
+  cursor: pointer; margin-top: 10px; flex-shrink: 0;
+  box-shadow: 0 4px 14px rgba(0,122,255,.3);
+  transition: transform .1s, box-shadow .1s;
+  letter-spacing: -.1px;
+}
+.show-ans:active { transform: scale(.98); box-shadow: 0 2px 8px rgba(0,122,255,.2); }
+
+/* Grade buttons — 4 columns, bold and spacious */
+.grades {
+  display: grid; grid-template-columns: repeat(4,1fr);
+  gap: 8px; margin-top: 10px; flex-shrink: 0;
+}
+.grade-btn {
+  padding: 14px 6px 12px; border-radius: 16px;
+  border: none; font-family: var(--font); cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  transition: transform .1s, box-shadow .1s;
+}
+.grade-btn:active { transform: scale(.94); }
+.g-dot { width: 28px; height: 28px; border-radius: 50%; margin-bottom: 2px; }
+.g-w   { font-size: 13px; font-weight: 800; }
+.g-nxt { font-size: 10px; font-weight: 500; opacity: .7; font-family: var(--mono); }
+
+.gb-again { background: #fff0ee; color: #e53535; box-shadow: 0 2px 10px rgba(229,53,53,.15); }
+.gb-again .g-dot { background: #ff3b30; box-shadow: 0 3px 8px rgba(255,59,48,.35); }
+.gb-hard  { background: #fff6ed; color: #e07800; box-shadow: 0 2px 10px rgba(255,149,0,.12); }
+.gb-hard  .g-dot { background: #ff9500; box-shadow: 0 3px 8px rgba(255,149,0,.35); }
+.gb-good  { background: #edf6ff; color: #0071e3; box-shadow: 0 2px 10px rgba(0,113,227,.12); }
+.gb-good  .g-dot { background: #007aff; box-shadow: 0 3px 8px rgba(0,122,255,.35); }
+.gb-easy  { background: #edfff3; color: #1a9e42; box-shadow: 0 2px 10px rgba(52,199,89,.12); }
+.gb-easy  .g-dot { background: #34c759; box-shadow: 0 3px 8px rgba(52,199,89,.35); }
+
 .anki-word { font-size: 32px !important; font-weight: 800 !important; color: var(--ink1) !important; margin: 0 0 6px 0 !important; display: block !important; letter-spacing: -0.5px; }
 .anki-ipa  { font-size: 17px !important; color: var(--blue) !important; font-style: italic !important; font-weight: 400 !important; margin: 0 0 8px 0 !important; display: block !important; }
 .anki-translation { font-size: 26px !important; font-weight: 700 !important; color: var(--green) !important; margin: 6px 0 !important; display: block !important; }
@@ -675,6 +749,8 @@ body {
 .ce-tb:hover { background:var(--bg2); }
 .ce-sep { width:.5px; height:20px; background:var(--border); margin:0 3px; flex-shrink:0; }
 .ce-field-active { outline:2px solid var(--blue) !important; outline-offset:0; }
+.ce-swatch { width:18px; height:18px; border-radius:4px; border:none; cursor:pointer; flex-shrink:0; transition:transform .1s; }
+.ce-swatch:hover { transform:scale(1.2); }
 .overlay-body  { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 .card-row {
@@ -1096,12 +1172,31 @@ body {
       <option value="16" selected>16</option><option value="18">18</option><option value="20">20</option>
       <option value="24">24</option><option value="28">28</option><option value="32">32</option>
     </select>
-    <!-- Text color -->
-    <input type="color" id="ceTxtColor" onchange="ceExec('foreColor',this.value)" title="Цвет текста"
-      style="width:28px;height:28px;border:none;border-radius:6px;cursor:pointer;padding:2px;">
-    <!-- Highlight -->
-    <input type="color" id="ceHlColor" value="#ffff00" onchange="ceExec('hiliteColor',this.value)" title="Выделение"
-      style="width:28px;height:28px;border:none;border-radius:6px;cursor:pointer;padding:2px;background:#ffff00;">
+    <!-- Text color swatches -->
+    <div style="display:flex;gap:3px;align-items:center;">
+      <span style="font-size:10px;color:var(--ink4);margin-right:1px;">A</span>
+      <button onmousedown="event.preventDefault();ceExec('foreColor','#111111')" class="ce-swatch" style="background:#111;"></button>
+      <button onmousedown="event.preventDefault();ceExec('foreColor','#e53535')" class="ce-swatch" style="background:#e53535;"></button>
+      <button onmousedown="event.preventDefault();ceExec('foreColor','#ff9500')" class="ce-swatch" style="background:#ff9500;"></button>
+      <button onmousedown="event.preventDefault();ceExec('foreColor','#34c759')" class="ce-swatch" style="background:#34c759;"></button>
+      <button onmousedown="event.preventDefault();ceExec('foreColor','#007aff')" class="ce-swatch" style="background:#007aff;"></button>
+      <button onmousedown="event.preventDefault();ceExec('foreColor','#af52de')" class="ce-swatch" style="background:#af52de;"></button>
+      <button onmousedown="event.preventDefault();ceExec('foreColor','#ff2d55')" class="ce-swatch" style="background:#ff2d55;"></button>
+      <button onmousedown="event.preventDefault();ceExec('foreColor','#5856d6')" class="ce-swatch" style="background:#5856d6;"></button>
+      <button onmousedown="event.preventDefault();ceExec('foreColor','#32ade6')" class="ce-swatch" style="background:#32ade6;"></button>
+      <button onmousedown="event.preventDefault();ceExec('foreColor','#ffffff')" class="ce-swatch" style="background:#fff;border:.5px solid #ccc;"></button>
+      <input type="color" onchange="ceExec('foreColor',this.value)" title="Другой цвет"
+        style="width:22px;height:22px;border:none;border-radius:5px;cursor:pointer;padding:1px;background:none;opacity:.7;" title="Ещё цвета">
+    </div>
+    <!-- Highlight swatches -->
+    <div style="display:flex;gap:3px;align-items:center;margin-left:2px;">
+      <span style="font-size:10px;color:var(--ink4);text-decoration:underline;margin-right:1px;">A</span>
+      <button onmousedown="event.preventDefault();ceExec('hiliteColor','#ffff00')" class="ce-swatch" style="background:#ffff00;border:.5px solid #ddd;"></button>
+      <button onmousedown="event.preventDefault();ceExec('hiliteColor','#a8e6cf')" class="ce-swatch" style="background:#a8e6cf;"></button>
+      <button onmousedown="event.preventDefault();ceExec('hiliteColor','#ffd3b6')" class="ce-swatch" style="background:#ffd3b6;"></button>
+      <button onmousedown="event.preventDefault();ceExec('hiliteColor','#c9d6ff')" class="ce-swatch" style="background:#c9d6ff;"></button>
+      <button onmousedown="event.preventDefault();ceExec('hiliteColor','transparent')" class="ce-swatch" style="background:#fff;border:.5px solid #ccc;font-size:10px;">✕</button>
+    </div>
     <div class="ce-sep"></div>
     <!-- Lists -->
     <button onmousedown="event.preventDefault();ceExec('insertUnorderedList')" title="Маркированный список" class="ce-tb">≡</button>
@@ -1895,29 +1990,27 @@ function renderCard(){
   document.getElementById('cardStage').innerHTML=`
     <div class="card-flipper card-in" id="flipper">
       <div class="c-face">
-        <div class="c-badge"><div class="c-dot" style="background:${sCol};"></div>${sLbl}</div>
-        <div class="c-deck-tag">${deck.emoji||'📚'}</div>
+        <div class="c-badge"><div class="c-dot" style="background:${sCol};"></div>${sLbl} · ${deck.emoji||'📚'}</div>
+        <button class="c-edit-btn" onclick="event.stopPropagation();editCurrentCard()" title="Редактировать">✏️</button>
         <div class="c-q">${renderCardWithTemplate(frontClean,'front')}</div>
         ${mkAudioBtn(frontAudio,'front')}
         <div class="c-hint" id="tapHint">Нажмите чтобы показать ответ</div>
       </div>
       <div class="c-face c-back">
-        <div class="c-badge"><div class="c-dot" style="background:${sCol};"></div>${sLbl}</div>
-        <div class="c-deck-tag">${deck.emoji||'📚'}</div>
+        <div class="c-badge"><div class="c-dot" style="background:${sCol};"></div>${sLbl} · ${deck.emoji||'📚'}</div>
+        <button class="c-edit-btn" onclick="event.stopPropagation();editCurrentCard()" title="Редактировать">✏️</button>
         <div class="c-a">${renderCardWithTemplate(backClean,'back')}</div>
         ${mkAudioBtn(backAudio,'back')}
         ${intStr?`<div class="c-int">${intStr}</div>`:''}
       </div>
     </div>
     <button class="show-ans" id="showAns" onclick="doFlip()">Показать ответ</button>
-    <button onclick="showRaw()" style="position:fixed;bottom:4px;right:4px;font-size:10px;opacity:.3;background:none;border:none;color:var(--ink3);cursor:pointer;z-index:999;">raw</button>
-    <button onclick="event.stopPropagation();editCurrentCard()" title="Редактировать карточку"
-      style="position:absolute;top:14px;right:16px;width:32px;height:32px;border-radius:9px;background:rgba(0,0,0,.06);border:none;font-size:15px;cursor:pointer;z-index:10;display:flex;align-items:center;justify-content:center;">✏️</button>
+    <button onclick="showRaw()" style="position:fixed;bottom:4px;right:4px;font-size:10px;opacity:.15;background:none;border:none;color:var(--ink3);cursor:pointer;z-index:999;">raw</button>
     <div class="grades" id="grades" style="display:none;">
-      <button class="grade-btn gb-again" onclick="doGrade(0)"><div class="g-em">🔴</div><div class="g-w">Снова</div><div class="g-nxt">${nextLbl(c,0)}</div></button>
-      <button class="grade-btn gb-hard"  onclick="doGrade(1)"><div class="g-em">🟠</div><div class="g-w">Трудно</div><div class="g-nxt">${nextLbl(c,1)}</div></button>
-      <button class="grade-btn gb-good"  onclick="doGrade(2)"><div class="g-em">🟢</div><div class="g-w">Хорошо</div><div class="g-nxt">${nextLbl(c,2)}</div></button>
-      <button class="grade-btn gb-easy"  onclick="doGrade(3)"><div class="g-em">🔵</div><div class="g-w">Легко</div><div class="g-nxt">${nextLbl(c,3)}</div></button>
+      <button class="grade-btn gb-again" onclick="doGrade(0)"><div class="g-dot"></div><div class="g-w">Снова</div><div class="g-nxt">${nextLbl(c,0)}</div></button>
+      <button class="grade-btn gb-hard"  onclick="doGrade(1)"><div class="g-dot"></div><div class="g-w">Трудно</div><div class="g-nxt">${nextLbl(c,1)}</div></button>
+      <button class="grade-btn gb-good"  onclick="doGrade(2)"><div class="g-dot"></div><div class="g-w">Хорошо</div><div class="g-nxt">${nextLbl(c,2)}</div></button>
+      <button class="grade-btn gb-easy"  onclick="doGrade(3)"><div class="g-dot"></div><div class="g-w">Легко</div><div class="g-nxt">${nextLbl(c,3)}</div></button>
     </div>`;
 
   // Load images from Firebase — setTimeout ensures DOM is fully rendered
@@ -2233,20 +2326,26 @@ function parseCardFields(front, back) {
 }
 
 function buildCardFromFields(vals) {
-  const ex = (vals.example||'').replace(/^→\s*/,'');
+  const ex = (vals.example||'').replace(/^→\s*/,'').replace(/<br>/g,'\n').replace(/<[^>]+>/g,'').trim();
+  // Strip HTML tags from plain text fields (word, ipa, translation, image, sound)
+  const plain = s => (s||'').replace(/<[^>]+>/g,'').trim();
   const front = [
-    vals.word        ? `<div class="anki-word">${vals.word}</div>` : '',
-    vals.ipa         ? `<div class="anki-ipa">[${vals.ipa.replace(/^\[|\]$/g,'')}]</div>` : '',
-    vals.sound       ? `[sound:${vals.sound}]` : '',
-    ex               ? `<div class="anki-example">→ ${ex}</div>` : '',
+    plain(vals.word)   ? `<div class="anki-word">${plain(vals.word)}</div>` : '',
+    plain(vals.ipa)    ? `<div class="anki-ipa">[${plain(vals.ipa).replace(/^\[|\]$/g,'')}]</div>` : '',
+    plain(vals.sound)  ? `[sound:${plain(vals.sound)}]` : '',
+    ex                 ? `<div class="anki-example">→ ${ex}</div>` : '',
   ].filter(Boolean).join('\n');
   const back = [
-    vals.word        ? `<div class="anki-word">${vals.word}</div>` : '',
-    vals.image       ? `<div class="anki-img">[img:${vals.image}]</div>` : '',
-    vals.translation ? `<div class="anki-translation">${vals.translation}</div>` : '',
-    vals.meaning     ? `<div class="anki-meaning">📖 ${vals.meaning}</div>` : '',
-    ex               ? `<div class="anki-example">→ ${ex}</div>` : '',
-    vals.sound_example ? `[sound:${vals.sound_example}]` : '',
+    plain(vals.word)        ? `<div class="anki-word">${plain(vals.word)}</div>` : '',
+    plain(vals.image)       ? `<div class="anki-img">[img:${plain(vals.image)}]</div>` : '',
+    plain(vals.translation) ? `<div class="anki-translation">${plain(vals.translation)}</div>` : '',
+    vals.meaning            ? `<div class="anki-meaning">📖 ${vals.meaning}</div>` : '',
+    ex                      ? `<div class="anki-example">→ ${ex}</div>` : '',
+    plain(vals.sound_example) ? `[sound:${plain(vals.sound_example)}]` : '',
+    // Custom fields — append to back with their label
+    ...Object.entries(vals)
+      .filter(([k,v]) => v && !['word','ipa','translation','meaning','example','image','sound','sound_example'].includes(k))
+      .map(([k,v]) => `<div class="anki-custom" data-field="${k}">${v}</div>`),
   ].filter(Boolean).join('\n');
   return {front, back};
 }
