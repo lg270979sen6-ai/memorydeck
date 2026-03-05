@@ -1380,9 +1380,28 @@ body {
   <div class="sheet">
     <div class="sheet-grip"></div>
     <div class="sheet-title">Настройки обучения</div>
+
+    <!-- Algorithm picker -->
+    <div class="field">
+      <label>Алгоритм повторений</label>
+      <div id="algoToggle" style="display:flex;gap:8px;margin-top:2px;">
+        <button id="algoBtnSM2"  onclick="pickAlgo('sm2')"
+          style="flex:1;padding:11px 6px;border-radius:12px;border:2px solid var(--blue);background:var(--blue);color:#fff;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:.15s;">
+          SM-2
+        </button>
+        <button id="algoBtnFSRS" onclick="pickAlgo('fsrs')"
+          style="flex:1;padding:11px 6px;border-radius:12px;border:2px solid var(--border2);background:var(--card);color:var(--ink2);font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;transition:.15s;">
+          FSRS-4.5
+        </button>
+      </div>
+      <div style="margin-top:7px;font-size:12px;color:var(--ink3);font-weight:500;" id="algoDesc">
+        Классический алгоритм SuperMemo. Надёжен и прост.
+      </div>
+    </div>
+
     <div class="field"><label>Новых карточек в день</label><input id="cfgNew" type="number" min="1" max="200"></div>
     <div class="field"><label>Макс. повторений в день</label><input id="cfgMax" type="number" min="10" max="9999"></div>
-    <div class="field"><label>Интервал после «Хорошо» (дни)</label><input id="cfgFirst" type="number" min="1" max="30"></div>
+    <div class="field" id="cfgFirstWrap"><label>Интервал после «Хорошо» (дни, SM-2)</label><input id="cfgFirst" type="number" min="1" max="30"></div>
     <div class="sheet-btns">
       <button class="sbtn sbtn-cancel" onclick="closeSh('studySh')">Отмена</button>
       <button class="sbtn sbtn-ok" onclick="saveStudySett()">Сохранить</button>
@@ -1484,32 +1503,238 @@ const COLORS = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5856d6','#30
 let db=null, fbRef=null;
 let allAcc={}, sess={accId:null,userId:null,ud:null,ad:null};
 let pendAcc=null, pendUser=null;
-let decks={}, cards={}, cfg={newPerDay:20,maxReviews:200,firstInterval:1}, studyLog={};
+let decks={}, cards={}, cfg={newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, studyLog={};
 let rQ=[], rIdx=0, rFlipped=false, rStats={}, rDeckId=null;
 let eDeckId=null, eCardId=null, eDetailDeck=null;
 let dColor=COLORS[0], dEmoji='📚';
 
 // ═══════════════════════════════════════════════════
-//  SM-2
+//  UTILS
 // ═══════════════════════════════════════════════════
 const today  = () => new Date().toISOString().slice(0,10);
 const addD   = (s,n) => { const d=new Date(s); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
 const isDue  = sm => !sm || sm.state==='new' || sm.due<=today();
 
+function fmtInterval(days) {
+  if (!days || days <= 0) return 'сейчас';
+  if (days < 1) return Math.round(days * 24 * 60) + 'м';
+  if (days < 30) return Math.round(days) + 'д';
+  if (days < 365) return Math.round(days / 7) + 'н';
+  return Math.round(days / 30) + 'мес';
+}
+
+// ═══════════════════════════════════════════════════
+//  SM-2  (SuperMemo original spec, corrected)
+//  Grades: 0=Again, 1=Hard, 2=Good, 3=Easy
+//  Maps to SM-2 quality: Again→0, Hard→2, Good→3, Easy→5
+// ═══════════════════════════════════════════════════
+const SM2_Q = [0, 2, 4, 5]; // Again/Hard/Good/Easy → SM-2 quality (0-5)
+
 function sm2Calc(sm, g) {
-  const s = sm ? {...sm} : {interval:0,ease:2.5,due:today(),state:'new',reps:0};
-  if (g===0) {
-    s.ease=Math.max(1.3,s.ease-.2); s.interval=0; s.reps=0; s.state='learning'; s.due=today();
+  const s = sm ? {...sm} : {interval:0, ease:2.5, due:today(), state:'new', reps:0, lapses:0};
+  const q = SM2_Q[g]; // SM-2 quality 0-5
+
+  if (q < 3) {
+    // Forgotten / hard — reset to relearning
+    s.reps = 0;
+    if (g === 0) { s.lapses = (s.lapses||0) + 1; s.interval = 1; }
+    else          { s.interval = Math.max(1, Math.round(s.interval * 0.5)); } // Hard: half interval
+    s.state = 'learning';
+    s.due = addD(today(), s.interval);
+    // EF adjustment for Hard (g=1)
+    if (g === 1) s.ease = Math.max(1.3, s.ease - 0.15);
+    // EF adjustment for Again (g=0)
+    if (g === 0) s.ease = Math.max(1.3, s.ease - 0.20);
   } else {
-    s.ease=Math.max(1.3,s.ease+[0,-.14,0,.1][g]);
-    if (s.reps===0||s.state==='learning') s.interval=[0,1,cfg.firstInterval||1,4][g];
-    else if (s.reps===1) s.interval=6;
-    else { s.interval=Math.max(1,Math.round(s.interval*s.ease)); if(g===1) s.interval=Math.max(1,Math.round(s.interval*.5)); }
-    s.reps++; s.state=s.interval>=21?'review':'learning'; s.due=addD(today(),s.interval);
+    // Remembered
+    let newInterval;
+    if (s.reps === 0) {
+      newInterval = (g === 3) ? 4 : (cfg.firstInterval || 1); // Easy=4, Good=firstInterval
+    } else if (s.reps === 1) {
+      newInterval = 6;
+    } else {
+      newInterval = Math.round(s.interval * s.ease);
+    }
+    // Easy bonus: multiply by easy bonus factor (1.3 like Anki)
+    if (g === 3) newInterval = Math.round(newInterval * 1.3);
+    s.interval = Math.max(1, newInterval);
+    s.reps++;
+    // EF update: EF' = EF + (0.1 - (5-q) * (0.08 + (5-q) * 0.02))
+    s.ease = Math.max(1.3, s.ease + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
+    s.state = s.interval >= 21 ? 'review' : 'learning';
+    s.due = addD(today(), s.interval);
   }
   return s;
 }
-function nextLbl(c,g){ const s=sm2Calc(c.sm2,g); return s.interval?s.interval<30?s.interval+'д':s.interval<365?Math.round(s.interval/7)+'н':Math.round(s.interval/30)+'м':'сейчас'; }
+
+// ═══════════════════════════════════════════════════
+//  FSRS-4.5
+//  Default parameters w[0..16] from open-source spec
+// ═══════════════════════════════════════════════════
+const FSRS_W = [
+  0.4072, 1.1829, 3.1262, 15.4722,  // w[0..3]: initial stability for grades 1-4
+  7.2102, 0.5316,  1.0651,  0.06069, // w[4..7]
+  2.9898, 0.14,   1.0,     1.9395,  // w[8..11]
+  0.11, 0.29605,  2.2700,  0.2500,  // w[12..15]
+  2.9898                             // w[16]
+];
+
+const FSRS_R_TARGET = 0.9; // desired retention (90%)
+const FSRS_DECAY    = -0.5;
+const FSRS_FACTOR   = Math.pow(0.9, 1 / FSRS_DECAY) - 1; // ≈ 0.17...
+
+// Retrievability R(t, S) = (1 + FACTOR * t / S) ^ DECAY
+function fsrsR(t, S) {
+  if (S <= 0) return 0;
+  return Math.pow(1 + FSRS_FACTOR * t / S, FSRS_DECAY);
+}
+
+// Stability after recall: S'r(D, S, R, G)
+function fsrsStabilityRecall(D, S, R, g) {
+  const w = FSRS_W;
+  // g: 1=Again,2=Hard,3=Good,4=Easy  (FSRS internal — we map our 0-3 to 1-4 below)
+  const hardPenalty = (g === 2) ? w[15] : 1;
+  const easyBonus   = (g === 4) ? w[16] : 1;
+  return S * (
+    Math.exp(w[8]) *
+    (11 - D) *
+    Math.pow(S, -w[9]) *
+    (Math.exp((1 - R) * w[10]) - 1) *
+    hardPenalty *
+    easyBonus
+  );
+}
+
+// Stability after forget: S'f(D, S, R)
+function fsrsStabilityForget(D, S, R) {
+  const w = FSRS_W;
+  return w[11] * Math.pow(D, -w[12]) * (Math.pow(S + 1, w[13]) - 1) * Math.exp((1 - R) * w[14]);
+}
+
+// Difficulty update D'(D, g): g is FSRS internal 1-4
+function fsrsDifficultyUpdate(D, g) {
+  const w = FSRS_W;
+  const deltaD = -w[6] * (g - 3);
+  return Math.min(10, Math.max(1, D + deltaD * ((10 - D) / 9)));
+}
+
+// Initial difficulty D0(g)
+function fsrsD0(g) {
+  return Math.min(10, Math.max(1, FSRS_W[4] - Math.exp(FSRS_W[5] * (g - 1)) + 1));
+}
+
+// Initial stability S0(g)
+function fsrsS0(g) {
+  return Math.max(0.1, FSRS_W[g - 1]);
+}
+
+// Next interval from stability and target retention
+function fsrsNextInterval(S) {
+  // I = S * (R^(1/DECAY) - 1) / FACTOR
+  return Math.max(1, Math.round(S * (Math.pow(FSRS_R_TARGET, 1 / FSRS_DECAY) - 1) / FSRS_FACTOR));
+}
+
+// FSRS grade mapping: our g (0=Again,1=Hard,2=Good,3=Easy) → FSRS g (1-4)
+const FSRS_G = [1, 2, 3, 4];
+
+function fsrsCalc(sm, g) {
+  const s = sm ? {...sm} : null;
+  const fg = FSRS_G[g]; // FSRS internal grade 1-4
+  const t = today();
+
+  let stability, difficulty, state, reps, lapses;
+
+  if (!s || s.state === 'new') {
+    // First review — new card
+    stability  = fsrsS0(fg);
+    difficulty = fsrsD0(fg);
+    reps    = 1;
+    lapses  = 0;
+    state   = (g === 0) ? 'learning' : (stability >= 21 ? 'review' : 'learning');
+  } else {
+    const lastDue  = s.due  || t;
+    const elapsed  = Math.max(0, (new Date(t) - new Date(lastDue)) / 86400000);
+    const S_prev   = s.stability  || 1;
+    const D_prev   = s.difficulty || 5;
+    const R        = fsrsR(elapsed, S_prev);
+
+    difficulty = fsrsDifficultyUpdate(D_prev, fg);
+
+    if (fg === 1) {
+      // Again — forgot
+      stability = fsrsStabilityForget(D_prev, S_prev, R);
+      lapses    = (s.lapses || 0) + 1;
+      reps      = 0;
+      state     = 'relearning';
+    } else {
+      stability = fsrsStabilityRecall(D_prev, S_prev, R, fg);
+      lapses    = s.lapses || 0;
+      reps      = (s.reps || 0) + 1;
+      state     = stability >= 21 ? 'review' : 'learning';
+    }
+  }
+
+  stability = Math.max(0.1, stability);
+  const interval = (g === 0) ? 1 : fsrsNextInterval(stability);
+
+  return {
+    stability, difficulty,
+    interval, state, reps, lapses,
+    due: addD(t, interval),
+    last_review: t
+  };
+}
+
+// ═══════════════════════════════════════════════════
+//  UNIFIED CALC — delegates to SM-2 or FSRS
+// ═══════════════════════════════════════════════════
+function getAlgo() { return cfg.algo || 'sm2'; }
+
+function schedCalc(sm, g) {
+  return getAlgo() === 'fsrs' ? fsrsCalc(sm, g) : sm2Calc(sm, g);
+}
+
+function nextLbl(c, g) {
+  const s = schedCalc(c.sm2, g);
+  return fmtInterval(s.interval);
+}
+
+// ═══════════════════════════════════════════════════
+//  ALGORITHM PICKER UI
+// ═══════════════════════════════════════════════════
+function pickAlgo(algo) {
+  cfg.algo = algo;
+  const isSM2 = algo === 'sm2';
+  const btnSM2  = document.getElementById('algoBtnSM2');
+  const btnFSRS = document.getElementById('algoBtnFSRS');
+  const desc    = document.getElementById('algoDesc');
+  const wrap    = document.getElementById('cfgFirstWrap');
+  if (btnSM2 && btnFSRS) {
+    btnSM2.style.background  = isSM2 ? 'var(--blue)' : 'var(--card)';
+    btnSM2.style.color       = isSM2 ? '#fff' : 'var(--ink2)';
+    btnSM2.style.borderColor = isSM2 ? 'var(--blue)' : 'var(--border2)';
+    btnFSRS.style.background = !isSM2 ? 'var(--purple)' : 'var(--card)';
+    btnFSRS.style.color      = !isSM2 ? '#fff' : 'var(--ink2)';
+    btnFSRS.style.borderColor= !isSM2 ? 'var(--purple)' : 'var(--border2)';
+  }
+  if (desc) desc.textContent = isSM2
+    ? 'Классический алгоритм SuperMemo. Надёжен и прост.'
+    : 'FSRS-4.5 — современный алгоритм на основе нейронных сетей. Более точный прогноз забывания.';
+  if (wrap) wrap.style.display = isSM2 ? '' : 'none';
+}
+
+function openStudySett() {
+  // Populate numeric fields
+  const ne = document.getElementById('cfgNew');
+  const me = document.getElementById('cfgMax');
+  const fe = document.getElementById('cfgFirst');
+  if (ne) ne.value = cfg.newPerDay   || 20;
+  if (me) me.value = cfg.maxReviews  || 200;
+  if (fe) fe.value = cfg.firstInterval || 1;
+  // Sync UI with current cfg
+  pickAlgo(cfg.algo || 'sm2');
+  openSh('studySh');
+}
 
 // ═══════════════════════════════════════════════════
 //  FIREBASE — точная копия логики из finflow
@@ -1582,7 +1807,7 @@ function initMainFirebase(accId, userId) {
       const d = s.val()||{};
       decks    = d.decks    ||{};
       cards    = d.cards    ||{};
-      cfg      = Object.assign({newPerDay:20,maxReviews:200,firstInterval:1}, d.cfg||{});
+      cfg      = Object.assign({newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, d.cfg||{});
       studyLog = d.studyLog ||{};
       const ne=document.getElementById('cfgNew'),me=document.getElementById('cfgMax'),fe=document.getElementById('cfgFirst');
       if(ne) ne.value=cfg.newPerDay;
@@ -1973,8 +2198,14 @@ function renderCard(){
   const deck=decks[c.deckId]||{}, sm=c.sm2;
   const sCol=!sm||sm.state==='new'?'var(--blue)':sm.state==='learning'?'var(--orange)':'var(--green)';
   const sLbl=!sm||sm.state==='new'?'Новая':sm.state==='learning'?'Учится':'Повторение';
-  const intStr=sm&&sm.interval>0?`${sm.interval}д · EF ${(sm.ease||2.5).toFixed(1)}`:'';
-
+  let intStr = '';
+  if (sm && sm.interval > 0) {
+    if (getAlgo() === 'fsrs') {
+      intStr = `${sm.interval}д · S=${(sm.stability||0).toFixed(1)} D=${(sm.difficulty||5).toFixed(1)}`;
+    } else {
+      intStr = `${sm.interval}д · EF ${(sm.ease||2.5).toFixed(1)}`;
+    }
+  }
   // Detect audio refs in card content — [sound:filename] or stored audioUrl
   const frontAudio = extractAudioRefs(c.front);
   const backAudio  = extractAudioRefs(c.back);
@@ -2166,7 +2397,7 @@ function closeReview(){
 }
 
 function doGrade(g){
-  const c=rQ[rIdx], ns=sm2Calc(c.sm2,g);
+  const c=rQ[rIdx], ns=schedCalc(c.sm2,g);
   save('cards/'+c.id+'/sm2',ns);
   ['again','hard','good','easy'].forEach((k,i)=>{if(i===g)rStats[k]++;});
   if(g===0)rQ.splice(Math.min(rIdx+5,rQ.length),0,{...c,sm2:ns});
@@ -2672,17 +2903,13 @@ function previewSound(f) { cePlaySound('ce_sound'); }
 // ═══════════════════════════════════════════════════
 //  SETTINGS
 // ═══════════════════════════════════════════════════
-function openStudySett(){
-  document.getElementById('cfgNew').value=cfg.newPerDay;
-  document.getElementById('cfgMax').value=cfg.maxReviews;
-  document.getElementById('cfgFirst').value=cfg.firstInterval;
-  openSh('studySh');
-}
+// openStudySett is defined above (near algorithm logic)
 function saveStudySett(){
-  cfg.newPerDay=parseInt(document.getElementById('cfgNew').value)||20;
-  cfg.maxReviews=parseInt(document.getElementById('cfgMax').value)||200;
-  cfg.firstInterval=parseInt(document.getElementById('cfgFirst').value)||1;
-  save('cfg',cfg); toast('✅ Сохранено'); closeSh('studySh'); renderAll();
+  cfg.newPerDay    = parseInt(document.getElementById('cfgNew').value)  || 20;
+  cfg.maxReviews   = parseInt(document.getElementById('cfgMax').value)  || 200;
+  cfg.firstInterval= parseInt(document.getElementById('cfgFirst').value)|| 1;
+  // algo is already set in cfg by pickAlgo()
+  save('cfg', cfg); toast('✅ Сохранено'); closeSh('studySh'); renderAll();
 }
 function openImportEx(){openSh('importSh');}
 function doImport(){
