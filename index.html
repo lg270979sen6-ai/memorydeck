@@ -1617,23 +1617,27 @@ function startReview(deckId=null){
 }
 
 async function loadCardImages() {
-  const imgs = document.querySelectorAll('#cardStage img[src]:not([src^="data:"])');
+  // Use data-anki-img attribute to find our images (not [src^=data:] which misses malformed srcs)
+  const imgs = document.querySelectorAll('#cardStage img[data-anki-img="1"]');
   console.log('[IMG] found imgs to load:', imgs.length);
   for (const img of imgs) {
-    const filename = img.getAttribute('src');
-    if (!filename) continue;
-    const safeKey = filename.replace(/[.#$\/[\]]/g, '_');
+    let src = img.getAttribute('src') || '';
+    // Extract just filename — handles malformed src like "<img src=filename.jpg"
+    const m = src.match(/([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))/i);
+    if (!m) { img.style.display='none'; continue; }
+    const filename = m[1];
+    const safeKey = filename.replace(/[.#$/[\]]/g, '_');
     console.log('[IMG] loading:', filename, '-> key:', safeKey);
     try {
       const snap = await db.ref('memorydeck_audio/' + sess.accId + '/' + safeKey).once('value');
-      console.log('[IMG] firebase result:', snap.val() ? 'FOUND ('+snap.val().length+' chars)' : 'NOT FOUND');
+      console.log('[IMG] firebase result:', snap.val() ? 'FOUND' : 'NOT FOUND');
       if (snap.val()) {
         img.src = snap.val();
         img.style.cssText = 'max-width:100%;max-height:200px;border-radius:10px;object-fit:contain;display:block;margin:8px auto;';
       } else {
         img.style.display = 'none';
       }
-    } catch(e) { console.log('[IMG] error:', e.message); img.style.display = 'none'; }
+    } catch(e) { img.style.display = 'none'; }
   }
 }
 
@@ -1759,11 +1763,6 @@ function renderCardContent(text) {
     t = t.replace(/class="anki-img"/g,         'style="display:block;text-align:center;margin:8px 0;"');
   }
   // Step 2: convert markdown ** and _ to HTML
-  // Fix broken img tags: remnants like: 0038.jpg" data-anki-img="1" style="...">
-  // Reconstruct them back to proper <img> tags
-  t = t.replace(/([\w.]+\.(?:jpg|jpeg|png|gif|webp))"\s+data-anki-img="1"[^>]*>/gi,
-    '<img src="$1" data-anki-img="1" style="max-width:100%;max-height:200px;border-radius:10px;display:block;margin:8px auto;">');
-
   t = t.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;font-style:normal;">$1</strong>');
   t = t.replace(/_([^_]+)_/g, '<em style="font-style:italic;opacity:.85;">$1</em>');
   // Step 3: newlines to <br>
