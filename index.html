@@ -1072,11 +1072,13 @@ body {
     <div class="editor-title" id="ceTitle">Новая карточка</div>
     <button class="editor-save" onclick="saveCard()">Сохранить</button>
   </div>
-  <div class="editor-body">
-    <div class="field"><label>Вопрос (лицевая)</label><textarea id="cFront" placeholder="Что такое...?"></textarea></div>
-    <div class="field"><label>Ответ (обратная)</label><textarea id="cBack" placeholder="Это..."></textarea></div>
+  <div class="editor-body" id="cardEdBody">
+    <!-- Fields rendered by JS based on template -->
+  </div>
+  <div style="padding:0 16px 16px;">
     <div class="field"><label>Колода</label><select id="cDeck"></select></div>
     <div class="field"><label>Теги (через запятую)</label><input id="cTags" placeholder="биология, экзамен"></div>
+    <button id="ceDeleteBtn" onclick="deleteCurrentCard()" style="display:none;width:100%;padding:13px;border-radius:14px;border:none;background:rgba(255,59,48,.08);color:#ff3b30;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer;margin-top:4px;">🗑 Удалить карточку</button>
   </div>
 </div>
 
@@ -1829,6 +1831,7 @@ function renderCard(){
     </div>
     <button class="show-ans" id="showAns" onclick="doFlip()">Показать ответ</button>
     <button onclick="showRaw()" style="position:fixed;bottom:4px;right:4px;font-size:10px;opacity:.3;background:none;border:none;color:var(--ink3);cursor:pointer;z-index:999;">raw</button>
+    <button onclick="editCurrentCard()" style="position:fixed;bottom:6px;left:50%;transform:translateX(-50%);padding:6px 16px;border-radius:20px;background:rgba(0,0,0,.06);border:none;font-size:12px;font-weight:600;color:var(--ink3);cursor:pointer;z-index:999;">✏️ Редактировать</button>
     <div class="grades" id="grades" style="display:none;">
       <button class="grade-btn gb-again" onclick="doGrade(0)"><div class="g-em">🔴</div><div class="g-w">Снова</div><div class="g-nxt">${nextLbl(c,0)}</div></button>
       <button class="grade-btn gb-hard"  onclick="doGrade(1)"><div class="g-em">🟠</div><div class="g-w">Трудно</div><div class="g-nxt">${nextLbl(c,1)}</div></button>
@@ -2106,37 +2109,178 @@ function saveDeck(){
 // ═══════════════════════════════════════════════════
 //  CARD EDITOR
 // ═══════════════════════════════════════════════════
+// Parse card front/back HTML into field values
+function parseCardFields(front, back) {
+  const get = (html, cls) => {
+    const m = html.match(new RegExp(`<div[^>]*class="anki-${cls}"[^>]*>([\\s\\S]*?)<\\/div>`,'i'));
+    return m ? m[1].trim() : '';
+  };
+  const getImg = html => {
+    const m = html.match(/\[img:([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))\]/i)
+           || html.match(/<div[^>]*class="anki-img"[^>]*>\s*\[img:([\w.\-]+)\]/i)
+           || html.match(/class="anki-img"[^>]*>[\s\S]*?src="([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))"/i);
+    return m ? m[1] : '';
+  };
+  const getSound = (html, pos) => {
+    const all = [...html.matchAll(/\[sound:([^\]]+)\]/g)].map(m=>m[1]);
+    return all[pos] || '';
+  };
+  return {
+    word:         get(front,'word') || get(back,'word'),
+    ipa:          get(front,'ipa'),
+    translation:  get(back,'translation'),
+    meaning:      get(back,'meaning').replace(/^📖\s*/,''),
+    example:      get(front,'example') || get(back,'example'),
+    image:        getImg(back),
+    sound:        getSound(front,0),
+    sound_example:getSound(back,0),
+  };
+}
+
+// Build card front/back from field values
+function buildCardFromFields(vals) {
+  const ex = vals.example ? `→ ${vals.example}` : '';
+  const front = [
+    vals.word    ? `<div class="anki-word">${vals.word}</div>` : '',
+    vals.ipa     ? `<div class="anki-ipa">[${vals.ipa.replace(/^\[|\]$/g,'')}]</div>` : '',
+    vals.sound   ? `[sound:${vals.sound}]` : '',
+    ex           ? `<div class="anki-example">${ex}</div>` : '',
+  ].filter(Boolean).join('\n');
+  const back = [
+    vals.word        ? `<div class="anki-word">${vals.word}</div>` : '',
+    vals.image       ? `<div class="anki-img">[img:${vals.image}]</div>` : '',
+    vals.translation ? `<div class="anki-translation">${vals.translation}</div>` : '',
+    vals.meaning     ? `<div class="anki-meaning">📖 ${vals.meaning}</div>` : '',
+    ex               ? `<div class="anki-example">${ex}</div>` : '',
+    vals.sound_example ? `[sound:${vals.sound_example}]` : '',
+  ].filter(Boolean).join('\n');
+  return {front, back};
+}
+
+// Field definitions for the editor UI
+const CARD_ED_FIELDS = [
+  { id:'word',         label:'Word (слово)',           placeholder:'approach',        hint:'Лицевая + Тыльная' },
+  { id:'ipa',          label:'IPA (транскрипция)',     placeholder:'əˈprəʊtʃ',       hint:'Лицевая' },
+  { id:'translation',  label:'Translation (перевод)',  placeholder:'приближаться',    hint:'Тыльная' },
+  { id:'meaning',      label:'Meaning (значение)',     placeholder:'To approach means to move close...', hint:'Тыльная', multiline:true },
+  { id:'example',      label:'Example (пример)',       placeholder:'The boy approached his school.',    hint:'Лицевая + Тыльная', multiline:true },
+  { id:'image',        label:'Image (картинка)',       placeholder:'filename.jpg',    hint:'Тыльная', isImage:true },
+  { id:'sound',        label:'Sound (звук слова)',     placeholder:'word.mp3',        hint:'Лицевая', isSound:true },
+  { id:'sound_example',label:'Sound Example',          placeholder:'example.mp3',     hint:'Тыльная', isSound:true },
+];
+
 function openCardEd(id){
-  eCardId=id;
-  const c=id?cards[id]:null;
-  document.getElementById('ceTitle').textContent=id?'Редактировать':'Новая карточка';
-  document.getElementById('cFront').value=c?.front||'';
-  document.getElementById('cBack').value=c?.back||'';
-  document.getElementById('cTags').value=(c?.tags||[]).join(', ');
-  document.getElementById('cDeck').innerHTML=Object.entries(decks).map(([did,d])=>
+  eCardId = id;
+  const c = id ? cards[id] : null;
+  document.getElementById('ceTitle').textContent = id ? 'Редактировать карточку' : 'Новая карточка';
+  document.getElementById('ceDeleteBtn').style.display = id ? 'block' : 'none';
+
+  // Parse existing card fields or use empty
+  const vals = c ? parseCardFields(c.front||'', c.back||'') : {};
+
+  // Render field editors
+  const body = document.getElementById('cardEdBody');
+  body.innerHTML = CARD_ED_FIELDS.map(f => {
+    const val = vals[f.id] || '';
+    if (f.isImage) return `
+      <div class="field">
+        <label>${f.label} <span style="font-size:11px;color:var(--ink4);font-weight:400;">${f.hint}</span></label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder}" style="flex:1;">
+          <div id="ce_${f.id}_prev" style="${val?'':'display:none'};width:48px;height:48px;border-radius:8px;overflow:hidden;background:var(--bg2);">
+            ${val?`<img id="ce_${f.id}_img" src="${val}" style="width:100%;height:100%;object-fit:cover;" data-anki-img="1">`:''}
+          </div>
+        </div>
+        <div style="font-size:12px;color:var(--ink4);margin-top:3px;">Имя файла из импорта (напр. 02_0022.jpg)</div>
+      </div>`;
+    if (f.isSound) return `
+      <div class="field">
+        <label>${f.label} <span style="font-size:11px;color:var(--ink4);font-weight:400;">${f.hint}</span></label>
+        <div style="display:flex;gap:8px;align-items:center;">
+          <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder}" style="flex:1;">
+          ${val?`<button onclick="previewSound('${val}')" style="padding:6px 10px;border-radius:8px;border:.5px solid var(--border);background:var(--bg2);font-size:14px;cursor:pointer;">🔊</button>`:''}
+        </div>
+      </div>`;
+    if (f.multiline) return `
+      <div class="field">
+        <label>${f.label} <span style="font-size:11px;color:var(--ink4);font-weight:400;">${f.hint}</span></label>
+        <textarea id="ce_${f.id}" placeholder="${f.placeholder}" style="min-height:70px;">${val}</textarea>
+      </div>`;
+    return `
+      <div class="field">
+        <label>${f.label} <span style="font-size:11px;color:var(--ink4);font-weight:400;">${f.hint}</span></label>
+        <input id="ce_${f.id}" value="${val}" placeholder="${f.placeholder}">
+      </div>`;
+  }).join('');
+
+  // Load image preview from Firebase
+  if (vals.image) {
+    const safeKey = vals.image.replace(/[.#$/[\]]/g,'_');
+    db.ref('memorydeck_audio/'+sess.accId+'/'+safeKey).once('value').then(snap => {
+      if (snap.val()) {
+        const img = document.getElementById('ce_image_img');
+        if (img) img.src = snap.val();
+        const prev = document.getElementById('ce_image_prev');
+        if (prev) prev.style.display = '';
+      }
+    });
+  }
+
+  document.getElementById('cDeck').innerHTML = Object.entries(decks).map(([did,d])=>
     `<option value="${did}" ${(id?c.deckId:eDetailDeck)===did?'selected':''}>${d.emoji||'📚'} ${d.name}</option>`).join('');
+  document.getElementById('cTags').value = (c?.tags||[]).join(', ');
   document.getElementById('cardEdOv').classList.add('open');
 }
-function closeCardEd(){document.getElementById('cardEdOv').classList.remove('open');}
+
+function closeCardEd(){ document.getElementById('cardEdOv').classList.remove('open'); }
+
+function previewSound(filename) {
+  const safeKey = filename.replace(/[.#$/[\]]/g,'_');
+  db.ref('memorydeck_audio/'+sess.accId+'/'+safeKey).once('value').then(snap => {
+    if (snap.val()) { new Audio(snap.val()).play(); }
+    else toast('🔊 Аудио не найдено в базе');
+  });
+}
+
 function saveCard(){
-  const front=document.getElementById('cFront').value.trim();
-  const back=document.getElementById('cBack').value.trim();
-  const deckId=document.getElementById('cDeck').value;
-  const tags=document.getElementById('cTags').value.split(',').map(t=>t.trim()).filter(Boolean);
-  if(!front){toast('❌ Введите вопрос');return;}
-  if(!back){toast('❌ Введите ответ');return;}
-  if(!deckId){toast('❌ Выберите колоду');return;}
-  const id=eCardId||'card_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+  const getVal = id => {
+    const el = document.getElementById('ce_'+id);
+    return el ? (el.value||el.textContent||'').trim() : '';
+  };
+  const vals = {};
+  CARD_ED_FIELDS.forEach(f => { vals[f.id] = getVal(f.id); });
+  if (!vals.word) { toast('❌ Введите слово'); return; }
+  const deckId = document.getElementById('cDeck').value;
+  if (!deckId) { toast('❌ Выберите колоду'); return; }
+  const {front, back} = buildCardFromFields(vals);
+  const tags = document.getElementById('cTags').value.split(',').map(t=>t.trim()).filter(Boolean);
+  const id = eCardId||'card_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
   save('cards/'+id,{front,back,deckId,tags,sm2:eCardId?cards[eCardId]?.sm2:null,createdAt:eCardId?(cards[eCardId]?.createdAt||Date.now()):Date.now()});
   toast(eCardId?'✅ Обновлено':'✅ Карточка добавлена');
   closeCardEd();
-  if(eDetailDeck)setTimeout(()=>openDeckDetail(eDetailDeck),300);
+  if(eDetailDeck) setTimeout(()=>openDeckDetail(eDetailDeck),300);
 }
+
+function deleteCurrentCard() {
+  if (!eCardId) return;
+  if (!confirm('Удалить карточку?')) return;
+  db.ref('memorydeck/'+sess.accId+'/users/'+sess.userId+'/cards/'+eCardId).remove();
+  toast('🗑 Удалено');
+  closeCardEd();
+  if(eDetailDeck) setTimeout(()=>openDeckDetail(eDetailDeck),300);
+}
+
 function deleteCard(id){
   if(!confirm('Удалить карточку?'))return;
   db.ref('memorydeck/'+sess.accId+'/users/'+sess.userId+'/cards/'+id).remove();
   toast('🗑 Удалено');
   if(eDetailDeck)setTimeout(()=>openDeckDetail(eDetailDeck),300);
+}
+
+function editCurrentCard() {
+  const c = rQ[rIdx];
+  if (!c) return;
+  openCardEd(c.id);
 }
 
 // ═══════════════════════════════════════════════════
