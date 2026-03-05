@@ -1054,7 +1054,10 @@ body {
   <div class="overlay-header">
     <div class="rev-close" onclick="closeDeckDetail()">✕</div>
     <div class="overlay-title" id="ddTitle"></div>
-    <div class="hbtn" onclick="openCardEd(null)" style="font-size:20px;background:var(--bg);">＋</div>
+    <div style="display:flex;gap:8px;">
+      <button onclick="openTemplateEd()" style="padding:6px 12px;border-radius:10px;background:var(--bg2);border:.5px solid var(--border);font-size:13px;font-weight:600;color:var(--ink2);cursor:pointer;">🎨 Шаблон</button>
+      <div class="hbtn" onclick="openCardEd(null)" style="font-size:20px;background:var(--bg);">＋</div>
+    </div>
   </div>
   <div id="ddMeta" style="padding:12px 16px;border-bottom:.5px solid var(--border);"></div>
   <div class="overlay-body" id="ddCards"></div>
@@ -1072,6 +1075,52 @@ body {
     <div class="field"><label>Ответ (обратная)</label><textarea id="cBack" placeholder="Это..."></textarea></div>
     <div class="field"><label>Колода</label><select id="cDeck"></select></div>
     <div class="field"><label>Теги (через запятую)</label><input id="cTags" placeholder="биология, экзамен"></div>
+  </div>
+</div>
+
+<!-- CARD TEMPLATE EDITOR -->
+<div class="overlay" id="templateEdOv" style="display:none;flex-direction:column;">
+  <div class="overlay-header">
+    <div class="rev-close" onclick="closeTemplateEd()">✕</div>
+    <div class="overlay-title">Шаблон карточки</div>
+    <button onclick="saveTemplate()" style="padding:6px 16px;border-radius:10px;background:var(--blue);color:#fff;border:none;font-weight:700;font-size:14px;cursor:pointer;">Сохранить</button>
+  </div>
+
+  <!-- Tab bar -->
+  <div style="display:flex;border-bottom:.5px solid var(--border);background:var(--card);">
+    <button id="tmplTab0" onclick="switchTmplTab(0)" style="flex:1;padding:11px;font-size:13px;font-weight:700;border:none;background:none;color:var(--blue);border-bottom:2px solid var(--blue);cursor:pointer;">Лицевая</button>
+    <button id="tmplTab1" onclick="switchTmplTab(1)" style="flex:1;padding:11px;font-size:13px;font-weight:600;border:none;background:none;color:var(--ink3);cursor:pointer;">Тыльная</button>
+    <button id="tmplTab2" onclick="switchTmplTab(2)" style="flex:1;padding:11px;font-size:13px;font-weight:600;border:none;background:none;color:var(--ink3);cursor:pointer;">Стили</button>
+  </div>
+
+  <div class="overlay-body" style="padding:0;">
+
+    <!-- FRONT FIELDS -->
+    <div id="tmplPanel0" style="padding:16px;">
+      <div style="font-size:12px;color:var(--ink3);font-weight:600;margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em;">Поля на лицевой стороне</div>
+      <div id="tmplFrontFields" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div style="font-size:12px;color:var(--ink4);margin-top:12px;">Перетащите для изменения порядка</div>
+
+      <div style="margin-top:20px;font-size:12px;color:var(--ink3);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Предпросмотр</div>
+      <div id="tmplFrontPreview" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;min-height:120px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;"></div>
+    </div>
+
+    <!-- BACK FIELDS -->
+    <div id="tmplPanel1" style="padding:16px;display:none;">
+      <div style="font-size:12px;color:var(--ink3);font-weight:600;margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em;">Поля на тыльной стороне</div>
+      <div id="tmplBackFields" style="display:flex;flex-direction:column;gap:8px;"></div>
+      <div style="font-size:12px;color:var(--ink4);margin-top:12px;">Перетащите для изменения порядка</div>
+
+      <div style="margin-top:20px;font-size:12px;color:var(--ink3);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Предпросмотр</div>
+      <div id="tmplBackPreview" style="background:linear-gradient(160deg,#f8f9ff,#f0f4ff);border:1px solid var(--border);border-radius:14px;padding:20px;min-height:120px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;"></div>
+    </div>
+
+    <!-- STYLES -->
+    <div id="tmplPanel2" style="padding:16px;display:none;">
+      <div style="font-size:12px;color:var(--ink3);font-weight:600;margin-bottom:16px;text-transform:uppercase;letter-spacing:.05em;">Стили полей</div>
+      <div style="display:flex;flex-direction:column;gap:16px;" id="tmplStyleFields"></div>
+    </div>
+
   </div>
 </div>
 
@@ -1618,7 +1667,8 @@ function startReview(deckId=null){
 
 async function loadCardImages() {
   // Use data-anki-img attribute to find our images (not [src^=data:] which misses malformed srcs)
-  const imgs = document.querySelectorAll('#cardStage img[data-anki-img="1"]');
+  // Search entire cardStage including hidden elements (display:none doesn't affect querySelector)
+  const imgs = document.querySelectorAll('#cardStage img[data-anki-img]');
   console.log('[IMG] found imgs to load:', imgs.length);
   for (const img of imgs) {
     let src = img.getAttribute('src') || '';
@@ -1680,14 +1730,14 @@ function renderCard(){
       <div class="c-face">
         <div class="c-badge"><div class="c-dot" style="background:${sCol};"></div>${sLbl}</div>
         <div class="c-deck-tag">${deck.emoji||'📚'}</div>
-        <div class="c-q">${renderCardContent(frontClean)}</div>
+        <div class="c-q">${renderCardWithTemplate(frontClean,'front')}</div>
         ${mkAudioBtn(frontAudio,'front')}
         <div class="c-hint" id="tapHint">Нажмите чтобы показать ответ</div>
       </div>
       <div class="c-face c-back">
         <div class="c-badge"><div class="c-dot" style="background:${sCol};"></div>${sLbl}</div>
         <div class="c-deck-tag">${deck.emoji||'📚'}</div>
-        <div class="c-a">${renderCardContent(backClean)}</div>
+        <div class="c-a">${renderCardWithTemplate(backClean,'back')}</div>
         ${mkAudioBtn(backAudio,'back')}
         ${intStr?`<div class="c-int">${intStr}</div>`:''}
       </div>
@@ -1716,11 +1766,12 @@ function doFlip(){
   document.getElementById('flipper').classList.toggle('flipped',rFlipped);
   document.getElementById('showAns').style.display=rFlipped?'none':'';
   document.getElementById('grades').style.display=rFlipped?'grid':'none';
-  // Auto-play back side audio when answer is revealed
+  // Auto-play back side audio + load images when answer is revealed
   if (rFlipped) {
     const c = rQ[rIdx];
     const backAudio = extractAudioRefs(c.back);
     if (backAudio.length) setTimeout(() => autoPlayAudio(c, 'back'), 300);
+    setTimeout(loadCardImages, 100); // load back-side images
   }
 }
 
@@ -2558,6 +2609,230 @@ async function doApkgImport() {
     btn.disabled = false; btn.textContent = 'Импортировать';
     toast('❌ ' + (err.message || String(err)));
   }
+}
+
+// ═══════════════════════════════════════════════════
+//  CARD TEMPLATE EDITOR
+// ═══════════════════════════════════════════════════
+
+// Default field definitions for 4000 EEW deck
+const DEFAULT_FIELDS = [
+  { id:'word',         label:'Word (слово)',       side:'front', show:true,  style:{size:32, weight:800, color:'#111111', italic:false} },
+  { id:'ipa',          label:'IPA (транскрипция)', side:'front', show:true,  style:{size:16, weight:400, color:'#007aff', italic:true}  },
+  { id:'sound',        label:'Sound (звук слова)', side:'front', show:true,  style:{size:14, weight:400, color:'#007aff', italic:false}  },
+  { id:'example',      label:'Example (пример)',   side:'front', show:true,  style:{size:15, weight:500, color:'#222222', italic:false}  },
+  { id:'image',        label:'Image (картинка)',   side:'back',  show:true,  style:{size:14, weight:400, color:'#555555', italic:false}  },
+  { id:'translation',  label:'Translation (перевод)', side:'back', show:true, style:{size:26, weight:700, color:'#34c759', italic:false} },
+  { id:'meaning',      label:'Meaning (значение)', side:'back',  show:true,  style:{size:15, weight:400, color:'#333333', italic:false}  },
+  { id:'sound_example',label:'Sound_Example (звук примера)', side:'back', show:true, style:{size:14, weight:400, color:'#007aff', italic:false} },
+];
+
+let tmplFields = [];
+let tmplCurrentTab = 0;
+let tmplDragSrc = null;
+
+function loadTemplate() {
+  try {
+    const saved = localStorage.getItem('md_template');
+    if (saved) return JSON.parse(saved);
+  } catch(e) {}
+  return JSON.parse(JSON.stringify(DEFAULT_FIELDS));
+}
+
+function saveTemplate() {
+  localStorage.setItem('md_template', JSON.stringify(tmplFields));
+  toast('✅ Шаблон сохранён');
+  closeTemplateEd();
+}
+
+function openTemplateEd() {
+  tmplFields = loadTemplate();
+  switchTmplTab(0);
+  document.getElementById('templateEdOv').style.display = 'flex';
+}
+
+function closeTemplateEd() {
+  document.getElementById('templateEdOv').style.display = 'none';
+}
+
+function switchTmplTab(n) {
+  tmplCurrentTab = n;
+  [0,1,2].forEach(i => {
+    const tab = document.getElementById('tmplTab'+i);
+    const panel = document.getElementById('tmplPanel'+i);
+    const active = i === n;
+    tab.style.color = active ? 'var(--blue)' : 'var(--ink3)';
+    tab.style.borderBottom = active ? '2px solid var(--blue)' : '2px solid transparent';
+    tab.style.fontWeight = active ? '700' : '600';
+    panel.style.display = active ? 'block' : 'none';
+  });
+  if (n === 0) renderTmplFieldList('front');
+  if (n === 1) renderTmplFieldList('back');
+  if (n === 2) renderTmplStyleFields();
+}
+
+function renderTmplFieldList(side) {
+  const containerId = side === 'front' ? 'tmplFrontFields' : 'tmplBackFields';
+  const previewId   = side === 'front' ? 'tmplFrontPreview' : 'tmplBackPreview';
+  const container   = document.getElementById(containerId);
+  const fields      = tmplFields.filter(f => f.side === side);
+
+  container.innerHTML = fields.map((f, i) => `
+    <div draggable="true" data-field-id="${f.id}" data-side="${side}"
+      ondragstart="tmplDragStart(event)" ondragover="tmplDragOver(event)" ondrop="tmplDrop(event,this)"
+      style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);border-radius:12px;border:.5px solid var(--border);cursor:grab;user-select:none;touch-action:none;">
+      <span style="color:var(--ink4);font-size:18px;cursor:grab;">⠿</span>
+      <div style="flex:1;">
+        <div style="font-size:14px;font-weight:600;color:var(--ink1);">${f.label}</div>
+      </div>
+      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--ink3);">
+        <input type="checkbox" ${f.show?'checked':''} onchange="tmplToggleField('${f.id}',this.checked)"
+          style="width:18px;height:18px;cursor:pointer;accent-color:var(--blue);">
+        Показать
+      </label>
+    </div>`).join('');
+
+  updateTmplPreview(side);
+}
+
+function tmplToggleField(id, show) {
+  const f = tmplFields.find(f => f.id === id);
+  if (f) { f.show = show; updateTmplPreview(f.side); }
+}
+
+function tmplDragStart(e) {
+  tmplDragSrc = e.currentTarget;
+  e.dataTransfer.effectAllowed = 'move';
+}
+
+function tmplDragOver(e) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+}
+
+function tmplDrop(e, target) {
+  e.preventDefault();
+  if (!tmplDragSrc || tmplDragSrc === target) return;
+  const srcId = tmplDragSrc.dataset.fieldId;
+  const dstId = target.dataset.fieldId;
+  const side  = target.dataset.side;
+  const sideFields = tmplFields.filter(f => f.side === side);
+  const srcIdx = sideFields.findIndex(f => f.id === srcId);
+  const dstIdx = sideFields.findIndex(f => f.id === dstId);
+  if (srcIdx < 0 || dstIdx < 0) return;
+  // Reorder within tmplFields
+  const globalSrcIdx = tmplFields.findIndex(f => f.id === srcId);
+  const globalDstIdx = tmplFields.findIndex(f => f.id === dstId);
+  const [moved] = tmplFields.splice(globalSrcIdx, 1);
+  tmplFields.splice(globalDstIdx, 0, moved);
+  renderTmplFieldList(side);
+}
+
+// Sample card data for preview
+const SAMPLE_CARD = {
+  word: 'agree', ipa: 'əˈɡriː', translation: 'соглашаться',
+  meaning: 'To agree is to have the same opinion as another person.',
+  example: 'The two friends agreed on everything.',
+  sound: '[sound:01_0001.mp3]', sound_example: '[sound:01_0001_example.mp3]',
+  image: '01_0001.jpg'
+};
+
+function updateTmplPreview(side) {
+  const previewId = side === 'front' ? 'tmplFrontPreview' : 'tmplBackPreview';
+  const preview = document.getElementById(previewId);
+  if (!preview) return;
+  const fields = tmplFields.filter(f => f.side === side && f.show);
+  preview.innerHTML = fields.map(f => {
+    const s = f.style;
+    const baseStyle = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}margin:4px 0;`;
+    const val = SAMPLE_CARD[f.id] || '';
+    if (f.id === 'image') return `<div style="${baseStyle}text-align:center;">🖼 image.jpg</div>`;
+    if (f.id.startsWith('sound')) return `<button style="padding:5px 12px;border-radius:8px;border:1px solid #ddd;background:#f5f5f5;font-size:13px;cursor:default;">🔊 Слушать</button>`;
+    if (f.id === 'meaning') return `<div style="${baseStyle}background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:7px 10px;border-radius:0 8px 8px 0;text-align:left;">${val}</div>`;
+    if (f.id === 'translation') return `<div style="${baseStyle}">${val}</div>`;
+    return `<div style="${baseStyle}">${val}</div>`;
+  }).join('');
+}
+
+function renderTmplStyleFields() {
+  const container = document.getElementById('tmplStyleFields');
+  const textFields = tmplFields.filter(f => !f.id.startsWith('sound') && f.id !== 'image');
+  container.innerHTML = textFields.map(f => {
+    const s = f.style;
+    return `<div style="background:var(--card);border-radius:14px;padding:14px;border:.5px solid var(--border);">
+      <div style="font-size:13px;font-weight:700;color:var(--ink1);margin-bottom:10px;">${f.label}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <label style="font-size:12px;color:var(--ink3);">Размер
+          <input type="number" value="${s.size}" min="10" max="48" onchange="tmplUpdateStyle('${f.id}','size',+this.value)"
+            style="display:block;width:100%;margin-top:4px;padding:6px 8px;border-radius:8px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
+        </label>
+        <label style="font-size:12px;color:var(--ink3);">Цвет
+          <input type="color" value="${s.color}" onchange="tmplUpdateStyle('${f.id}','color',this.value)"
+            style="display:block;width:100%;height:32px;margin-top:4px;border-radius:8px;border:.5px solid var(--border);cursor:pointer;">
+        </label>
+        <label style="font-size:12px;color:var(--ink3);">Толщина
+          <select onchange="tmplUpdateStyle('${f.id}','weight',+this.value)"
+            style="display:block;width:100%;margin-top:4px;padding:6px 8px;border-radius:8px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
+            <option value="400" ${s.weight===400?'selected':''}>Обычный</option>
+            <option value="600" ${s.weight===600?'selected':''}>Полужирный</option>
+            <option value="700" ${s.weight===700?'selected':''}>Жирный</option>
+            <option value="800" ${s.weight===800?'selected':''}>Очень жирный</option>
+          </select>
+        </label>
+        <label style="font-size:12px;color:var(--ink3);display:flex;align-items:center;gap:8px;padding-top:16px;">
+          <input type="checkbox" ${s.italic?'checked':''} onchange="tmplUpdateStyle('${f.id}','italic',this.checked)"
+            style="width:16px;height:16px;accent-color:var(--blue);">
+          Курсив
+        </label>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function tmplUpdateStyle(fieldId, prop, val) {
+  const f = tmplFields.find(f => f.id === fieldId);
+  if (f) f.style[prop] = val;
+}
+
+// Apply template when rendering card
+function renderCardWithTemplate(text, side) {
+  if (!text) return '';
+  const tmpl = loadTemplate();
+  const sideFields = tmpl.filter(f => f.side === side && f.show);
+
+  // Parse the stored HTML divs and apply template styles
+  let t = text.replace(/\[sound:[^\]]+\]/g, '').trim();
+
+  // Apply inline styles based on template
+  for (const f of tmpl) {
+    const s = f.style;
+    const inlineStyle = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}margin:4px 0;`;
+    const className = `anki-${f.id === 'sound' || f.id === 'sound_example' || f.id === 'sound_meaning' ? 'sound' : f.id}`;
+
+    if (f.id === 'word')        t = t.replace(/class="anki-word"/g,        `style="${inlineStyle}margin:0 0 4px 0;"`);
+    if (f.id === 'ipa')         t = t.replace(/class="anki-ipa"/g,         `style="${inlineStyle}"`);
+    if (f.id === 'translation') t = t.replace(/class="anki-translation"/g, `style="${inlineStyle}"`);
+    if (f.id === 'meaning')     t = t.replace(/class="anki-meaning"/g,     `style="${inlineStyle}background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:8px 12px;border-radius:0 8px 8px 0;text-align:left;"`);
+    if (f.id === 'example')     t = t.replace(/class="anki-example"/g,     `style="${inlineStyle}text-align:left;padding:0 2px;"`);
+    if (f.id === 'image')       t = t.replace(/class="anki-img"/g,         `style="display:block;text-align:center;margin:8px 0;"`);
+  }
+
+  // Hide fields that are turned off
+  const hiddenFields = tmpl.filter(f => !f.show);
+  for (const f of hiddenFields) {
+    if (f.id === 'word')        t = t.replace(/<div[^>]*class="anki-word"[^>]*>.*?<\/div>/gi, '');
+    if (f.id === 'ipa')         t = t.replace(/<div[^>]*class="anki-ipa"[^>]*>.*?<\/div>/gi, '');
+    if (f.id === 'translation') t = t.replace(/<div[^>]*class="anki-translation"[^>]*>.*?<\/div>/gi, '');
+    if (f.id === 'meaning')     t = t.replace(/<div[^>]*class="anki-meaning"[^>]*>.*?<\/div>/gi, '');
+    if (f.id === 'example')     t = t.replace(/<div[^>]*class="anki-example"[^>]*>.*?<\/div>/gi, '');
+    if (f.id === 'image')       t = t.replace(/<div[^>]*class="anki-img"[^>]*>[\s\S]*?<\/div>/gi, '');
+  }
+
+  // Convert markdown
+  t = t.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;font-style:normal;">$1</strong>');
+  t = t.replace(/_([^_]+)_/g, '<em style="font-style:italic;opacity:.85;">$1</em>');
+  t = t.replace(/\n/g, '<br>');
+  return t;
 }
 </script>
 </body>
