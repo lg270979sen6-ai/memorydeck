@@ -2326,26 +2326,30 @@ function parseCardFields(front, back) {
 }
 
 function buildCardFromFields(vals) {
-  const ex = (vals.example||'').replace(/^→\s*/,'').replace(/<br>/g,'\n').replace(/<[^>]+>/g,'').trim();
-  // Strip HTML tags from plain text fields (word, ipa, translation, image, sound)
-  const plain = s => (s||'').replace(/<[^>]+>/g,'').trim();
+  // For plain-text fields strip any accidental HTML tags
+  const pt = s => (s||'').replace(/<[^>]+>/g,'').trim();
+  // For rich fields keep HTML as-is
+  const rt = s => (s||'').trim();
+
+  const ex = rt(vals.example).replace(/^→\s*/,'');
   const front = [
-    plain(vals.word)   ? `<div class="anki-word">${plain(vals.word)}</div>` : '',
-    plain(vals.ipa)    ? `<div class="anki-ipa">[${plain(vals.ipa).replace(/^\[|\]$/g,'')}]</div>` : '',
-    plain(vals.sound)  ? `[sound:${plain(vals.sound)}]` : '',
-    ex                 ? `<div class="anki-example">→ ${ex}</div>` : '',
+    pt(vals.word)   ? `<div class="anki-word">${pt(vals.word)}</div>` : '',
+    pt(vals.ipa)    ? `<div class="anki-ipa">[${pt(vals.ipa).replace(/^\[|\]$/g,'')}]</div>` : '',
+    pt(vals.sound)  ? `[sound:${pt(vals.sound)}]` : '',
+    ex              ? `<div class="anki-example">→ ${ex}</div>` : '',
   ].filter(Boolean).join('\n');
+
   const back = [
-    plain(vals.word)        ? `<div class="anki-word">${plain(vals.word)}</div>` : '',
-    plain(vals.image)       ? `<div class="anki-img">[img:${plain(vals.image)}]</div>` : '',
-    plain(vals.translation) ? `<div class="anki-translation">${plain(vals.translation)}</div>` : '',
-    vals.meaning            ? `<div class="anki-meaning">📖 ${vals.meaning}</div>` : '',
+    pt(vals.word)           ? `<div class="anki-word">${pt(vals.word)}</div>` : '',
+    pt(vals.image)          ? `<div class="anki-img">[img:${pt(vals.image)}]</div>` : '',
+    pt(vals.translation)    ? `<div class="anki-translation">${pt(vals.translation)}</div>` : '',
+    rt(vals.meaning)        ? `<div class="anki-meaning">📖 ${rt(vals.meaning)}</div>` : '',
     ex                      ? `<div class="anki-example">→ ${ex}</div>` : '',
-    plain(vals.sound_example) ? `[sound:${plain(vals.sound_example)}]` : '',
-    // Custom fields — append to back with their label
+    pt(vals.sound_example)  ? `[sound:${pt(vals.sound_example)}]` : '',
+    // Custom fields — preserve rich HTML
     ...Object.entries(vals)
       .filter(([k,v]) => v && !['word','ipa','translation','meaning','example','image','sound','sound_example'].includes(k))
-      .map(([k,v]) => `<div class="anki-custom" data-field="${k}">${v}</div>`),
+      .map(([k,v]) => `<div class="anki-custom" data-field="${k}">${rt(v)}</div>`),
   ].filter(Boolean).join('\n');
   return {front, back};
 }
@@ -2456,8 +2460,10 @@ function openCardEd(id) {
           ${labelHtml}
           <div id="ce_${f.id}" contenteditable="true"
             onfocus="ceActiveField='ce_${f.id}';this.classList.add('ce-field-active')"
-            onblur="this.classList.remove('ce-field-active')"
-            style="min-height:52px;padding:10px;border:.5px solid var(--border);border-radius:8px;background:var(--card);font-size:15px;outline:none;line-height:1.6;text-align:left;">${val}</div>
+            onblur="ceSaveRange();this.classList.remove('ce-field-active')"
+            onkeyup="ceSaveRange()" onmouseup="ceSaveRange()"
+            data-init="${encodeURIComponent(val)}"
+            style="min-height:52px;padding:10px;border:.5px solid var(--border);border-radius:8px;background:var(--card);font-size:15px;outline:none;line-height:1.6;text-align:left;"></div>
         </div>`;
 
       // default: simple text
@@ -2468,6 +2474,12 @@ function openCardEd(id) {
             style="width:100%;padding:9px 12px;border-radius:10px;border:.5px solid var(--border);font-size:15px;background:var(--bg);box-sizing:border-box;">
         </div>`;
     }).join('');
+
+  // Restore rich field content via innerHTML (not template string — avoids HTML escaping)
+  body.querySelectorAll('[data-init]').forEach(el => {
+    try { el.innerHTML = decodeURIComponent(el.dataset.init); } catch(e) { el.innerHTML = el.dataset.init; }
+    delete el.dataset.init;
+  });
 
   // Load image from Firebase for preview
   if (vals.image) {
@@ -2490,16 +2502,75 @@ function closeCardEd() { document.getElementById('cardEdOv').classList.remove('o
 
 // ── Unified toolbar ──────────────────────────────────
 let ceActiveField = null;
+let ceSavedRange = null; // saved selection range
+
+function ceSaveRange() {
+  const sel = window.getSelection();
+  if (sel && sel.rangeCount > 0) {
+    const r = sel.getRangeAt(0);
+    // Only save if inside a contenteditable
+    if (r.commonAncestorContainer.closest && r.commonAncestorContainer.closest('[contenteditable]')) {
+      ceSavedRange = r.cloneRange();
+    } else if (r.commonAncestorContainer.parentElement && r.commonAncestorContainer.parentElement.closest('[contenteditable]')) {
+      ceSavedRange = r.cloneRange();
+    }
+  }
+}
+
+function ceRestoreRange() {
+  if (!ceSavedRange) return false;
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(ceSavedRange);
+  return true;
+}
+
 function ceExec(cmd, val) {
-  if (ceActiveField) { const el=document.getElementById(ceActiveField); if(el) el.focus(); }
-  document.execCommand(cmd, false, val||null);
+  // Restore selection into the active field
+  if (ceActiveField) {
+    const el = document.getElementById(ceActiveField);
+    if (el) {
+      el.focus();
+      if (!ceRestoreRange()) {
+        // No saved range — select all content
+        const range = document.createRange();
+        range.selectNodeContents(el);
+        range.collapse(false);
+        window.getSelection().removeAllRanges();
+        window.getSelection().addRange(range);
+      }
+    }
+  }
+  document.execCommand(cmd, false, val || null);
+  ceSaveRange();
 }
+
 function ceFontSize(size) {
-  if (ceActiveField) { const el=document.getElementById(ceActiveField); if(el) el.focus(); }
-  document.execCommand('fontSize',false,'7');
-  document.querySelectorAll('[contenteditable] font[size="7"]').forEach(f=>{ f.removeAttribute('size'); f.style.fontSize=size+'px'; });
+  if (ceActiveField) {
+    const el = document.getElementById(ceActiveField);
+    if (el) {
+      el.focus();
+      ceRestoreRange();
+    }
+  }
+  document.execCommand('fontSize', false, '7');
+  // Replace font[size=7] with span[style=font-size]
+  const fields = document.querySelectorAll('#cardEdBody [contenteditable]');
+  fields.forEach(el => {
+    el.querySelectorAll('font[size="7"]').forEach(f => {
+      const span = document.createElement('span');
+      span.style.fontSize = size + 'px';
+      span.innerHTML = f.innerHTML;
+      f.replaceWith(span);
+    });
+  });
+  ceSaveRange();
 }
-function ceInsertLink() { const u=prompt('URL:'); if(u) ceExec('createLink',u); }
+
+function ceInsertLink() {
+  const u = prompt('URL:');
+  if (u) ceExec('createLink', u);
+}
 function ceRichFontSize(sel, fieldId) {
   const el = document.getElementById('ce_'+fieldId);
   if (el) { el.focus(); ceFontSize(sel.value); }
