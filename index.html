@@ -668,6 +668,9 @@ body {
   flex-shrink: 0;
 }
 .overlay-title { font-size: 18px; font-weight: 800; flex: 1; letter-spacing: -.2px; }
+.tmpl-tab { flex:1; padding:11px 4px; font-size:13px; font-weight:600; border:none; background:none; color:var(--ink3); border-bottom:2px solid transparent; cursor:pointer; font-family:var(--font); transition:color .15s; }
+.tmpl-tab-active { color:var(--blue) !important; border-bottom-color:var(--blue) !important; font-weight:700 !important; }
+.tmpl-field-row { display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:.5px solid var(--border); background:var(--card); }
 .overlay-body  { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 .card-row {
@@ -1078,50 +1081,129 @@ body {
 </div>
 
 <!-- CARD TEMPLATE EDITOR -->
-<div class="overlay" id="templateEdOv" style="display:none;flex-direction:column;">
-  <div class="overlay-header">
+<div class="overlay" id="templateEdOv" style="display:none;flex-direction:column;background:var(--bg);">
+  <div class="overlay-header" style="padding-top:calc(var(--safe-t) + 12px);">
     <div class="rev-close" onclick="closeTemplateEd()">✕</div>
-    <div class="overlay-title">Шаблон карточки</div>
-    <button onclick="saveTemplate()" style="padding:6px 16px;border-radius:10px;background:var(--blue);color:#fff;border:none;font-weight:700;font-size:14px;cursor:pointer;">Сохранить</button>
+    <div class="overlay-title">Поля и шаблон</div>
+    <button onclick="saveTemplate()" style="padding:7px 16px;border-radius:10px;background:var(--blue);color:#fff;border:none;font-weight:700;font-size:13px;cursor:pointer;">Сохранить</button>
   </div>
 
   <!-- Tab bar -->
-  <div style="display:flex;border-bottom:.5px solid var(--border);background:var(--card);">
-    <button id="tmplTab0" onclick="switchTmplTab(0)" style="flex:1;padding:11px;font-size:13px;font-weight:700;border:none;background:none;color:var(--blue);border-bottom:2px solid var(--blue);cursor:pointer;">Лицевая</button>
-    <button id="tmplTab1" onclick="switchTmplTab(1)" style="flex:1;padding:11px;font-size:13px;font-weight:600;border:none;background:none;color:var(--ink3);cursor:pointer;">Тыльная</button>
-    <button id="tmplTab2" onclick="switchTmplTab(2)" style="flex:1;padding:11px;font-size:13px;font-weight:600;border:none;background:none;color:var(--ink3);cursor:pointer;">Стили</button>
+  <div style="display:flex;border-bottom:.5px solid var(--border);background:var(--card);flex-shrink:0;">
+    <button id="tmplTab0" onclick="switchTmplTab(0)" class="tmpl-tab tmpl-tab-active">Поля</button>
+    <button id="tmplTab1" onclick="switchTmplTab(1)" class="tmpl-tab">Лицевая</button>
+    <button id="tmplTab2" onclick="switchTmplTab(2)" class="tmpl-tab">Тыльная</button>
+    <button id="tmplTab3" onclick="switchTmplTab(3)" class="tmpl-tab">Просмотр</button>
   </div>
 
-  <div class="overlay-body" style="padding:0;">
+  <div class="overlay-body" style="padding:0;" id="tmplBody">
 
-    <!-- FRONT FIELDS -->
-    <div id="tmplPanel0" style="padding:16px;">
-      <div style="font-size:12px;color:var(--ink3);font-weight:600;margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em;">Поля на лицевой стороне</div>
-      <div id="tmplFrontFields" style="display:flex;flex-direction:column;gap:8px;"></div>
-      <div style="font-size:12px;color:var(--ink4);margin-top:12px;">Перетащите для изменения порядка</div>
-
-      <div style="margin-top:20px;font-size:12px;color:var(--ink3);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Предпросмотр</div>
-      <div id="tmplFrontPreview" style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:20px;min-height:120px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;"></div>
+    <!-- PANEL 0: ALL FIELDS (Anki "Fields" tab) -->
+    <div id="tmplPanel0" style="padding:0;">
+      <div id="tmplAllFieldsList" style="display:flex;flex-direction:column;"></div>
+      <div style="padding:12px 16px;">
+        <button onclick="tmplAddField()" style="width:100%;padding:13px;border-radius:14px;border:1.5px dashed var(--border);background:transparent;color:var(--blue);font-size:14px;font-weight:600;cursor:pointer;font-family:var(--font);">＋ Добавить поле</button>
+      </div>
     </div>
 
-    <!-- BACK FIELDS -->
-    <div id="tmplPanel1" style="padding:16px;display:none;">
-      <div style="font-size:12px;color:var(--ink3);font-weight:600;margin-bottom:12px;text-transform:uppercase;letter-spacing:.05em;">Поля на тыльной стороне</div>
-      <div id="tmplBackFields" style="display:flex;flex-direction:column;gap:8px;"></div>
-      <div style="font-size:12px;color:var(--ink4);margin-top:12px;">Перетащите для изменения порядка</div>
-
-      <div style="margin-top:20px;font-size:12px;color:var(--ink3);font-weight:600;margin-bottom:8px;text-transform:uppercase;letter-spacing:.05em;">Предпросмотр</div>
-      <div id="tmplBackPreview" style="background:linear-gradient(160deg,#f8f9ff,#f0f4ff);border:1px solid var(--border);border-radius:14px;padding:20px;min-height:120px;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;"></div>
+    <!-- PANEL 1: FRONT SIDE -->
+    <div id="tmplPanel1" style="padding:0;display:none;">
+      <div style="padding:12px 16px 6px;font-size:11px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:.06em;">Выберите поля для лицевой стороны</div>
+      <div id="tmplFrontList" style="display:flex;flex-direction:column;"></div>
     </div>
 
-    <!-- STYLES -->
-    <div id="tmplPanel2" style="padding:16px;display:none;">
-      <div style="font-size:12px;color:var(--ink3);font-weight:600;margin-bottom:16px;text-transform:uppercase;letter-spacing:.05em;">Стили полей</div>
-      <div style="display:flex;flex-direction:column;gap:16px;" id="tmplStyleFields"></div>
+    <!-- PANEL 2: BACK SIDE -->
+    <div id="tmplPanel2" style="padding:0;display:none;">
+      <div style="padding:12px 16px 6px;font-size:11px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:.06em;">Выберите поля для тыльной стороны</div>
+      <div id="tmplBackList" style="display:flex;flex-direction:column;"></div>
+    </div>
+
+    <!-- PANEL 3: PREVIEW -->
+    <div id="tmplPanel3" style="padding:16px;display:none;">
+      <div style="font-size:11px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:12px;">Предпросмотр</div>
+
+      <!-- Front preview -->
+      <div style="font-size:12px;font-weight:600;color:var(--ink3);margin-bottom:6px;">Лицевая сторона</div>
+      <div id="tmplPreviewFront" style="background:var(--card);border:1px solid var(--border);border-radius:16px;padding:24px 20px;min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,.06);"></div>
+
+      <!-- Back preview -->
+      <div style="font-size:12px;font-weight:600;color:var(--ink3);margin-bottom:6px;">Тыльная сторона</div>
+      <div id="tmplPreviewBack" style="background:linear-gradient(160deg,#f8f9ff,#f0f4ff);border:1px solid var(--border);border-radius:16px;padding:24px 20px;min-height:140px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-shadow:0 2px 12px rgba(0,0,0,.06);"></div>
     </div>
 
   </div>
 </div>
+
+<!-- FIELD EDITOR SHEET (Anki-style) -->
+<div class="sheet-bg" id="fieldEdSh">
+  <div class="sheet" style="max-height:90vh;">
+    <div class="sheet-grip"></div>
+    <div class="sheet-title" id="fieldEdTitle">Редактировать поле</div>
+
+    <div class="field">
+      <label>Название поля</label>
+      <input id="fieldEdName" placeholder="Например: Перевод" style="font-size:16px;">
+    </div>
+
+    <!-- Rich text toolbar -->
+    <div style="margin:0 0 6px 0;">
+      <label style="font-size:12px;font-weight:600;color:var(--ink3);display:block;margin-bottom:8px;">Значение по умолчанию</label>
+      <div style="display:flex;gap:4px;flex-wrap:wrap;padding:8px;background:var(--bg2);border-radius:10px 10px 0 0;border:.5px solid var(--border);">
+        <button onclick="fmtDoc('bold')" title="Жирный" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink);">B</button>
+        <button onclick="fmtDoc('italic')" title="Курсив" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:14px;font-style:italic;cursor:pointer;color:var(--ink);">I</button>
+        <button onclick="fmtDoc('underline')" title="Подчёркнутый" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:14px;text-decoration:underline;cursor:pointer;color:var(--ink);">U</button>
+        <div style="width:1px;background:var(--border);margin:2px 4px;"></div>
+        <select onchange="fmtFontSize(this.value)" style="height:30px;border-radius:6px;border:.5px solid var(--border);background:var(--card);font-size:12px;padding:0 4px;cursor:pointer;">
+          <option value="12">12</option><option value="14">14</option><option value="16" selected>16</option>
+          <option value="18">18</option><option value="20">20</option><option value="24">24</option>
+          <option value="28">28</option><option value="32">32</option>
+        </select>
+        <input type="color" onchange="fmtColor(this.value)" title="Цвет текста" style="width:30px;height:30px;border:none;border-radius:6px;cursor:pointer;padding:2px;background:none;">
+        <div style="width:1px;background:var(--border);margin:2px 4px;"></div>
+        <button onclick="fieldInsertSound()" title="Добавить звук" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:16px;cursor:pointer;">🔊</button>
+        <button onclick="fieldInsertImage()" title="Добавить картинку" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:16px;cursor:pointer;">🖼️</button>
+        <button onclick="fieldInsertLink()" title="Добавить ссылку" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:16px;cursor:pointer;">🔗</button>
+      </div>
+      <div id="fieldEdContent" contenteditable="true" style="min-height:80px;padding:10px;border:.5px solid var(--border);border-top:none;border-radius:0 0 10px 10px;background:var(--card);font-size:15px;outline:none;line-height:1.5;"></div>
+    </div>
+
+    <!-- Style settings -->
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+      <label style="font-size:12px;color:var(--ink3);">Размер шрифта
+        <input type="number" id="fieldEdSize" value="16" min="10" max="48"
+          style="display:block;width:100%;margin-top:4px;padding:8px;border-radius:8px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
+      </label>
+      <label style="font-size:12px;color:var(--ink3);">Цвет текста
+        <input type="color" id="fieldEdColor" value="#111111"
+          style="display:block;width:100%;height:36px;margin-top:4px;border-radius:8px;border:.5px solid var(--border);cursor:pointer;">
+      </label>
+      <label style="font-size:12px;color:var(--ink3);">Насыщенность
+        <select id="fieldEdWeight" style="display:block;width:100%;margin-top:4px;padding:8px;border-radius:8px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
+          <option value="400">Обычный</option>
+          <option value="600">Полужирный</option>
+          <option value="700" selected>Жирный</option>
+          <option value="800">Очень жирный</option>
+        </select>
+      </label>
+      <label style="font-size:12px;color:var(--ink3);display:flex;flex-direction:column;">Курсив
+        <label style="display:flex;align-items:center;gap:8px;margin-top:10px;cursor:pointer;">
+          <input type="checkbox" id="fieldEdItalic" style="width:18px;height:18px;accent-color:var(--blue);">
+          <span style="font-size:14px;color:var(--ink2);">Включить</span>
+        </label>
+      </label>
+    </div>
+
+    <div class="sheet-btns">
+      <button class="sbtn sbtn-cancel" onclick="closeSh('fieldEdSh')">Отмена</button>
+      <button class="sbtn sbtn-ok" onclick="saveFieldEd()">Сохранить</button>
+    </div>
+    <button id="fieldEdDeleteBtn" onclick="deleteFieldEd()" style="display:none;width:100%;margin-top:8px;padding:13px;border-radius:14px;border:none;background:rgba(255,59,48,.08);color:#ff3b30;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer;">🗑 Удалить поле</button>
+  </div>
+</div>
+
+<!-- hidden file inputs for field editor -->
+<input type="file" id="fieldSoundInput" accept="audio/*" style="display:none" onchange="handleFieldSound(this)">
+<input type="file" id="fieldImageInput" accept="image/*" style="display:none" onchange="handleFieldImage(this)">
 
 <!-- DECK EDITOR SHEET -->
 <div class="sheet-bg" id="deckEdSh">
@@ -2616,37 +2698,32 @@ async function doApkgImport() {
 }
 
 // ═══════════════════════════════════════════════════
-//  CARD TEMPLATE EDITOR
+//  CARD TEMPLATE EDITOR — Full Anki-style
 // ═══════════════════════════════════════════════════
 
-// Default field definitions for 4000 EEW deck
 const DEFAULT_FIELDS = [
-  { id:'word',         label:'Word (слово)',       side:'front', show:true,  style:{size:32, weight:800, color:'#111111', italic:false} },
-  { id:'ipa',          label:'IPA (транскрипция)', side:'front', show:true,  style:{size:16, weight:400, color:'#007aff', italic:true}  },
-  { id:'sound',        label:'Sound (звук слова)', side:'front', show:true,  style:{size:14, weight:400, color:'#007aff', italic:false}  },
-  { id:'example',      label:'Example (пример)',   side:'front', show:true,  style:{size:15, weight:500, color:'#222222', italic:false}  },
-  { id:'image',        label:'Image (картинка)',   side:'back',  show:true,  style:{size:14, weight:400, color:'#555555', italic:false}  },
-  { id:'translation',  label:'Translation (перевод)', side:'back', show:true, style:{size:26, weight:700, color:'#34c759', italic:false} },
-  { id:'meaning',      label:'Meaning (значение)', side:'back',  show:true,  style:{size:15, weight:400, color:'#333333', italic:false}  },
-  { id:'sound_example',label:'Sound_Example (звук примера)', side:'back', show:true, style:{size:14, weight:400, color:'#007aff', italic:false} },
+  { id:'word',         label:'Word',          side:'front', showFront:true,  showBack:true,  style:{size:30,weight:800,color:'#111111',italic:false} },
+  { id:'ipa',          label:'IPA',           side:'front', showFront:true,  showBack:false, style:{size:16,weight:400,color:'#007aff',italic:true}  },
+  { id:'sound',        label:'Sound',         side:'front', showFront:true,  showBack:false, style:{size:14,weight:400,color:'#007aff',italic:false}  },
+  { id:'example',      label:'Example',       side:'front', showFront:true,  showBack:true,  style:{size:15,weight:500,color:'#222222',italic:false}  },
+  { id:'image',        label:'Image',         side:'back',  showFront:false, showBack:true,  style:{size:14,weight:400,color:'#555555',italic:false}  },
+  { id:'translation',  label:'Translation',   side:'back',  showFront:false, showBack:true,  style:{size:26,weight:700,color:'#34c759',italic:false}  },
+  { id:'meaning',      label:'Meaning',       side:'back',  showFront:false, showBack:true,  style:{size:15,weight:400,color:'#333333',italic:false}  },
+  { id:'sound_example',label:'Sound Example', side:'back',  showFront:false, showBack:true,  style:{size:14,weight:400,color:'#007aff',italic:false}  },
 ];
 
 let tmplFields = [];
-let tmplCurrentTab = 0;
-let tmplDragSrc = null;
+let tmplEditIdx = -1; // index of field being edited in fieldEdSh
 
 function loadTemplate() {
-  try {
-    const saved = localStorage.getItem('md_template');
-    if (saved) return JSON.parse(saved);
-  } catch(e) {}
+  try { const s = localStorage.getItem('md_template'); if (s) return JSON.parse(s); } catch(e){}
   return JSON.parse(JSON.stringify(DEFAULT_FIELDS));
 }
 
 function saveTemplate() {
   localStorage.setItem('md_template', JSON.stringify(tmplFields));
-  toast('✅ Шаблон сохранён');
   closeTemplateEd();
+  toast('✅ Шаблон сохранён');
 }
 
 function openTemplateEd() {
@@ -2654,192 +2731,241 @@ function openTemplateEd() {
   switchTmplTab(0);
   document.getElementById('templateEdOv').style.display = 'flex';
 }
-
 function closeTemplateEd() {
   document.getElementById('templateEdOv').style.display = 'none';
 }
 
 function switchTmplTab(n) {
-  tmplCurrentTab = n;
-  [0,1,2].forEach(i => {
+  [0,1,2,3].forEach(i => {
     const tab = document.getElementById('tmplTab'+i);
-    const panel = document.getElementById('tmplPanel'+i);
-    const active = i === n;
-    tab.style.color = active ? 'var(--blue)' : 'var(--ink3)';
-    tab.style.borderBottom = active ? '2px solid var(--blue)' : '2px solid transparent';
-    tab.style.fontWeight = active ? '700' : '600';
-    panel.style.display = active ? 'block' : 'none';
+    tab.classList.toggle('tmpl-tab-active', i===n);
+    document.getElementById('tmplPanel'+i).style.display = i===n ? 'block' : 'none';
   });
-  if (n === 0) renderTmplFieldList('front');
-  if (n === 1) renderTmplFieldList('back');
-  if (n === 2) renderTmplStyleFields();
+  if (n===0) renderAllFieldsList();
+  if (n===1) renderSideFieldsList('front','tmplFrontList');
+  if (n===2) renderSideFieldsList('back','tmplBackList');
+  if (n===3) renderPreview();
 }
 
-function renderTmplFieldList(side) {
-  const containerId = side === 'front' ? 'tmplFrontFields' : 'tmplBackFields';
-  const previewId   = side === 'front' ? 'tmplFrontPreview' : 'tmplBackPreview';
-  const container   = document.getElementById(containerId);
-  const fields      = tmplFields.filter(f => f.side === side);
+// ── Panel 0: All fields ──────────────────────────────
+function renderAllFieldsList() {
+  const el = document.getElementById('tmplAllFieldsList');
+  el.innerHTML = tmplFields.map((f,i) => `
+    <div class="tmpl-field-row" draggable="true" data-idx="${i}"
+      ondragstart="tfDragStart(event)" ondragover="tfDragOver(event)" ondrop="tfDrop(event,this)">
+      <span style="color:var(--ink4);font-size:18px;cursor:grab;touch-action:none;">⠿</span>
+      <div style="flex:1;">
+        <div style="font-size:15px;font-weight:600;color:var(--ink1);">${f.label}</div>
+        <div style="font-size:12px;color:var(--ink4);margin-top:1px;">
+          ${f.showFront?'<span style="color:var(--blue);font-weight:600;">Лицевая</span> ':''}${f.showBack?'<span style="color:var(--green);font-weight:600;">Тыльная</span>':''}
+        </div>
+      </div>
+      <button onclick="openFieldEd(${i})" style="padding:6px 12px;border-radius:8px;border:.5px solid var(--border);background:var(--bg2);font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;">✏️ Ред.</button>
+    </div>
+  `).join('');
+}
 
-  container.innerHTML = fields.map((f, i) => `
-    <div draggable="true" data-field-id="${f.id}" data-side="${side}"
-      ondragstart="tmplDragStart(event)" ondragover="tmplDragOver(event)" ondrop="tmplDrop(event,this)"
-      style="display:flex;align-items:center;gap:10px;padding:12px 14px;background:var(--card);border-radius:12px;border:.5px solid var(--border);cursor:grab;user-select:none;touch-action:none;">
+let tfDragIdx = null;
+function tfDragStart(e) { tfDragIdx = +e.currentTarget.dataset.idx; e.dataTransfer.effectAllowed='move'; }
+function tfDragOver(e) { e.preventDefault(); }
+function tfDrop(e, el) {
+  e.preventDefault();
+  const dstIdx = +el.dataset.idx;
+  if (tfDragIdx===null || tfDragIdx===dstIdx) return;
+  const [moved] = tmplFields.splice(tfDragIdx, 1);
+  tmplFields.splice(dstIdx, 0, moved);
+  renderAllFieldsList();
+  tfDragIdx = null;
+}
+
+function tmplAddField() {
+  tmplFields.push({ id:'field_'+Date.now(), label:'Новое поле', showFront:false, showBack:false, style:{size:16,weight:400,color:'#111111',italic:false}, defaultValue:'' });
+  renderAllFieldsList();
+  openFieldEd(tmplFields.length-1);
+}
+
+// ── Panel 1/2: Side field toggles ───────────────────
+function renderSideFieldsList(side, containerId) {
+  const el = document.getElementById(containerId);
+  const prop = side==='front' ? 'showFront' : 'showBack';
+  const color = side==='front' ? 'var(--blue)' : 'var(--green)';
+  el.innerHTML = tmplFields.map((f,i) => `
+    <div class="tmpl-field-row" draggable="true" data-idx="${i}" data-side="${side}"
+      ondragstart="tfDragStart(event)" ondragover="tfDragOver(event)" ondrop="tfDropSide(event,this,'${side}')">
       <span style="color:var(--ink4);font-size:18px;cursor:grab;">⠿</span>
       <div style="flex:1;">
-        <div style="font-size:14px;font-weight:600;color:var(--ink1);">${f.label}</div>
+        <div style="font-size:15px;font-weight:600;color:${f[prop]?'var(--ink1)':'var(--ink4)'};">${f.label}</div>
+        <div style="font-size:12px;color:var(--ink4);">
+          ${f.style.size}px · ${f.style.weight>=700?'Жирный':'Обычный'}${f.style.italic?' · Курсив':''}
+        </div>
       </div>
-      <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:var(--ink3);">
-        <input type="checkbox" ${f.show?'checked':''} onchange="tmplToggleField('${f.id}',this.checked)"
-          style="width:18px;height:18px;cursor:pointer;accent-color:var(--blue);">
-        Показать
+      <label style="cursor:pointer;display:flex;align-items:center;gap:6px;">
+        <input type="checkbox" ${f[prop]?'checked':''} onchange="tmplToggleSide(${i},'${side}',this.checked)"
+          style="width:22px;height:22px;cursor:pointer;accent-color:${color};">
       </label>
-    </div>`).join('');
-
-  updateTmplPreview(side);
+    </div>
+  `).join('');
 }
 
-function tmplToggleField(id, show) {
-  const f = tmplFields.find(f => f.id === id);
-  if (f) { f.show = show; updateTmplPreview(f.side); }
+function tmplToggleSide(idx, side, val) {
+  tmplFields[idx][side==='front'?'showFront':'showBack'] = val;
 }
 
-function tmplDragStart(e) {
-  tmplDragSrc = e.currentTarget;
-  e.dataTransfer.effectAllowed = 'move';
-}
-
-function tmplDragOver(e) {
+function tfDropSide(e, el, side) {
   e.preventDefault();
-  e.dataTransfer.dropEffect = 'move';
+  const dstIdx = +el.dataset.idx;
+  if (tfDragIdx===null || tfDragIdx===dstIdx) return;
+  const [moved] = tmplFields.splice(tfDragIdx, 1);
+  tmplFields.splice(dstIdx, 0, moved);
+  renderSideFieldsList(side, side==='front'?'tmplFrontList':'tmplBackList');
+  tfDragIdx = null;
 }
 
-function tmplDrop(e, target) {
-  e.preventDefault();
-  if (!tmplDragSrc || tmplDragSrc === target) return;
-  const srcId = tmplDragSrc.dataset.fieldId;
-  const dstId = target.dataset.fieldId;
-  const side  = target.dataset.side;
-  const sideFields = tmplFields.filter(f => f.side === side);
-  const srcIdx = sideFields.findIndex(f => f.id === srcId);
-  const dstIdx = sideFields.findIndex(f => f.id === dstId);
-  if (srcIdx < 0 || dstIdx < 0) return;
-  // Reorder within tmplFields
-  const globalSrcIdx = tmplFields.findIndex(f => f.id === srcId);
-  const globalDstIdx = tmplFields.findIndex(f => f.id === dstId);
-  const [moved] = tmplFields.splice(globalSrcIdx, 1);
-  tmplFields.splice(globalDstIdx, 0, moved);
-  renderTmplFieldList(side);
-}
-
-// Sample card data for preview
-const SAMPLE_CARD = {
-  word: 'agree', ipa: 'əˈɡriː', translation: 'соглашаться',
-  meaning: 'To agree is to have the same opinion as another person.',
-  example: 'The two friends agreed on everything.',
-  sound: '[sound:01_0001.mp3]', sound_example: '[sound:01_0001_example.mp3]',
-  image: '01_0001.jpg'
+// ── Panel 3: Preview ─────────────────────────────────
+const SAMPLE = {
+  word:'agree', ipa:'əˈɡriː', translation:'соглашаться',
+  meaning:'To agree is to have the same opinion as another person.',
+  example:'The two friends **agreed** on everything.',
+  sound:'[sound:01_0001.mp3]', sound_example:'[sound:01_0001_example.mp3]',
+  image:'[img:01_0001.jpg]'
 };
 
-function updateTmplPreview(side) {
-  const previewId = side === 'front' ? 'tmplFrontPreview' : 'tmplBackPreview';
-  const preview = document.getElementById(previewId);
-  if (!preview) return;
-  const fields = tmplFields.filter(f => f.side === side && f.show);
-  preview.innerHTML = fields.map(f => {
+function renderPreview() {
+  renderPreviewSide('tmplPreviewFront','showFront');
+  renderPreviewSide('tmplPreviewBack','showBack');
+}
+
+function renderPreviewSide(elId, prop) {
+  const el = document.getElementById(elId);
+  const html = tmplFields.filter(f=>f[prop]).map(f => {
     const s = f.style;
-    const baseStyle = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}margin:4px 0;`;
-    const val = SAMPLE_CARD[f.id] || '';
-    if (f.id === 'image') return `<div style="${baseStyle}text-align:center;">🖼 image.jpg</div>`;
-    if (f.id.startsWith('sound')) return `<button style="padding:5px 12px;border-radius:8px;border:1px solid #ddd;background:#f5f5f5;font-size:13px;cursor:default;">🔊 Слушать</button>`;
-    if (f.id === 'meaning') return `<div style="${baseStyle}background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:7px 10px;border-radius:0 8px 8px 0;text-align:left;">${val}</div>`;
-    if (f.id === 'translation') return `<div style="${baseStyle}">${val}</div>`;
-    return `<div style="${baseStyle}">${val}</div>`;
+    const base = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}margin:3px 0;`;
+    const val = SAMPLE[f.id] || f.defaultValue || `[${f.label}]`;
+    if (f.id==='image') return `<div style="${base}text-align:center;">🖼 <em style="font-size:12px;color:#aaa;">image.jpg</em></div>`;
+    if (f.id.startsWith('sound')) return `<button style="padding:5px 14px;border-radius:8px;border:1px solid #ddd;background:#f5f5f7;font-size:13px;cursor:default;margin:2px 0;">🔊 Слушать</button>`;
+    if (f.id==='meaning') return `<div style="${base}background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:7px 10px;border-radius:0 8px 8px 0;text-align:left;">${val.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/_([^_]+)_/g,'<em>$1</em>')}</div>`;
+    return `<div style="${base}">${val.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/_([^_]+)_/g,'<em>$1</em>')}</div>`;
   }).join('');
+  el.innerHTML = html || '<div style="color:var(--ink4);font-size:13px;">Нет полей</div>';
 }
 
-function renderTmplStyleFields() {
-  const container = document.getElementById('tmplStyleFields');
-  const textFields = tmplFields.filter(f => !f.id.startsWith('sound') && f.id !== 'image');
-  container.innerHTML = textFields.map(f => {
-    const s = f.style;
-    return `<div style="background:var(--card);border-radius:14px;padding:14px;border:.5px solid var(--border);">
-      <div style="font-size:13px;font-weight:700;color:var(--ink1);margin-bottom:10px;">${f.label}</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <label style="font-size:12px;color:var(--ink3);">Размер
-          <input type="number" value="${s.size}" min="10" max="48" onchange="tmplUpdateStyle('${f.id}','size',+this.value)"
-            style="display:block;width:100%;margin-top:4px;padding:6px 8px;border-radius:8px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
-        </label>
-        <label style="font-size:12px;color:var(--ink3);">Цвет
-          <input type="color" value="${s.color}" onchange="tmplUpdateStyle('${f.id}','color',this.value)"
-            style="display:block;width:100%;height:32px;margin-top:4px;border-radius:8px;border:.5px solid var(--border);cursor:pointer;">
-        </label>
-        <label style="font-size:12px;color:var(--ink3);">Толщина
-          <select onchange="tmplUpdateStyle('${f.id}','weight',+this.value)"
-            style="display:block;width:100%;margin-top:4px;padding:6px 8px;border-radius:8px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
-            <option value="400" ${s.weight===400?'selected':''}>Обычный</option>
-            <option value="600" ${s.weight===600?'selected':''}>Полужирный</option>
-            <option value="700" ${s.weight===700?'selected':''}>Жирный</option>
-            <option value="800" ${s.weight===800?'selected':''}>Очень жирный</option>
-          </select>
-        </label>
-        <label style="font-size:12px;color:var(--ink3);display:flex;align-items:center;gap:8px;padding-top:16px;">
-          <input type="checkbox" ${s.italic?'checked':''} onchange="tmplUpdateStyle('${f.id}','italic',this.checked)"
-            style="width:16px;height:16px;accent-color:var(--blue);">
-          Курсив
-        </label>
-      </div>
-    </div>`;
-  }).join('');
+// ── Field Editor (sheet) ─────────────────────────────
+function openFieldEd(idx) {
+  tmplEditIdx = idx;
+  const f = tmplFields[idx];
+  document.getElementById('fieldEdTitle').textContent = idx < DEFAULT_FIELDS.length ? 'Редактировать поле' : 'Новое поле';
+  document.getElementById('fieldEdName').value = f.label;
+  document.getElementById('fieldEdContent').innerHTML = f.defaultValue || '';
+  document.getElementById('fieldEdSize').value = f.style.size;
+  document.getElementById('fieldEdColor').value = f.style.color;
+  document.getElementById('fieldEdWeight').value = f.style.weight;
+  document.getElementById('fieldEdItalic').checked = f.style.italic;
+  document.getElementById('fieldEdDeleteBtn').style.display = idx >= DEFAULT_FIELDS.length ? 'block' : 'none';
+  openSh('fieldEdSh');
 }
 
-function tmplUpdateStyle(fieldId, prop, val) {
-  const f = tmplFields.find(f => f.id === fieldId);
-  if (f) f.style[prop] = val;
+function saveFieldEd() {
+  if (tmplEditIdx < 0) return;
+  const f = tmplFields[tmplEditIdx];
+  f.label = document.getElementById('fieldEdName').value.trim() || f.label;
+  f.defaultValue = document.getElementById('fieldEdContent').innerHTML;
+  f.style.size = +document.getElementById('fieldEdSize').value || 16;
+  f.style.color = document.getElementById('fieldEdColor').value;
+  f.style.weight = +document.getElementById('fieldEdWeight').value;
+  f.style.italic = document.getElementById('fieldEdItalic').checked;
+  closeSh('fieldEdSh');
+  renderAllFieldsList();
 }
 
-// Apply template when rendering card
+function deleteFieldEd() {
+  if (tmplEditIdx < DEFAULT_FIELDS.length) return; // protect built-in fields
+  if (!confirm('Удалить поле «' + tmplFields[tmplEditIdx].label + '»?')) return;
+  tmplFields.splice(tmplEditIdx, 1);
+  closeSh('fieldEdSh');
+  renderAllFieldsList();
+}
+
+// ── Rich text toolbar commands ───────────────────────
+function fmtDoc(cmd) {
+  document.getElementById('fieldEdContent').focus();
+  document.execCommand(cmd, false, null);
+}
+function fmtFontSize(size) {
+  document.getElementById('fieldEdContent').focus();
+  document.execCommand('fontSize', false, '7');
+  document.querySelectorAll('#fieldEdContent font[size="7"]').forEach(el => {
+    el.removeAttribute('size');
+    el.style.fontSize = size + 'px';
+  });
+}
+function fmtColor(color) {
+  document.getElementById('fieldEdContent').focus();
+  document.execCommand('foreColor', false, color);
+}
+function fieldInsertSound() {
+  document.getElementById('fieldSoundInput').click();
+}
+function fieldInsertImage() {
+  document.getElementById('fieldImageInput').click();
+}
+function fieldInsertLink() {
+  const url = prompt('URL ссылки:');
+  if (url) { document.getElementById('fieldEdContent').focus(); document.execCommand('createLink', false, url); }
+}
+function handleFieldSound(input) {
+  const file = input.files[0]; if (!file) return;
+  document.getElementById('fieldEdContent').focus();
+  document.getElementById('fieldEdContent').innerHTML += ` [sound:${file.name}]`;
+  input.value = '';
+}
+function handleFieldImage(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('fieldEdContent').focus();
+    const img = `<img src="${e.target.result}" style="max-width:100%;max-height:150px;border-radius:8px;">`;
+    document.getElementById('fieldEdContent').innerHTML += img;
+  };
+  reader.readAsDataURL(file);
+  input.value = '';
+}
+
+// ── renderCardWithTemplate ───────────────────────────
 function renderCardWithTemplate(text, side) {
   if (!text) return '';
   const tmpl = loadTemplate();
 
-  // Parse the stored HTML divs and apply template styles
   let t = text.replace(/\[sound:[^\]]+\]/g, '').trim();
 
-  // Convert [img:filename] placeholder (new format) to img tag
+  // Convert [img:filename] to img tag
   t = t.replace(/\[img:([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))\]/gi,
     '<img src="$1" data-anki-img="1">');
-  // Fix old broken format: 02_0038.jpg" data-anki-img="1" ...>
+  // Fix old broken format
   t = t.replace(/([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))"[^<>]*data-anki-img[^<>]*>/gi,
     '<img src="$1" data-anki-img="1">');
 
-  // Apply inline styles based on template
+  // Apply styles from template to each field
   for (const f of tmpl) {
     const s = f.style;
+    const shown = side==='front' ? f.showFront : f.showBack;
     const inlineStyle = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}margin:4px 0;`;
-    const className = `anki-${f.id === 'sound' || f.id === 'sound_example' || f.id === 'sound_meaning' ? 'sound' : f.id}`;
 
-    if (f.id === 'word')        t = t.replace(/class="anki-word"/g,        `style="${inlineStyle}margin:0 0 4px 0;"`);
-    if (f.id === 'ipa')         t = t.replace(/class="anki-ipa"/g,         `style="${inlineStyle}"`);
-    if (f.id === 'translation') t = t.replace(/class="anki-translation"/g, `style="${inlineStyle}"`);
-    if (f.id === 'meaning')     t = t.replace(/class="anki-meaning"/g,     `style="${inlineStyle}background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:8px 12px;border-radius:0 8px 8px 0;text-align:left;"`);
-    if (f.id === 'example')     t = t.replace(/class="anki-example"/g,     `style="${inlineStyle}text-align:left;padding:0 2px;"`);
-    if (f.id === 'image')       t = t.replace(/class="anki-img"/g,         `style="display:block;text-align:center;margin:8px 0;"`);
+    // Hide fields not shown on this side by removing their div
+    if (!shown) {
+      if (f.id==='image') t = t.replace(/<div[^>]*class="anki-img"[^>]*>[\s\S]*?<\/div>/gi, '');
+      else t = t.replace(new RegExp(`<div[^>]*class="anki-${f.id}"[^>]*>.*?<\/div>`,'gi'), '');
+      continue;
+    }
+
+    if (f.id==='word')        t = t.replace(/class="anki-word"/g,        `style="${inlineStyle}"`);
+    if (f.id==='ipa')         t = t.replace(/class="anki-ipa"/g,         `style="${inlineStyle}"`);
+    if (f.id==='translation') t = t.replace(/class="anki-translation"/g, `style="${inlineStyle}"`);
+    if (f.id==='meaning')     t = t.replace(/class="anki-meaning"/g,     `style="${inlineStyle}background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:8px 12px;border-radius:0 8px 8px 0;text-align:left;"`);
+    if (f.id==='example')     t = t.replace(/class="anki-example"/g,     `style="${inlineStyle}text-align:left;"`);
+    if (f.id==='image')       t = t.replace(/class="anki-img"/g,         `style="display:block;text-align:center;margin:8px 0;"`);
   }
 
-  // Hide fields that are turned off
-  const hiddenFields = tmpl.filter(f => !f.show);
-  for (const f of hiddenFields) {
-    if (f.id === 'word')        t = t.replace(/<div[^>]*class="anki-word"[^>]*>.*?<\/div>/gi, '');
-    if (f.id === 'ipa')         t = t.replace(/<div[^>]*class="anki-ipa"[^>]*>.*?<\/div>/gi, '');
-    if (f.id === 'translation') t = t.replace(/<div[^>]*class="anki-translation"[^>]*>.*?<\/div>/gi, '');
-    if (f.id === 'meaning')     t = t.replace(/<div[^>]*class="anki-meaning"[^>]*>.*?<\/div>/gi, '');
-    if (f.id === 'example')     t = t.replace(/<div[^>]*class="anki-example"[^>]*>.*?<\/div>/gi, '');
-    if (f.id === 'image')       t = t.replace(/<div[^>]*class="anki-img"[^>]*>[\s\S]*?<\/div>/gi, '');
-  }
-
-  // Convert markdown
-  t = t.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;font-style:normal;">$1</strong>');
+  t = t.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;">$1</strong>');
   t = t.replace(/_([^_]+)_/g, '<em style="font-style:italic;opacity:.85;">$1</em>');
   t = t.replace(/\n/g, '<br>');
   return t;
