@@ -671,6 +671,10 @@ body {
 .tmpl-tab { flex:1; padding:11px 4px; font-size:13px; font-weight:600; border:none; background:none; color:var(--ink3); border-bottom:2px solid transparent; cursor:pointer; font-family:var(--font); transition:color .15s; }
 .tmpl-tab-active { color:var(--blue) !important; border-bottom-color:var(--blue) !important; font-weight:700 !important; }
 .tmpl-field-row { display:flex; align-items:center; gap:10px; padding:13px 16px; border-bottom:.5px solid var(--border); background:var(--card); }
+.ce-tb { width:30px; height:28px; border:none; background:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; color:var(--ink); display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.ce-tb:hover { background:var(--bg2); }
+.ce-sep { width:.5px; height:20px; background:var(--border); margin:0 3px; flex-shrink:0; }
+.ce-field-active { outline:2px solid var(--blue) !important; outline-offset:0; }
 .overlay-body  { flex: 1; overflow-y: auto; -webkit-overflow-scrolling: touch; }
 
 .card-row {
@@ -1072,11 +1076,53 @@ body {
     <div class="editor-title" id="ceTitle">Новая карточка</div>
     <button class="editor-save" onclick="saveCard()">Сохранить</button>
   </div>
+
+  <!-- Anki-style toolbar - always visible, applies to focused field -->
+  <div id="ceToolbar" style="padding:6px 10px;background:var(--card);border-bottom:.5px solid var(--border);flex-shrink:0;display:flex;gap:2px;flex-wrap:wrap;align-items:center;">
+    <!-- Text formatting -->
+    <button onmousedown="event.preventDefault();ceExec('bold')"           title="Жирный (Ctrl+B)"        class="ce-tb">𝐁</button>
+    <button onmousedown="event.preventDefault();ceExec('italic')"         title="Курсив (Ctrl+I)"        class="ce-tb" style="font-style:italic;">𝐼</button>
+    <button onmousedown="event.preventDefault();ceExec('underline')"      title="Подчёркнутый (Ctrl+U)"  class="ce-tb" style="text-decoration:underline;">U</button>
+    <button onmousedown="event.preventDefault();ceExec('strikeThrough')"  title="Зачёркнутый"            class="ce-tb" style="text-decoration:line-through;">S</button>
+    <div class="ce-sep"></div>
+    <!-- Superscript / Subscript -->
+    <button onmousedown="event.preventDefault();ceExec('superscript')"   title="Верхний индекс"  class="ce-tb" style="font-size:11px;">x²</button>
+    <button onmousedown="event.preventDefault();ceExec('subscript')"     title="Нижний индекс"   class="ce-tb" style="font-size:11px;">x₂</button>
+    <div class="ce-sep"></div>
+    <!-- Font size -->
+    <select onchange="ceFontSize(this.value)" title="Размер шрифта"
+      style="height:28px;border-radius:6px;border:.5px solid var(--border);background:var(--bg);font-size:12px;padding:0 4px;cursor:pointer;">
+      <option value="10">10</option><option value="12">12</option><option value="14">14</option>
+      <option value="16" selected>16</option><option value="18">18</option><option value="20">20</option>
+      <option value="24">24</option><option value="28">28</option><option value="32">32</option>
+    </select>
+    <!-- Text color -->
+    <input type="color" id="ceTxtColor" onchange="ceExec('foreColor',this.value)" title="Цвет текста"
+      style="width:28px;height:28px;border:none;border-radius:6px;cursor:pointer;padding:2px;">
+    <!-- Highlight -->
+    <input type="color" id="ceHlColor" value="#ffff00" onchange="ceExec('hiliteColor',this.value)" title="Выделение"
+      style="width:28px;height:28px;border:none;border-radius:6px;cursor:pointer;padding:2px;background:#ffff00;">
+    <div class="ce-sep"></div>
+    <!-- Lists -->
+    <button onmousedown="event.preventDefault();ceExec('insertUnorderedList')" title="Маркированный список" class="ce-tb">≡</button>
+    <button onmousedown="event.preventDefault();ceExec('insertOrderedList')"   title="Нумерованный список"  class="ce-tb">1.</button>
+    <div class="ce-sep"></div>
+    <!-- Media -->
+    <button onmousedown="event.preventDefault();document.getElementById('ceImgInput').click()" title="Вставить картинку" class="ce-tb">🖼</button>
+    <button onmousedown="event.preventDefault();document.getElementById('ceSndInput').click()" title="Вставить звук"    class="ce-tb">🔊</button>
+    <button onmousedown="event.preventDefault();ceInsertLink()"                                 title="Вставить ссылку"  class="ce-tb">🔗</button>
+    <div class="ce-sep"></div>
+    <!-- Clear formatting -->
+    <button onmousedown="event.preventDefault();ceExec('removeFormat')" title="Убрать форматирование" class="ce-tb" style="font-size:12px;">✕fmt</button>
+  </div>
+
+  <!-- Tab bar: Fields / Front preview / Back preview -->
   <div style="display:flex;border-bottom:.5px solid var(--border);background:var(--card);flex-shrink:0;">
     <button id="ceTab0" onclick="switchCeTab(0)" class="tmpl-tab tmpl-tab-active">Поля</button>
     <button id="ceTab1" onclick="switchCeTab(1)" class="tmpl-tab">▶ Лицевая</button>
     <button id="ceTab2" onclick="switchCeTab(2)" class="tmpl-tab">▶ Тыльная</button>
   </div>
+
   <div id="cePanel0" class="editor-body" style="padding:0;">
     <div id="cardEdBody"></div>
     <div style="padding:0 16px 16px;">
@@ -1092,6 +1138,7 @@ body {
 <input type="file" id="ceSndInput" accept="audio/*" style="display:none" onchange="handleCeSound(this)">
 
 <!-- CARD TEMPLATE EDITOR -->
+
 <div class="overlay" id="templateEdOv" style="display:none;flex-direction:column;background:var(--bg);">
   <div class="overlay-header" style="padding-top:calc(var(--safe-t) + 12px);">
     <div class="rev-close" onclick="closeTemplateEd()">✕</div>
@@ -2225,7 +2272,7 @@ function getCeVals() {
   allFields.forEach(f => {
     const el = document.getElementById('ce_'+f.id);
     if (!el) return;
-    if (f.type==='rich') vals[f.id] = el.innerHTML.replace(/<br\s*\/?>/gi,'\n').replace(/<[^>]+>/g,'').trim();
+    if (f.type==='rich') vals[f.id] = el.innerHTML.trim();
     else vals[f.id] = (el.value||'').trim();
   });
   return vals;
@@ -2306,21 +2353,12 @@ function openCardEd(id) {
         </div>`;
 
       if (f.type==='rich') return `
-        <div class="field" style="margin-bottom:14px;padding:12px 16px;border-bottom:.5px solid var(--border);">
+        <div class="field" style="margin-bottom:0;padding:10px 16px 14px;border-bottom:.5px solid var(--border);">
           ${labelHtml}
-          <div style="display:flex;gap:3px;flex-wrap:wrap;padding:6px 8px;background:var(--bg2);border-radius:8px 8px 0 0;border:.5px solid var(--border);">
-            <button onmousedown="event.preventDefault();document.execCommand('bold')" style="width:28px;height:28px;border:none;background:none;border-radius:5px;font-weight:700;font-size:13px;cursor:pointer;color:var(--ink);">B</button>
-            <button onmousedown="event.preventDefault();document.execCommand('italic')" style="width:28px;height:28px;border:none;background:none;border-radius:5px;font-style:italic;font-size:13px;cursor:pointer;color:var(--ink);">I</button>
-            <button onmousedown="event.preventDefault();document.execCommand('underline')" style="width:28px;height:28px;border:none;background:none;border-radius:5px;text-decoration:underline;font-size:13px;cursor:pointer;color:var(--ink);">U</button>
-            <div style="width:.5px;background:var(--border);margin:3px 2px;"></div>
-            <select onchange="event.preventDefault();ceRichFontSize(this,'${f.id}')" style="height:28px;border-radius:5px;border:.5px solid var(--border);background:var(--card);font-size:11px;padding:0 2px;">
-              <option>12</option><option>14</option><option selected>16</option><option>18</option><option>20</option><option>24</option><option>28</option><option>32</option>
-            </select>
-            <input type="color" onchange="event.preventDefault();document.execCommand('foreColor',false,this.value)"
-              style="width:28px;height:28px;border:none;border-radius:5px;cursor:pointer;padding:1px;background:none;" title="Цвет">
-          </div>
-          <div id="ce_${f.id}" contenteditable="true" oninput="void 0"
-            style="min-height:60px;padding:10px;border:.5px solid var(--border);border-top:none;border-radius:0 0 8px 8px;background:var(--card);font-size:15px;outline:none;line-height:1.5;text-align:left;">${val}</div>
+          <div id="ce_${f.id}" contenteditable="true"
+            onfocus="ceActiveField='ce_${f.id}';this.classList.add('ce-field-active')"
+            onblur="this.classList.remove('ce-field-active')"
+            style="min-height:52px;padding:10px;border:.5px solid var(--border);border-radius:8px;background:var(--card);font-size:15px;outline:none;line-height:1.6;text-align:left;">${val}</div>
         </div>`;
 
       // default: simple text
@@ -2351,9 +2389,21 @@ function openCardEd(id) {
 
 function closeCardEd() { document.getElementById('cardEdOv').classList.remove('open'); }
 
+// ── Unified toolbar ──────────────────────────────────
+let ceActiveField = null;
+function ceExec(cmd, val) {
+  if (ceActiveField) { const el=document.getElementById(ceActiveField); if(el) el.focus(); }
+  document.execCommand(cmd, false, val||null);
+}
+function ceFontSize(size) {
+  if (ceActiveField) { const el=document.getElementById(ceActiveField); if(el) el.focus(); }
+  document.execCommand('fontSize',false,'7');
+  document.querySelectorAll('[contenteditable] font[size="7"]').forEach(f=>{ f.removeAttribute('size'); f.style.fontSize=size+'px'; });
+}
+function ceInsertLink() { const u=prompt('URL:'); if(u) ceExec('createLink',u); }
 function ceRichFontSize(sel, fieldId) {
   const el = document.getElementById('ce_'+fieldId);
-  if (el) { el.focus(); document.execCommand('fontSize',false,'7'); el.querySelectorAll('font[size="7"]').forEach(f=>{f.removeAttribute('size');f.style.fontSize=sel.value+'px';}); }
+  if (el) { el.focus(); ceFontSize(sel.value); }
 }
 
 function ceImageInputChanged(val) {
@@ -2413,8 +2463,9 @@ function handleCeSound(input) {
 function saveCard() {
   const getVal = id => {
     const el = document.getElementById('ce_'+id); if (!el) return '';
-    return el.getAttribute('contenteditable')!==null
-      ? el.innerText.trim()
+    // Rich fields: preserve innerHTML (has bold, italic, colors, etc.)
+    return el.getAttribute('contenteditable') !== null
+      ? el.innerHTML.trim()
       : (el.value||'').trim();
   };
   const vals = {};
@@ -3247,7 +3298,6 @@ function renderCardWithTemplate(text, side) {
   let t = text.replace(/\[sound:[^\]]+\]/g, '').trim();
 
   // Fix old broken format FIRST (before [img:] conversion):
-  // e.g. `02_0037.jpg" data-anki-img="1" ...>` missing the `<img src="`
   t = t.replace(/(?<![="\/\w])([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))"[^<>]*data-anki-img[^<>]*>/gi,
     '<img src="$1" data-anki-img="1">');
   // Convert [img:filename] placeholder to img tag
@@ -3259,14 +3309,11 @@ function renderCardWithTemplate(text, side) {
     const s = f.style;
     const shown = side==='front' ? f.showFront : f.showBack;
     const inlineStyle = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}margin:4px 0;`;
-
-    // Hide fields not shown on this side by removing their div
     if (!shown) {
       if (f.id==='image') t = t.replace(/<div[^>]*class="anki-img"[^>]*>[\s\S]*?<\/div>/gi, '');
-      else t = t.replace(new RegExp(`<div[^>]*class="anki-${f.id}"[^>]*>.*?<\/div>`,'gi'), '');
+      else t = t.replace(new RegExp(`<div[^>]*class="anki-${f.id}"[^>]*>.*?<\\/div>`,'gi'), '');
       continue;
     }
-
     if (f.id==='word')        t = t.replace(/class="anki-word"/g,        `style="${inlineStyle}"`);
     if (f.id==='ipa')         t = t.replace(/class="anki-ipa"/g,         `style="${inlineStyle}"`);
     if (f.id==='translation') t = t.replace(/class="anki-translation"/g, `style="${inlineStyle}"`);
@@ -3275,11 +3322,20 @@ function renderCardWithTemplate(text, side) {
     if (f.id==='image')       t = t.replace(/class="anki-img"/g,         `style="display:block;text-align:center;margin:8px 0;"`);
   }
 
-  t = t.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;">$1</strong>');
-  t = t.replace(/_([^_]+)_/g, '<em style="font-style:italic;opacity:.85;">$1</em>');
+  // Apply markdown ONLY to text nodes (between tags), never inside tag attributes
+  // Split on HTML tags, process only text parts
+  t = t.split(/(<[^>]+>)/g).map((part, i) => {
+    if (part.startsWith('<')) return part; // leave tags untouched
+    // Apply markdown to text only
+    part = part.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;">$1</strong>');
+    part = part.replace(/_([^_\s][^_]*)_/g, '<em style="font-style:italic;opacity:.85;">$1</em>');
+    return part;
+  }).join('');
+
   t = t.replace(/\n/g, '<br>');
   return t;
 }
 </script>
 </body>
 </html>
+
