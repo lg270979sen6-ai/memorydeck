@@ -1617,21 +1617,23 @@ function startReview(deckId=null){
 }
 
 async function loadCardImages() {
-  // Find all img tags with non-data src (filename references)
   const imgs = document.querySelectorAll('#cardStage img[src]:not([src^="data:"])');
+  console.log('[IMG] found imgs to load:', imgs.length);
   for (const img of imgs) {
     const filename = img.getAttribute('src');
     if (!filename) continue;
-    const safeKey = filename.replace(/[.#$/[\]]/g, '_');
+    const safeKey = filename.replace(/[.#$\/[\]]/g, '_');
+    console.log('[IMG] loading:', filename, '-> key:', safeKey);
     try {
       const snap = await db.ref('memorydeck_audio/' + sess.accId + '/' + safeKey).once('value');
+      console.log('[IMG] firebase result:', snap.val() ? 'FOUND ('+snap.val().length+' chars)' : 'NOT FOUND');
       if (snap.val()) {
         img.src = snap.val();
         img.style.cssText = 'max-width:100%;max-height:200px;border-radius:10px;object-fit:contain;display:block;margin:8px auto;';
       } else {
-        img.style.display = 'none'; // hide broken images silently
+        img.style.display = 'none';
       }
-    } catch(e) { img.style.display = 'none'; }
+    } catch(e) { console.log('[IMG] error:', e.message); img.style.display = 'none'; }
   }
 }
 
@@ -1695,8 +1697,8 @@ function renderCard(){
       <button class="grade-btn gb-easy"  onclick="doGrade(3)"><div class="g-em">🔵</div><div class="g-w">Легко</div><div class="g-nxt">${nextLbl(c,3)}</div></button>
     </div>`;
 
-  // Load images from Firebase for this card
-  loadCardImages();
+  // Load images from Firebase — setTimeout ensures DOM is fully rendered
+  setTimeout(loadCardImages, 50);
 
   // Auto-play front audio when card appears
   if (frontAudio.length) {
@@ -2435,7 +2437,9 @@ async function doApkgImport() {
       if (isRichDeck) {
         // Fields by NAME (case-insensitive) with fallback to position from screenshot:
         // 0:Word 1:Translation 2:Image 3:Sound 4:Sound_Meaning 5:Sound_Example 6:Meaning 7:Example 8:IPA
-        const word        = await processField(getField(fields, 'word',         0), mediaMap);
+        // Word field: take only first line (some cards have example embedded in word field)
+        const wordRaw = getField(fields, 'word', 0).split('\n')[0].split('<br')[0].trim();
+        const word    = await processField(wordRaw, mediaMap);
         const translation = await processField(getField(fields, 'translation',  1), mediaMap);
         const image       = await processField(getField(fields, 'image',        2), mediaMap);
         const sound       = await processField(getField(fields, 'sound',        3), mediaMap);
