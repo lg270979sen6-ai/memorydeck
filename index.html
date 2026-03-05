@@ -1054,12 +1054,11 @@ body {
   <div class="overlay-header">
     <div class="rev-close" onclick="closeDeckDetail()">✕</div>
     <div class="overlay-title" id="ddTitle"></div>
-    <div style="display:flex;gap:8px;">
-      <button onclick="openTemplateEd()" style="padding:6px 12px;border-radius:10px;background:var(--bg2);border:.5px solid var(--border);font-size:13px;font-weight:600;color:var(--ink2);cursor:pointer;">🎨 Шаблон</button>
-      <div class="hbtn" onclick="openCardEd(null)" style="font-size:20px;background:var(--bg);">＋</div>
-    </div>
+    <div class="hbtn" onclick="openCardEd(null)" style="font-size:20px;background:var(--bg);">＋</div>
   </div>
-  <div id="ddMeta" style="padding:12px 16px;border-bottom:.5px solid var(--border);"></div>
+  <div id="ddMeta" style="padding:12px 16px;border-bottom:.5px solid var(--border);display:flex;align-items:center;gap:8px;">
+    <button onclick="openTemplateEd()" style="margin-left:auto;padding:7px 14px;border-radius:10px;background:var(--bg2);border:.5px solid var(--border);font-size:13px;font-weight:600;color:var(--ink2);cursor:pointer;flex-shrink:0;">🎨 Шаблон карточек</button>
+  </div>
   <div class="overlay-body" id="ddCards"></div>
 </div>
 
@@ -1666,28 +1665,32 @@ function startReview(deckId=null){
 }
 
 async function loadCardImages() {
-  // Use data-anki-img attribute to find our images (not [src^=data:] which misses malformed srcs)
-  // Search entire cardStage including hidden elements (display:none doesn't affect querySelector)
-  const imgs = document.querySelectorAll('#cardStage img[data-anki-img]');
-  console.log('[IMG] found imgs to load:', imgs.length);
+  // Search all imgs with data-anki-img in cardStage (including hidden c-back)
+  const stage = document.getElementById('cardStage');
+  if (!stage) return;
+  const imgs = stage.querySelectorAll('img[data-anki-img]');
+  console.log('[IMG] querySelectorAll img[data-anki-img]:', imgs.length);
+  // Also log ALL imgs in stage for debugging
+  const allImgs = stage.querySelectorAll('img');
+  console.log('[IMG] ALL imgs in cardStage:', allImgs.length, [...allImgs].map(i=>i.getAttribute('src')||'no-src').join(', '));
+
   for (const img of imgs) {
-    let src = img.getAttribute('src') || '';
-    // Extract just filename — handles malformed src like "<img src=filename.jpg"
+    const src = img.getAttribute('src') || '';
     const m = src.match(/([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))/i);
-    if (!m) { img.style.display='none'; continue; }
+    if (!m) continue;
     const filename = m[1];
     const safeKey = filename.replace(/[.#$/[\]]/g, '_');
-    console.log('[IMG] loading:', filename, '-> key:', safeKey);
+    console.log('[IMG] loading:', filename, 'key:', safeKey);
     try {
       const snap = await db.ref('memorydeck_audio/' + sess.accId + '/' + safeKey).once('value');
-      console.log('[IMG] firebase result:', snap.val() ? 'FOUND' : 'NOT FOUND');
+      console.log('[IMG] firebase:', snap.val() ? 'FOUND len='+(snap.val().length) : 'NOT FOUND');
       if (snap.val()) {
         img.src = snap.val();
         img.style.cssText = 'max-width:100%;max-height:200px;border-radius:10px;object-fit:contain;display:block;margin:8px auto;';
       } else {
-        img.style.display = 'none';
+        img.parentElement && (img.parentElement.style.display = 'none');
       }
-    } catch(e) { img.style.display = 'none'; }
+    } catch(e) { console.log('[IMG] err:', e.message); }
   }
 }
 
@@ -1955,6 +1958,7 @@ function openDeckDetail(id){
     <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
       <span style="background:${d.color||COLORS[0]}18;color:${d.color||COLORS[0]};padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;">${dc.length} карточек</span>
       <span style="background:rgba(255,149,0,.1);color:var(--orange);padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;">${due} к повтору</span>
+      <button onclick="openTemplateEd()" style="padding:6px 12px;border-radius:10px;background:var(--bg2);border:.5px solid var(--border);font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;">🎨 Шаблон</button>
       <button onclick="startReview('${id}')" style="margin-left:auto;padding:8px 16px;border-radius:10px;background:var(--blue);color:white;border:none;font-family:var(--font);font-size:13px;font-weight:800;cursor:pointer;"${due===0?' disabled style="opacity:.4;cursor:default;"':''}>▶ Повторить</button>
     </div>`;
   const pipCol=sm=>!sm||sm.state==='new'?'var(--blue)':sm.state==='learning'?'var(--orange)':isDue(sm)?'var(--red)':'var(--green)';
@@ -2191,7 +2195,7 @@ async function processField(html, mediaMap) {
     const src = m[1];
     if (src.startsWith('data:')) continue; // already a data URI
     // Store as <img src="filename.jpg"> — will be resolved from Firebase at display time
-    result = result.replace(m[0], `<img src="${src}" data-anki-img="1" style="max-width:100%;max-height:200px;border-radius:10px;display:block;margin:8px auto;">`);
+    result = result.replace(m[0], `[img:${src}]`); // store as simple placeholder
   }
 
   // 2. Convert HTML formatting to markdown (safe for text storage)
@@ -2798,10 +2802,16 @@ function tmplUpdateStyle(fieldId, prop, val) {
 function renderCardWithTemplate(text, side) {
   if (!text) return '';
   const tmpl = loadTemplate();
-  const sideFields = tmpl.filter(f => f.side === side && f.show);
 
   // Parse the stored HTML divs and apply template styles
   let t = text.replace(/\[sound:[^\]]+\]/g, '').trim();
+
+  // Convert [img:filename] placeholder (new format) to img tag
+  t = t.replace(/\[img:([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))\]/gi,
+    '<img src="$1" data-anki-img="1">');
+  // Fix old broken format: 02_0038.jpg" data-anki-img="1" ...>
+  t = t.replace(/([\w.\-]+\.(?:jpg|jpeg|png|gif|webp))"[^<>]*data-anki-img[^<>]*>/gi,
+    '<img src="$1" data-anki-img="1">');
 
   // Apply inline styles based on template
   for (const f of tmpl) {
