@@ -445,9 +445,9 @@ body {
   box-shadow: 0 4px 24px rgba(0,0,0,.08), 0 1px 4px rgba(0,0,0,.04);
   display: flex; flex-direction: column;
   align-items: center; justify-content: flex-start;
-  padding: 52px 18px 16px; text-align: center;
+  padding: 44px 16px 12px; text-align: center;
   border: .5px solid var(--border);
-  overflow-y: auto;
+  overflow-y: auto; -webkit-overflow-scrolling: touch;
   transition: opacity .2s;
 }
 .c-back {
@@ -509,12 +509,12 @@ body {
 
 /* Show answer button */
 .show-ans {
-  width: 100%; padding: 17px;
+  width: 100%; padding: 14px;
   background: var(--blue);
-  border: none; border-radius: 16px;
+  border: none; border-radius: 14px;
   color: white;
-  font-family: var(--font); font-size: 16px; font-weight: 700;
-  cursor: pointer; margin-top: 10px; flex-shrink: 0;
+  font-family: var(--font); font-size: 15px; font-weight: 700;
+  cursor: pointer; margin-top: 8px; flex-shrink: 0;
   box-shadow: 0 4px 14px rgba(0,122,255,.3);
   transition: transform .1s, box-shadow .1s;
   letter-spacing: -.1px;
@@ -561,39 +561,6 @@ body {
   position: absolute; bottom: 16px;
   font-size: 12px; color: var(--ink4); font-weight: 600;
 }
-
-/* Show answer */
-.show-ans {
-  width: 100%; padding: 16px;
-  background: var(--card); border: 1.5px solid var(--border2);
-  border-radius: var(--radius-lg); color: var(--ink);
-  font-family: var(--font); font-size: 16px; font-weight: 700;
-  cursor: pointer; margin-top: 12px; flex-shrink: 0;
-  box-shadow: var(--shadow-sm); transition: background .12s;
-}
-.show-ans:active { background: var(--bg2); }
-
-/* Grade buttons */
-.grades {
-  display: grid; grid-template-columns: repeat(4,1fr);
-  gap: 7px; margin-top: 10px; flex-shrink: 0;
-}
-.grade-btn {
-  padding: 13px 4px; border-radius: var(--radius);
-  border: none; font-family: var(--font); cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 4px;
-  transition: transform .1s, opacity .1s;
-  box-shadow: var(--shadow-sm);
-}
-.grade-btn:active { transform: scale(.93); opacity: .8; }
-.g-em  { font-size: 20px; }
-.g-w   { font-size: 12px; font-weight: 800; }
-.g-nxt { font-size: 10px; opacity: .6; font-family: var(--mono); }
-
-.gb-again  { background: #fff2f2; color: var(--red);    border: 1px solid rgba(255,59,48,.15); }
-.gb-hard   { background: #fff8f0; color: var(--orange); border: 1px solid rgba(255,149,0,.15); }
-.gb-good   { background: #f0f8ff; color: var(--blue);   border: 1px solid rgba(0,122,255,.15); }
-.gb-easy   { background: #f0fff6; color: var(--green);  border: 1px solid rgba(52,199,89,.15); }
 
 /* Done */
 .done-screen {
@@ -2154,16 +2121,13 @@ function fsrsCalc(sm, g, deckOpt) {
     difficulty = fsrsD0(fg, w);
     lapses = 0;
     if (fg === 1) {
-      // Again → learning step 0
       reps = 0; state = 'learning'; stepIdx = 0;
     } else if (fg === 4) {
-      // Easy → immediate graduation
       reps = 1; state = 'review'; stepIdx = 0;
     } else if (fg === 2) {
-      // Hard → stay at step 0
+      // Hard → stay at step 0 (stepIdx stays 0, interval computed below)
       reps = 0; state = 'learning'; stepIdx = 0;
     } else {
-      // Good → advance to step 1, or graduate
       const nextIdx = 1;
       if (nextIdx >= learnSteps.length) { reps = 1; state = 'review'; stepIdx = 0; }
       else { reps = 0; state = 'learning'; stepIdx = nextIdx; }
@@ -2179,6 +2143,7 @@ function fsrsCalc(sm, g, deckOpt) {
     } else if (fg === 4) {
       reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0;
     } else if (fg === 2) {
+      // Hard → stay at current step
       reps = sm.reps||0; state = 'learning'; stepIdx = sm.stepIdx||0;
     } else {
       const nextIdx = (sm.stepIdx||0) + 1;
@@ -2234,7 +2199,15 @@ function fsrsCalc(sm, g, deckOpt) {
   // Compute interval
   let interval;
   if (state === 'learning') {
-    interval = learnSteps[stepIdx] ?? learnSteps[learnSteps.length-1] ?? 1/1440;
+    const baseIdx = Math.max(0, stepIdx);
+    const curr = learnSteps[baseIdx] ?? learnSteps[learnSteps.length-1] ?? 1/1440;
+    // Hard (fg===2) in learning: average of current step and next step (Anki formula)
+    if (fg === 2 && (sm?.state === 'new' || sm?.state === 'learning')) {
+      const next = learnSteps[baseIdx + 1] ?? curr * 2;
+      interval = (curr + next) / 2;
+    } else {
+      interval = curr;
+    }
   } else if (state === 'relearning') {
     interval = relearnSteps[stepIdx] ?? relearnSteps[relearnSteps.length-1] ?? 10/1440;
   } else {
