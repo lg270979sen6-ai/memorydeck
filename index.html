@@ -1404,7 +1404,7 @@ body {
       </div>
       <div class="dopt-row" style="flex-direction:column;align-items:stretch;gap:6px;">
         <div class="dopt-lbl">Параметры FSRS w[0..16]<div class="dopt-hint">17 чисел через запятую — изменяйте осторожно</div></div>
-        <textarea class="dopt-params-area" id="doptFSRSParams" rows="3">0.2120,1.2981,3.2066,15.6426,7.2102,0.5563,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898,0.51655,1.4852,0.0,0.5</textarea>
+        <textarea class="dopt-params-area" id="doptFSRSParams" rows="3">0.4072,1.1829,3.1262,15.4722,7.2102,0.5316,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898</textarea>
       </div>
       <div class="dopt-row">
         <div class="dopt-lbl">Исторический уровень усвоения</div>
@@ -1441,6 +1441,7 @@ body {
 </div>
 
 <!-- CARD EDITOR -->
+<div class="editor" id="cardEdOv">
   <div class="editor-header">
     <div class="rev-close" onclick="closeCardEd()">✕</div>
     <div class="editor-title" id="ceTitle">Новая карточка</div>
@@ -1496,6 +1497,11 @@ body {
     <button onmousedown="event.preventDefault();ceExec('insertUnorderedList')" title="Маркированный список" class="ce-tb">≡</button>
     <button onmousedown="event.preventDefault();ceExec('insertOrderedList')"   title="Нумерованный список"  class="ce-tb">1.</button>
     <div class="ce-sep"></div>
+    <!-- Text alignment -->
+    <button onmousedown="event.preventDefault();ceExec('justifyLeft')"   title="По левому краю"  class="ce-tb" style="font-size:14px;">⬅️</button>
+    <button onmousedown="event.preventDefault();ceExec('justifyCenter')" title="По центру"       class="ce-tb" style="font-size:14px;">↔️</button>
+    <button onmousedown="event.preventDefault();ceExec('justifyRight')"  title="По правому краю" class="ce-tb" style="font-size:14px;">➡️</button>
+    <div class="ce-sep"></div>
     <!-- Media -->
     <button onmousedown="event.preventDefault();document.getElementById('ceImgInput').click()" title="Вставить картинку" class="ce-tb">🖼</button>
     <button onmousedown="event.preventDefault();document.getElementById('ceSndInput').click()" title="Вставить звук"    class="ce-tb">🔊</button>
@@ -1523,6 +1529,7 @@ body {
   <div id="cePanel1" style="display:none;flex:1;overflow-y:auto;padding:16px;"></div>
   <div id="cePanel2" style="display:none;flex:1;overflow-y:auto;padding:16px;"></div>
 </div>
+</div><!-- /cardEdOv -->
 <input type="file" id="ceImgInput" accept="image/*" style="display:none" onchange="handleCeImage(this)">
 <input type="file" id="ceSndInput" accept="audio/*" style="display:none" onchange="handleCeSound(this)">
 
@@ -1974,88 +1981,99 @@ function addDFrac(dateStr, fracDays) {
 }
 
 // ═══════════════════════════════════════════════════
-//  FSRS-6  (документ: w[0..20], decay = w_20)
-//  Дефолтные параметры FSRS-6
+//  FSRS v4  — correct implementation per spec
+//  R(t,S) = (1 + t/S)^(-w)   where w = FSRS_W[16]
+//  S > 0 means after w days, R ≈ 2^(-w)
+//  We target R = 0.9, so interval: t = S*(0.9^(-1/w)-1)
+//
+//  Parameters w[0..16]:
+//   w[0..3]  — S0 initial stability for grades 1..4
+//   w[4]     — D0 base
+//   w[5]     — D0 exp factor
+//   w[6]     — difficulty Δ scale
+//   w[7]     — difficulty mean-reversion scale
+//   w[8]     — recall S' base (exp(w8) is θ₁)
+//   w[9]     — recall (1-R) exponent (θ₂)
+//   w[10]    — recall D exponent (θ₃)
+//   w[11..14]— forget S' params
+//   w[15]    — Hard penalty
+//   w[16]    — Easy bonus & forgetting curve exponent (w in R formula)
 // ═══════════════════════════════════════════════════
 const FSRS_W = [
-  0.2120, 1.2981, 3.2066, 15.6426,   // w[0..3] S0 for G=1..4
-  7.2102, 0.5563,  1.0651, 0.06069,  // w[4..7]  D0, D0 exp, diff update, diff update
-  2.9898, 0.14,    1.0,   1.9395,    // w[8..11] Sr recall formula
-  0.11,  0.29605,  2.2700, 0.2500,   // w[12..15]
-  2.9898, 0.51655, 1.4852, 0.0,      // w[16..19] (w17,w18,w19 for S' recall in v6)
-  0.5                                 // w[20] — decay exponent
+  0.4072, 1.1829, 3.1262, 15.4722,  // w[0..3]: S0 for G=1,2,3,4
+  7.2102, 0.5316, 1.0651, 0.06069,  // w[4..7]
+  2.9898, 0.14,   1.0,   1.9395,   // w[8..11]
+  0.11,   0.29605, 2.2700, 0.2500,  // w[12..15]
+  2.9898                             // w[16]: forgetting curve exponent
 ];
 
-// factor: f = 0.9^(-1/w20) - 1  so that R(S,S)=0.9
-function fsrsFactor(w20) {
-  return Math.pow(0.9, -1 / w20) - 1;
+// FSRS-4.5 forgetting curve: R = (1 + FACTOR*t/S)^DECAY
+// DECAY=-0.5, FACTOR = 0.9^(1/DECAY)-1 ≈ 0.2346
+// This guarantees R(S,S) = 0.9
+const FSRS_DECAY  = -0.5;
+const FSRS_FACTOR = Math.pow(0.9, 1 / FSRS_DECAY) - 1; // ≈ 0.2346
+
+function fsrsR(t, S) {
+  if (S <= 0 || t < 0) return t <= 0 ? 1 : 0;
+  return Math.pow(1 + FSRS_FACTOR * t / S, FSRS_DECAY);
 }
 
-// Retrievability R(t, S) = (1 + f*t/S)^(-w20)
-function fsrsR(t, S, w20val) {
-  if (S <= 0) return 0;
-  const w20 = w20val || FSRS_W[20] || 0.5;
-  const f   = fsrsFactor(w20);
-  return Math.pow(1 + f * t / S, -w20);
+// Next interval: solve R(I,S)=retTarget
+// I = S * (ret^(1/DECAY) - 1) / FACTOR  ≈  S  (when ret=0.9)
+function fsrsInterval(S, retTarget, maxInt) {
+  retTarget = retTarget || 0.9;
+  maxInt    = maxInt    || 36500;
+  const I = Math.round(S * (Math.pow(retTarget, 1 / FSRS_DECAY) - 1) / FSRS_FACTOR);
+  return Math.max(1, Math.min(maxInt, I));
 }
 
-// S' after recall (FSRS-6 formula from doc)
-// S' = S * exp(w17*(G-3+w18)) * S^(-w19)    with S'>=S for G>=3
+// S' after successful recall (Hard/Good/Easy = fg 2,3,4)
+// S' = S * (1 + exp(w8) * (1-R)^w9 * D^(-w10) * multiplier)
 function fsrsStabilityRecall(D, S, R, fg, w) {
   w = w || FSRS_W;
-  const hardPenalty = (fg === 2) ? w[15] : 1;
-  const easyBonus   = (fg === 4) ? w[16] : 1;
-  // Combined FSRS formula (D and R terms)
-  const full = S * (
-    Math.exp(w[8]) * (11 - D) *
-    Math.pow(S, -w[9]) *
-    (Math.exp((1 - R) * w[10]) - 1) *
-    hardPenalty * easyBonus
-  );
-  const newS = Math.max(full, 0.1);
-  return fg >= 3 ? Math.max(newS, S) : newS; // S' >= S for Good/Easy
+  const hardPenalty = fg === 2 ? w[15] : 1;
+  const easyBonus   = fg === 4 ? w[16] : 1;
+  const growth = Math.exp(w[8]) *
+    Math.pow(Math.max(0.001, 1 - R), w[9]) *
+    Math.pow(D, -w[10]) *
+    hardPenalty * easyBonus;
+  const newS = S * (1 + growth);
+  return fg >= 3 ? Math.max(newS, S) : newS; // Good/Easy can't decrease S
 }
 
-// S' after forget (lapse)
+// S' after forget (Again = fg 1): full reset, not a multiplier
+// S' = exp(w11) * D^(-w12) * (S+1)^w13 * exp((1-R)*w14)
 function fsrsStabilityForget(D, S, R, w) {
   w = w || FSRS_W;
   return Math.max(0.1,
-    w[11] * Math.pow(D, -w[12]) * (Math.pow(S + 1, w[13]) - 1) * Math.exp((1 - R) * w[14])
+    w[11] * Math.pow(D, -w[12]) *
+    Math.pow(S + 1, w[13]) *
+    Math.exp((1 - R) * w[14])
   );
 }
 
-// Difficulty update (with mean reversion / damping)
+// Difficulty update with mean-reversion
 function fsrsDiffUpdate(D, fg, w) {
   w = w || FSRS_W;
-  const deltaD = -w[6] * (fg - 3);
-  return Math.min(10, Math.max(1, D + deltaD * ((10 - D) / 9)));
+  const D0base = 5; // mean difficulty
+  const dD = -w[6] * (fg - 3);
+  const D1 = D + dD;
+  return Math.min(10, Math.max(1, D1 + w[7] * (D0base - D1)));
 }
 
-// Initial difficulty D0(fg)
+// Initial difficulty for first answer
 function fsrsD0(fg, w) {
   w = w || FSRS_W;
   return Math.min(10, Math.max(1, w[4] - Math.exp(w[5] * (fg - 1)) + 1));
 }
 
-// Initial stability S0(fg) from w[0..3]
+// Initial stability for first answer
 function fsrsS0(fg, w) {
   w = w || FSRS_W;
   return Math.max(0.1, w[fg - 1]);
 }
 
-// Next interval: I = S * (ret^(-1/w20) - 1) / f
-function fsrsInterval(S, retTarget, maxInt, w) {
-  w         = w || FSRS_W;
-  retTarget = retTarget || 0.9;
-  maxInt    = maxInt || 36500;
-  const w20 = w[20] || 0.5;
-  const f   = fsrsFactor(w20);
-  return Math.max(1, Math.min(maxInt,
-    Math.round(S * (Math.pow(retTarget, -1 / w20) - 1) / f)
-  ));
-}
-
-const FSRS_G = [1, 2, 3, 4]; // our g → FSRS grade
+const FSRS_G = [1, 2, 3, 4]; // our g (0=Again..3=Easy) → FSRS grade 1..4
 
 function fsrsCalc(sm, g, deckOpt) {
   const learnSteps   = parseSteps(deckOpt?.learnSteps   || '1m 10m');
@@ -2063,109 +2081,100 @@ function fsrsCalc(sm, g, deckOpt) {
   const retTarget    = (deckOpt?.fsrsRetention || 90) / 100;
   const maxInt       = deckOpt?.maxInterval || 36500;
 
-  // Parse custom w params from deck options
+  // Parse custom w params
   let w = FSRS_W;
   if (deckOpt?.fsrsParams) {
     const parsed = deckOpt.fsrsParams.split(',').map(Number).filter(n => !isNaN(n));
-    if (parsed.length >= 17) w = parsed.length >= 21 ? parsed : [...parsed, ...FSRS_W.slice(parsed.length)];
+    if (parsed.length >= 17) w = parsed;
   }
 
-  const t = today();
-  const fg = FSRS_G[g]; // FSRS grade 1–4
-
-  let stability, difficulty, reps, lapses, state, stepIdx;
+  const t  = today();
+  const fg = FSRS_G[g]; // FSRS grade 1..4
 
   const inReview     = sm?.state === 'review';
   const inRelearning = sm?.state === 'relearning';
   const inLearning   = !sm || sm.state === 'new' || sm.state === 'learning';
 
+  let stability, difficulty, reps, lapses, state, stepIdx;
+
   if (!sm || sm.state === 'new') {
-    // ── New card: first answer ──────────────────────
+    // ── First time seeing card ──
     stability  = fsrsS0(fg, w);
     difficulty = fsrsD0(fg, w);
-    lapses     = 0;
-
+    lapses = 0;
     if (fg === 1) {
-      // Again on new card → learning step 0
+      // Again → learning step 0
       reps = 0; state = 'learning'; stepIdx = 0;
     } else if (fg === 4) {
-      // Easy on new card → immediately graduate
+      // Easy → immediate graduation
       reps = 1; state = 'review'; stepIdx = 0;
+    } else if (fg === 2) {
+      // Hard → stay at step 0
+      reps = 0; state = 'learning'; stepIdx = 0;
     } else {
-      // Hard/Good → next learning step
-      const nextIdx = (fg === 2) ? 0 : 1; // Hard=stay 0, Good=advance to step 1
-      if (nextIdx >= learnSteps.length) {
-        reps = 1; state = 'review'; stepIdx = 0;
-      } else {
-        reps = 0; state = 'learning'; stepIdx = nextIdx;
-      }
+      // Good → advance to step 1, or graduate
+      const nextIdx = 1;
+      if (nextIdx >= learnSteps.length) { reps = 1; state = 'review'; stepIdx = 0; }
+      else { reps = 0; state = 'learning'; stepIdx = nextIdx; }
     }
 
   } else if (inLearning) {
-    // ── In learning steps ───────────────────────────
-    stability  = fsrsS0(fg, w);
-    difficulty = fsrsD0(fg, w);
-    lapses     = sm.lapses || 0;
-
+    // ── In learning steps ──
+    stability  = sm.stability  ? Math.max(sm.stability,  fsrsS0(fg, w)) : fsrsS0(fg, w);
+    difficulty = sm.difficulty ? fsrsDiffUpdate(sm.difficulty, fg, w)   : fsrsD0(fg, w);
+    lapses = sm.lapses || 0;
     if (fg === 1) {
-      reps = 0; state = 'learning'; stepIdx = 0; // restart
+      reps = 0; state = 'learning'; stepIdx = 0;
     } else if (fg === 4) {
-      reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0; // graduate easy
+      reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0;
+    } else if (fg === 2) {
+      reps = sm.reps||0; state = 'learning'; stepIdx = sm.stepIdx||0;
     } else {
-      const nextIdx = (sm.stepIdx||0) + (fg === 2 ? 0 : 1);
-      if (nextIdx >= learnSteps.length) {
-        reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0;
-      } else {
-        reps = sm.reps||0; state = 'learning'; stepIdx = nextIdx;
-      }
+      const nextIdx = (sm.stepIdx||0) + 1;
+      if (nextIdx >= learnSteps.length) { reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0; }
+      else { reps = sm.reps||0; state = 'learning'; stepIdx = nextIdx; }
     }
 
   } else if (inRelearning) {
-    // ── Relearning after lapse ───────────────────────
-    stability  = sm.stability || 1;
+    // ── Relearning after lapse ──
+    stability  = sm.stability  || 1;
     difficulty = fsrsDiffUpdate(sm.difficulty || 5, fg, w);
-    lapses     = sm.lapses || 0;
-
+    lapses = sm.lapses || 0;
     if (fg === 1) {
       reps = 0; state = 'relearning'; stepIdx = 0;
     } else if (fg === 4) {
       reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0;
-      stability = fsrsStabilityRecall(sm.difficulty||5, sm.stability||1,
-        fsrsR(Math.max(0,(new Date(t)-new Date(sm.due||t))/86400000), sm.stability||1, w[20]), fg, w);
+      const elapsed = Math.max(0, (new Date(t)-new Date(sm.due||t))/86400000);
+      stability = fsrsStabilityRecall(sm.difficulty||5, sm.stability||1, fsrsR(elapsed, sm.stability||1), fg, w);
+    } else if (fg === 2) {
+      reps = sm.reps||0; state = 'relearning'; stepIdx = sm.stepIdx||0;
     } else {
-      const nextIdx = (sm.stepIdx||0) + (fg === 2 ? 0 : 1);
+      const nextIdx = (sm.stepIdx||0) + 1;
       if (nextIdx >= relearnSteps.length) {
         reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0;
-        stability = Math.max(sm.stability||1,
-          fsrsStabilityForget(sm.difficulty||5, sm.stability||1,
-            fsrsR(Math.max(0,(new Date(t)-new Date(sm.due||t))/86400000), sm.stability||1, w[20]), w));
       } else {
         reps = sm.reps||0; state = 'relearning'; stepIdx = nextIdx;
       }
     }
 
   } else {
-    // ── Review card ──────────────────────────────────
+    // ── Review card ──
     const elapsed = Math.max(0, (new Date(t) - new Date(sm.due || t)) / 86400000);
     const S_prev  = sm.stability  || 1;
     const D_prev  = sm.difficulty || 5;
-    const R       = fsrsR(elapsed, S_prev, w[20]);
-
-    difficulty = fsrsDiffUpdate(D_prev, fg, w);
+    const R       = fsrsR(elapsed, S_prev);
+    difficulty    = fsrsDiffUpdate(D_prev, fg, w);
 
     if (fg === 1) {
       // Lapse
       stability = fsrsStabilityForget(D_prev, S_prev, R, w);
       lapses    = (sm.lapses || 0) + 1;
-      reps      = 0;
-      state     = 'relearning';
-      stepIdx   = 0;
+      reps      = 0; state = 'relearning'; stepIdx = 0;
     } else {
       stability = fsrsStabilityRecall(D_prev, S_prev, R, fg, w);
       lapses    = sm.lapses || 0;
       reps      = (sm.reps || 0) + 1;
-      state     = 'review';
-      stepIdx   = 0;
+      state     = 'review'; stepIdx = 0;
     }
   }
 
@@ -2174,13 +2183,11 @@ function fsrsCalc(sm, g, deckOpt) {
   // Compute interval
   let interval;
   if (state === 'learning') {
-    interval = learnSteps[stepIdx] || learnSteps[learnSteps.length - 1] || 1/1440;
+    interval = learnSteps[stepIdx] ?? learnSteps[learnSteps.length-1] ?? 1/1440;
   } else if (state === 'relearning') {
-    interval = relearnSteps[stepIdx] || relearnSteps[relearnSteps.length - 1] || 10/1440;
+    interval = relearnSteps[stepIdx] ?? relearnSteps[relearnSteps.length-1] ?? 10/1440;
   } else {
-    // review — calculate from stability
-    interval = fsrsInterval(stability, retTarget, maxInt, w);
-    if (g === 0) interval = relearnSteps[0] || 10/1440; // lapse overrides interval
+    interval = fsrsInterval(stability, retTarget, maxInt);
   }
 
   return {
@@ -2617,35 +2624,39 @@ function updateBadge(){
 //  REVIEW
 // ═══════════════════════════════════════════════════
 function buildQ(deckId=null){
-  const t=today(), k=PFX+'new_'+t;
-  const shown=(()=>{try{return parseInt(localStorage.getItem(k)||'0');}catch(e){return 0;}})();
-  // Get effective limits: deck opt > global cfg
+  const t=today();
+  // Per-deck new-shown tracking key
+  const newKey = PFX+'new_'+t+(deckId?'_'+deckId:'');
+  const shown=(()=>{try{return parseInt(localStorage.getItem(newKey)||'0');}catch(e){return 0;}})();
+
+  // Effective limits: deck opt > global cfg
   const opt = deckId ? getDeckOpt(deckId) : null;
-  const maxNew = opt ? (opt.newPerDay || cfg.newPerDay) : cfg.newPerDay;
-  const maxRev = opt ? (opt.maxReviews || cfg.maxReviews) : cfg.maxReviews;
+  // Only use deck opt limits if user explicitly saved deck opts (d.opt exists)
+  const hasDeckOpt = deckId && decks[deckId]?.opt;
+  const maxNew = hasDeckOpt ? (opt.newPerDay ?? cfg.newPerDay) : cfg.newPerDay;
+  const maxRev = hasDeckOpt ? (opt.maxReviews ?? cfg.maxReviews) : cfg.maxReviews;
 
   let nw=[],rv=[],ln=[];
   Object.entries(cards).forEach(([id,c])=>{
     if(deckId&&c.deckId!==deckId)return;
     const sm=c.sm2;
     if(!sm||sm.state==='new') nw.push({id,...c});
-    else if(sm.state==='learning'||sm.state==='relearning') ln.push({id,...c}); // always due
+    else if(sm.state==='learning'||sm.state==='relearning') ln.push({id,...c});
     else if(sm.due<=t) rv.push({id,...c});
   });
 
-  // Sort new cards by deck option
+  // Sort new cards
   const newOrder = opt?.newOrder || 'sequential';
   if (newOrder === 'random') nw = nw.sort(()=>Math.random()-.5);
-  // else sequential — keep insertion order
 
-  // Sort reviews by deck option
+  // Sort reviews
   const revSort = opt?.revSort || 'due_random';
-  if (revSort === 'random')       rv = rv.sort(()=>Math.random()-.5);
-  else if (revSort === 'due')     rv = rv.sort((a,b)=>(a.sm2?.due||'').localeCompare(b.sm2?.due||''));
-  else /* due_random */           { rv = rv.sort((a,b)=>(a.sm2?.due||'').localeCompare(b.sm2?.due||'')); rv = rv.sort((a,b)=>a.sm2?.due===b.sm2?.due?Math.random()-.5:0); }
+  if (revSort === 'random') rv = rv.sort(()=>Math.random()-.5);
+  else rv = rv.sort((a,b)=>(a.sm2?.due||'').localeCompare(b.sm2?.due||''));
 
-  const sh=a=>a.sort(()=>Math.random()-.5);
-  return [...sh(ln),...rv.slice(0,maxRev),...nw.slice(0,Math.max(0,maxNew-shown))];
+  const sh=a=>[...a].sort(()=>Math.random()-.5);
+  const newSlice = nw.slice(0, Math.max(0, maxNew - shown));
+  return [...sh(ln), ...rv.slice(0, maxRev), ...newSlice];
 }
 
 function startReview(deckId=null){
@@ -2942,7 +2953,7 @@ function doGrade(g){
   if(g===0)rQ.splice(Math.min(rIdx+5,rQ.length),0,{...c,sm2:ns});
   const t=today(), cnt=(studyLog[t]||0)+1;
   save('studyLog/'+t,cnt); studyLog[t]=cnt;
-  if(!c.sm2||c.sm2.state==='new'){try{const k=PFX+'new_'+t;localStorage.setItem(k,String((parseInt(localStorage.getItem(k)||'0')+1)));}catch(e){}}
+  if(!c.sm2||c.sm2.state==='new'){try{const newKey=PFX+'new_'+t+(rDeckId?'_'+rDeckId:'');localStorage.setItem(newKey,String((parseInt(localStorage.getItem(newKey)||'0')+1)));}catch(e){}}
   rIdx++;
   setTimeout(renderCard,80);
 }
@@ -3085,7 +3096,7 @@ const DECK_OPT_DEFAULTS = {
   // FSRS
   fsrsEnabled:  true,
   fsrsRetention:90,
-  fsrsParams:   '0.2120,1.2981,3.2066,15.6426,7.2102,0.5563,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898,0.51655,1.4852,0.0,0.5',
+  fsrsParams:   '0.4072,1.1829,3.1262,15.4722,7.2102,0.5316,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898',
   fsrsHistRet:  90,
   maxInterval:  36500,
 };
