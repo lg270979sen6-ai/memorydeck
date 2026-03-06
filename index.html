@@ -269,21 +269,23 @@ body {
 }
 .nav-item {
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; gap: 3px; padding: 4px;
+  align-items: center; gap: 2px; padding: 4px 2px;
   cursor: pointer; position: relative;
 }
 .nav-icon {
-  width: 44px; height: 28px;
+  width: 48px; height: 28px;
   display: flex; align-items: center; justify-content: center;
-  font-size: 22px; border-radius: 10px;
-  transition: transform .15s;
+  border-radius: 14px; transition: background .15s;
 }
-.nav-item.active .nav-icon { transform: scale(1.08); }
+.nav-icon svg { width: 24px; height: 24px; transition: all .15s; }
+.nav-item.active .nav-icon { background: rgba(0,122,255,.10); }
+.nav-item.active .nav-icon svg { stroke: var(--blue); }
+.nav-item:not(.active) .nav-icon svg { stroke: var(--ink4); }
 .nav-label {
-  font-size: 10px; font-weight: 700; color: var(--ink4);
-  letter-spacing: .02em; transition: color .15s;
+  font-size: 10px; font-weight: 600; color: var(--ink4);
+  letter-spacing: .01em; transition: color .15s;
 }
-.nav-item.active .nav-label { color: var(--blue); }
+.nav-item.active .nav-label { color: var(--blue); font-weight: 700; }
 .nav-badge {
   position: absolute; top: 1px; right: calc(50% - 26px);
   background: var(--red); color: white;
@@ -391,18 +393,21 @@ body {
   color: var(--orange); flex-shrink: 0; align-self: center;
 }
 .deck-play-btn {
-  width: 34px; height: 34px; border-radius: 10px;
-  background: var(--bg2); border: .5px solid var(--border);
+  width: 38px; height: 38px; border-radius: 12px;
+  background: var(--blue); border: none;
   display: flex; align-items: center; justify-content: center;
-  font-size: 14px; cursor: pointer; color: var(--ink3);
-  flex-shrink: 0; transition: background .12s, color .12s;
+  cursor: pointer; flex-shrink: 0;
+  transition: background .12s, transform .1s, box-shadow .1s;
+  box-shadow: 0 3px 10px rgba(0,122,255,.3);
 }
-.deck-play-btn:active { background: var(--border); }
+.deck-play-btn svg { width: 16px; height: 16px; stroke: white; fill: white; }
+.deck-play-btn:active { transform: scale(.92); box-shadow: 0 1px 4px rgba(0,122,255,.2); }
 .deck-play-paused {
-  background: rgba(255,149,0,.12);
-  border-color: var(--orange);
-  color: var(--orange);
+  background: var(--bg2);
+  box-shadow: none;
+  border: 1.5px solid var(--border2);
 }
+.deck-play-paused svg { stroke: var(--ink3); fill: var(--ink3); }
 .deck-menu-btn {
   width: 30px; height: 30px; border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
@@ -470,27 +475,33 @@ body {
 .card-flipper.flipped .c-face:not(.c-back) { display: none; }
 .card-flipper.flipped .c-back { display: flex; }
 
-/* Status badge — top left */
+/* Status badge — just a colored dot, top left */
 .c-badge {
-  position: absolute; top: 10px; left: 10px;
-  display: flex; align-items: center; gap: 4px;
-  font-size: 9px; font-weight: 700; color: var(--ink4);
-  letter-spacing: .05em; text-transform: uppercase;
-  background: var(--bg2); border-radius: 6px; padding: 3px 7px;
-  opacity: .8;
+  position: absolute; top: 12px; left: 14px;
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
 }
-.c-dot { width: 5px; height: 5px; border-radius: 50%; }
-
-/* Edit button — top right, small and clean */
+/* Edit button — SVG pencil, top right */
 .c-edit-btn {
-  position: absolute; top: 12px; right: 14px;
-  width: 30px; height: 30px; border-radius: 9px;
-  background: var(--bg2); border: .5px solid var(--border);
+  position: absolute; top: 10px; right: 50px;
+  width: 32px; height: 32px; border-radius: 10px;
+  background: rgba(0,0,0,.04); border: none;
   display: flex; align-items: center; justify-content: center;
-  font-size: 14px; cursor: pointer; color: var(--ink3);
-  transition: background .12s;
+  cursor: pointer; transition: background .12s;
 }
-.c-edit-btn:active { background: var(--border); }
+.c-edit-btn:active { background: rgba(0,0,0,.1); }
+.c-edit-btn svg { width: 16px; height: 16px; stroke: var(--ink3); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+/* Audio icon button — top right corner */
+.c-audio-btn {
+  position: absolute; top: 10px; right: 12px;
+  width: 32px; height: 32px; border-radius: 10px;
+  background: rgba(0,122,255,.08); border: none;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: background .12s;
+}
+.c-audio-btn svg { width: 18px; height: 18px; stroke: var(--blue); fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.c-audio-btn.playing { background: rgba(0,122,255,.18); animation: audioPulse .9s ease infinite; }
+.c-audio-btn:active { background: rgba(0,122,255,.2); }
 
 .c-deck-tag { display: none; } /* hidden — shown in badge instead */
 
@@ -559,13 +570,14 @@ body {
 .gb-easy  { background: #edfff3; color: #1a9e42; box-shadow: 0 2px 10px rgba(52,199,89,.12); }
 .gb-easy  .g-dot { background: #34c759; box-shadow: 0 3px 8px rgba(52,199,89,.35); }
 
-.anki-word { font-size: 32px !important; font-weight: 800 !important; color: var(--ink1) !important; margin: 0 0 4px 0 !important; display: block !important; letter-spacing: -0.5px; }
-.anki-ipa  { font-size: 17px !important; color: var(--blue) !important; font-style: italic !important; font-weight: 400 !important; margin: 0 0 6px 0 !important; display: block !important; }
-.anki-translation { font-size: 26px !important; font-weight: 700 !important; color: var(--green) !important; margin: 4px 0 !important; display: block !important; }
-.anki-meaning { font-size: 14px !important; font-weight: 400 !important; color: var(--ink2) !important; line-height: 1.5 !important; margin: 6px 0 !important; background: rgba(0,122,255,.07) !important; border-left: 3px solid var(--blue) !important; padding: 6px 10px !important; border-radius: 0 8px 8px 0 !important; display: block !important; }
-.anki-example { font-size: 13px !important; font-weight: 400 !important; color: var(--ink3) !important; font-style: italic !important; margin: 4px 0 0 0 !important; line-height: 1.5 !important; display: block !important; }
-.anki-img { text-align: center !important; margin: 6px 0 !important; display: block !important; }
-.anki-img img, .c-body img { max-width: 100% !important; max-height: 190px !important; border-radius: 10px !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
+.anki-word { font-size: 30px !important; font-weight: 800 !important; color: var(--ink1) !important; margin: 0 0 2px 0 !important; display: block !important; letter-spacing: -0.5px; }
+.anki-ipa  { font-size: 15px !important; color: var(--blue) !important; font-style: italic !important; font-weight: 400 !important; margin: 0 0 4px 0 !important; display: block !important; }
+.anki-translation { font-size: 24px !important; font-weight: 700 !important; color: var(--green) !important; margin: 2px 0 4px !important; display: block !important; }
+.anki-meaning { font-size: 13px !important; font-weight: 400 !important; color: var(--ink2) !important; line-height: 1.45 !important; margin: 4px 0 !important; background: rgba(0,122,255,.07) !important; border-left: 3px solid var(--blue) !important; padding: 5px 10px !important; border-radius: 0 8px 8px 0 !important; display: block !important; text-align:left !important; }
+.anki-example { font-size: 13px !important; font-weight: 400 !important; color: var(--ink2) !important; font-style: italic !important; margin: 4px 0 0 0 !important; line-height: 1.4 !important; display: block !important; text-align:left !important; padding: 0 2px !important; }
+.anki-example::before { content: '→ '; color: var(--ink4); font-style:normal; }
+.anki-img { text-align: center !important; margin: 4px 0 !important; display: block !important; }
+.anki-img img, .c-body img { max-width: 100% !important; max-height: 170px !important; border-radius: 10px !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
 .c-int {
   font-family: var(--mono); font-size: 11px;
   color: var(--ink4); margin-top: 10px;
@@ -1194,17 +1206,21 @@ body {
 
   <nav class="nav">
     <div class="nav-item active" id="nt-home" onclick="switchView('home')">
-      <div class="nav-icon">🏠</div><div class="nav-label">Главная</div>
+      <div class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>
+      <div class="nav-label">Главная</div>
     </div>
     <div class="nav-item" id="nt-decks" onclick="switchView('decks')">
-      <div class="nav-icon">📚</div><div class="nav-label">Колоды</div>
+      <div class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><path d="M7 7h10M7 11h6"/></svg></div>
+      <div class="nav-label">Колоды</div>
       <div class="nav-badge" id="navBadge" style="display:none;"></div>
     </div>
     <div class="nav-item" id="nt-stats" onclick="switchView('stats')">
-      <div class="nav-icon">📊</div><div class="nav-label">Прогресс</div>
+      <div class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg></div>
+      <div class="nav-label">Прогресс</div>
     </div>
     <div class="nav-item" id="nt-settings" onclick="switchView('settings')">
-      <div class="nav-icon">⚙️</div><div class="nav-label">Настройки</div>
+      <div class="nav-icon"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M6 20v-2a6 6 0 0112 0v2"/></svg></div>
+      <div class="nav-label">Профиль</div>
     </div>
   </nav>
 
@@ -2639,39 +2655,42 @@ function buildDeckRow(id, d) {
   const col = d.color || COLORS[0];
   const paused = d.paused || false;
   const opt = getDeckOpt(id);
-  const algoLbl = opt.algo === 'fsrs' ? 'FSRS' : 'SM-2';
   const totalDue = nw + ln + rv;
 
-  // Due badge colors
-  const dueParts = [];
-  if (nw > 0)  dueParts.push(`<span style="color:var(--blue);font-weight:700;">${nw}</span>`);
-  if (ln > 0)  dueParts.push(`<span style="color:var(--orange);font-weight:700;">${ln}</span>`);
-  if (rv > 0)  dueParts.push(`<span style="color:var(--green);font-weight:700;">${rv}</span>`);
-  const dueStr = dueParts.length ? dueParts.join('<span style="color:var(--ink4);margin:0 2px;">·</span>') : '<span style="color:var(--ink4);">0</span>';
+  // Today task counts
+  const taskParts = [];
+  if (nw > 0) taskParts.push(`<span style="color:var(--blue);font-weight:700;font-size:11px;">${nw} нов.</span>`);
+  if (rv > 0 || ln > 0) taskParts.push(`<span style="color:var(--green);font-weight:700;font-size:11px;">${rv+ln} повт.</span>`);
+  const taskStr = taskParts.length
+    ? taskParts.join('<span style="color:var(--ink4);margin:0 3px;font-size:11px;">·</span>')
+    : `<span style="color:var(--ink4);font-size:11px;">готово ✓</span>`;
+
+  // Play/pause SVG button
+  const playBtn = paused
+    ? `<button class="deck-play-btn deck-play-paused" onclick="event.stopPropagation();toggleDeckPause('${id}')" title="Возобновить">
+        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;stroke:var(--ink3);fill:none;"><rect x="6" y="4" width="4" height="16" rx="1" fill="var(--ink3)" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1" fill="var(--ink3)" stroke="none"/></svg>
+       </button>`
+    : `<button class="deck-play-btn" onclick="event.stopPropagation();${totalDue>0?`startReview('${id}')`:`toggleDeckPause('${id}')`}" title="Учить">
+        <svg viewBox="0 0 24 24" fill="white" stroke="none" style="width:18px;height:18px;margin-left:2px;"><polygon points="5,3 19,12 5,21"/></svg>
+       </button>`;
 
   return `
   <div class="deck-row" onclick="openDeckDetail('${id}')">
     <div class="deck-em" style="background:${col}18;position:relative;">
       ${d.emoji||'📚'}
-      ${paused ? '<div style="position:absolute;bottom:-2px;right:-2px;font-size:9px;background:var(--bg);border-radius:50%;line-height:1;">⏸</div>' : ''}
+      ${paused?'<div style="position:absolute;bottom:-3px;right:-3px;width:14px;height:14px;background:var(--orange);border-radius:50%;border:2px solid var(--card);display:flex;align-items:center;justify-content:center;font-size:7px;line-height:1;">⏸</div>':''}
     </div>
     <div class="deck-inf" style="flex:1;min-width:0;">
-      <div style="display:flex;align-items:center;gap:6px;">
-        <div class="deck-nm" style="${paused?'color:var(--ink3);':''}">${d.name||'Без названия'}</div>
-        <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:5px;background:${opt.algo==='fsrs'?'rgba(175,82,222,.1)':'rgba(0,122,255,.08)'};color:${opt.algo==='fsrs'?'var(--purple)':'var(--blue)'};">${algoLbl}</span>
-      </div>
+      <div class="deck-nm" style="${paused?'color:var(--ink3);':''}">${d.name||'Без названия'}</div>
       <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
         <div style="flex:1;height:3px;background:var(--bg2);border-radius:2px;overflow:hidden;">
           <div style="height:100%;width:${pct}%;background:${col};border-radius:2px;"></div>
         </div>
         <span style="font-size:10px;color:var(--ink4);flex-shrink:0;">${pct}%</span>
       </div>
-      <div style="font-size:11px;color:var(--ink4);margin-top:2px;">${total} карт. · ${dueStr}</div>
+      <div style="margin-top:4px;">${taskStr}</div>
     </div>
-    <button class="deck-play-btn ${paused?'deck-play-paused':''}" onclick="event.stopPropagation();toggleDeckPause('${id}')" title="${paused?'Возобновить':'Пауза'}">
-      ${paused ? '▶' : '⏸'}
-    </button>
-    <div class="deck-menu-btn" onclick="event.stopPropagation();openDeckEd('${id}')">···</div>
+    ${playBtn}
   </div>`;
 }
 
@@ -3079,26 +3098,29 @@ function renderCard(){
   const frontClean = cleanAudioTags(c.front);
   const backClean  = cleanAudioTags(c.back);
 
-  // Audio button HTML
+  // Audio icon — top right, no text
   const mkAudioBtn = (refs, side) => refs.length
-    ? `<button class="audio-btn" id="audiobtn-${side}" onclick="playCardAudio('${side}',event)">🔊 Слушать</button>`
+    ? `<button class="c-audio-btn" id="audiobtn-${side}" onclick="event.stopPropagation();playCardAudio('${side}',event)" title="Слушать"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/></svg></button>`
     : '';
+
+  // SVG pencil edit button
+  const editBtn = `<button class="c-edit-btn" onclick="event.stopPropagation();editCurrentCard()" title="Редактировать"><svg viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>`;
 
   // After rendering, load images from Firebase
   document.getElementById('cardStage').innerHTML=`
     <div class="card-flipper card-in" id="flipper">
       <div class="c-face">
-        <div class="c-badge"><div class="c-dot" style="background:${sCol};"></div>${sLbl} · ${deck.emoji||'📚'}</div>
-        <button class="c-edit-btn" onclick="event.stopPropagation();editCurrentCard()" title="Редактировать">✏️</button>
-        <div class="c-q">${renderCardWithTemplate(frontClean,'front')}</div>
+        <div class="c-badge" style="background:${sCol};"></div>
+        ${editBtn}
         ${mkAudioBtn(frontAudio,'front')}
+        <div class="c-q" style="margin-top:10px;width:100%;">${renderCardWithTemplate(frontClean,'front')}</div>
         <div class="c-hint" id="tapHint">Нажмите чтобы показать ответ</div>
       </div>
       <div class="c-face c-back">
-        <div class="c-badge"><div class="c-dot" style="background:${sCol};"></div>${sLbl} · ${deck.emoji||'📚'}</div>
-        <button class="c-edit-btn" onclick="event.stopPropagation();editCurrentCard()" title="Редактировать">✏️</button>
-        <div class="c-a">${renderCardWithTemplate(backClean,'back')}</div>
+        <div class="c-badge" style="background:${sCol};"></div>
+        ${editBtn}
         ${mkAudioBtn(backAudio,'back')}
+        <div class="c-a" style="margin-top:10px;width:100%;">${renderCardWithTemplate(backClean,'back')}</div>
         ${intStr?`<div class="c-int">${intStr}</div>`:''}
       </div>
     </div>
@@ -3192,7 +3214,7 @@ async function loadAndPlayAudio(filename, btnEl) {
     return;
   }
 
-  if (btnEl) { btnEl.textContent = '⏳ Загрузка...'; btnEl.disabled = true; }
+  if (btnEl) btnEl.classList.add('loading');
 
   try {
     // Audio stored under memorydeck_audio/{accId}/{hash}
@@ -3202,13 +3224,13 @@ async function loadAndPlayAudio(filename, btnEl) {
     const data = snap.val();
     if (data) {
       audioCache[filename] = data;
-      if (btnEl) { btnEl.textContent = '🔊 Слушать'; btnEl.disabled = false; }
+      if (btnEl) btnEl.classList.remove('loading');
       playAudioData(data, btnEl);
     } else {
-      if (btnEl) { btnEl.textContent = '❌ Нет аудио'; btnEl.disabled = false; }
+      if (btnEl) btnEl.classList.remove('loading');
     }
   } catch(e) {
-    if (btnEl) { btnEl.textContent = '🔊 Слушать'; btnEl.disabled = false; }
+    if (btnEl) btnEl.classList.remove('loading');
   }
 }
 
@@ -3234,7 +3256,7 @@ function stopCurrentAudio() {
     currentAudio = null;
   }
   // Remove playing class from all buttons
-  document.querySelectorAll('.audio-btn.playing').forEach(b => b.classList.remove('playing'));
+  document.querySelectorAll('.c-audio-btn.playing').forEach(b => b.classList.remove('playing'));
 }
 
 // Called by audio button click
@@ -3437,6 +3459,7 @@ function openDeckSettings(id) {
     <div style="background:var(--card);border-radius:22px 22px 0 0;padding:16px 16px calc(var(--safe-b) + 16px);display:flex;flex-direction:column;gap:8px;">
       <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 8px;"></div>
       <div style="font-size:15px;font-weight:800;text-align:center;margin-bottom:4px;">⚙️ Настройки колоды</div>
+      <button onclick="document.getElementById('deckSettingsSheet').remove();openDeckEd('${id}')" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;text-align:left;">✏️ Редактировать колоду</button>
       <button onclick="document.getElementById('deckSettingsSheet').remove();openDeckOpt('${id}')" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;text-align:left;">📐 Параметры обучения</button>
       <button onclick="document.getElementById('deckSettingsSheet').remove();openTemplateEd()" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;text-align:left;">🎨 Шаблон карточек</button>
       <button onclick="document.getElementById('deckSettingsSheet').remove();" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink3);cursor:pointer;">Отмена</button>
