@@ -444,8 +444,8 @@ body {
   background: var(--card); border-radius: 22px;
   box-shadow: 0 4px 24px rgba(0,0,0,.08), 0 1px 4px rgba(0,0,0,.04);
   display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  padding: 48px 22px 24px; text-align: center;
+  align-items: center; justify-content: flex-start;
+  padding: 52px 18px 16px; text-align: center;
   border: .5px solid var(--border);
   overflow-y: auto;
   transition: opacity .2s;
@@ -459,13 +459,14 @@ body {
 
 /* Status badge — top left */
 .c-badge {
-  position: absolute; top: 14px; left: 14px;
-  display: flex; align-items: center; gap: 5px;
-  font-size: 10px; font-weight: 700; color: var(--ink4);
-  letter-spacing: .06em; text-transform: uppercase;
-  background: var(--bg2); border-radius: 8px; padding: 4px 8px;
+  position: absolute; top: 10px; left: 10px;
+  display: flex; align-items: center; gap: 4px;
+  font-size: 9px; font-weight: 700; color: var(--ink4);
+  letter-spacing: .05em; text-transform: uppercase;
+  background: var(--bg2); border-radius: 6px; padding: 3px 7px;
+  opacity: .8;
 }
-.c-dot { width: 6px; height: 6px; border-radius: 50%; }
+.c-dot { width: 5px; height: 5px; border-radius: 50%; }
 
 /* Edit button — top right, small and clean */
 .c-edit-btn {
@@ -523,17 +524,17 @@ body {
 /* Grade buttons — 4 columns, bold and spacious */
 .grades {
   display: grid; grid-template-columns: repeat(4,1fr);
-  gap: 8px; margin-top: 10px; flex-shrink: 0;
+  gap: 6px; margin-top: 8px; flex-shrink: 0;
 }
 .grade-btn {
-  padding: 14px 6px 12px; border-radius: 16px;
+  padding: 10px 4px 8px; border-radius: 14px;
   border: none; font-family: var(--font); cursor: pointer;
-  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
   transition: transform .1s, box-shadow .1s;
 }
 .grade-btn:active { transform: scale(.94); }
-.g-dot { width: 28px; height: 28px; border-radius: 50%; margin-bottom: 2px; }
-.g-w   { font-size: 13px; font-weight: 800; }
+.g-dot { width: 24px; height: 24px; border-radius: 50%; margin-bottom: 1px; }
+.g-w   { font-size: 12px; font-weight: 800; }
 .g-nxt { font-size: 10px; font-weight: 500; opacity: .7; font-family: var(--mono); }
 
 .gb-again { background: #fff0ee; color: #e53535; box-shadow: 0 2px 10px rgba(229,53,53,.15); }
@@ -1156,20 +1157,29 @@ body {
     <!-- STATS -->
     <div class="view" id="vStats">
       <div class="sec-head"><div class="sec-title">Прогресс</div></div>
-      <div class="stats-top fu" id="statsTop"></div>
+      <!-- Today + Streak -->
+      <div id="statsTodayEl" class="fu"></div>
       <div id="streakEl" class="fu1"></div>
+      <!-- Activity heatmap -->
       <div class="chart-card fu2">
         <div class="chart-title">Активность — 90 дней</div>
         <div class="heatmap" id="heatmap"></div>
       </div>
+      <!-- Deck table: Новые / Учатся / К повтору -->
+      <div class="chart-card fu2" id="statsDeckTable"></div>
+      <!-- Card states donuts -->
       <div class="chart-card fu2">
-        <div class="chart-title">Прогресс по колодам</div>
-        <div class="bar-list" id="deckBars"></div>
-      </div>
-      <div class="chart-card fu3">
         <div class="chart-title">Состояние карточек</div>
         <div class="donuts" id="donuts"></div>
       </div>
+      <!-- Forecast -->
+      <div class="chart-card fu2" id="statsForecast"></div>
+      <!-- Intervals histogram -->
+      <div class="chart-card fu2" id="statsIntervals"></div>
+      <!-- Retention table -->
+      <div class="chart-card fu2" id="statsRetention"></div>
+      <!-- Grade buttons usage -->
+      <div class="chart-card fu2" id="statsGrades"></div>
     </div>
 
     <!-- SETTINGS -->
@@ -1829,7 +1839,7 @@ const COLORS = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5856d6','#30
 let db=null, fbRef=null;
 let allAcc={}, sess={accId:null,userId:null,ud:null,ad:null};
 let pendAcc=null, pendUser=null;
-let decks={}, cards={}, cfg={newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, studyLog={}, newLog={};
+let decks={}, cards={}, cfg={newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, studyLog={}, newLog={}, gradeLog={};
 let rQ=[], rIdx=0, rFlipped=false, rStats={}, rDeckId=null;
 let eDeckId=null, eCardId=null, eDetailDeck=null;
 let dColor=COLORS[0], dEmoji='📚';
@@ -2370,6 +2380,7 @@ function initMainFirebase(accId, userId) {
       cfg      = Object.assign({newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, d.cfg||{});
       studyLog = d.studyLog ||{};
       newLog   = d.newLog   ||{};
+      gradeLog = d.gradeLog ||{};
 
       // ── Load template from Firebase (fallback: localStorage → DEFAULT_FIELDS) ──
       if (d.template && Array.isArray(d.template) && d.template.length > 0) {
@@ -2606,33 +2617,68 @@ function renderHome(){
   }
 }
 
-function buildDeckRow(id,d){
-  const dc=Object.values(cards).filter(c=>c.deckId===id);
-  const total=dc.length, mature=dc.filter(c=>c.sm2&&c.sm2.interval>=21).length;
-  const due=dc.filter(c=>isDue(c.sm2)).length;
-  const pct=total?Math.round(mature/total*100):0;
-  const col=d.color||COLORS[0];
+function getDeckDue(deckId) {
+  const t = today();
+  const shownNew = newLog[t] || 0;
+  const opt = getDeckOpt(deckId);
+  const hasDeckOpt = decks[deckId]?.opt;
+  const maxNew = hasDeckOpt ? (opt.newPerDay ?? cfg.newPerDay) : cfg.newPerDay;
+
+  let nw=0, ln=0, rv=0;
+  Object.values(cards).forEach(c => {
+    if (c.deckId !== deckId) return;
+    const sm = c.sm2;
+    if (!sm || sm.state==='new') nw++;
+    else if ((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) ln++;
+    else if (sm.state==='review' && sm.due<=t) rv++;
+  });
+  return {
+    nw: Math.max(0, Math.min(nw, maxNew - shownNew)),
+    ln,
+    rv: Math.min(rv, hasDeckOpt ? (opt.maxReviews ?? cfg.maxReviews) : cfg.maxReviews)
+  };
+}
+
+function buildDeckRow(id, d) {
+  const {nw, ln, rv} = getDeckDue(id);
+  const total = Object.values(cards).filter(c=>c.deckId===id).length;
+  const col = d.color || COLORS[0];
+  const fmtN = (n, color) => n > 0
+    ? `<span style="color:${color};font-weight:700;">${n}</span>`
+    : `<span style="color:var(--ink4);">0</span>`;
   return `
   <div class="deck-row" onclick="openDeckDetail('${id}')">
     <div class="deck-em" style="background:${col}18;">${d.emoji||'📚'}</div>
-    <div class="deck-inf">
+    <div class="deck-inf" style="flex:1;min-width:0;">
       <div class="deck-nm">${d.name||'Без названия'}</div>
-      <div class="deck-progress-track"><div class="deck-progress-fill" style="width:${pct}%;background:${col};"></div></div>
-      <div class="deck-meta"><span>${total} карточек</span><span style="color:${col};">${pct}% изучено</span></div>
+      <div style="font-size:11px;color:var(--ink4);">${total} карт.</div>
     </div>
-    ${due>0?`<div class="deck-due">${due}</div>`:'<div style="font-size:20px;">✅</div>'}
+    <div style="display:flex;gap:12px;align-items:center;flex-shrink:0;font-size:14px;min-width:110px;justify-content:flex-end;">
+      ${fmtN(nw,'var(--blue)')}
+      ${fmtN(ln,'var(--orange)')}
+      ${fmtN(rv,'var(--green)')}
+    </div>
     <div class="deck-menu-btn" onclick="event.stopPropagation();openDeckEd('${id}')">···</div>
   </div>`;
 }
 
 function renderDecks(){
-  const el=document.getElementById('allDecks');
-  const list=Object.entries(decks);
-  if(!list.length){
+  const el = document.getElementById('allDecks');
+  const list = Object.entries(decks);
+  if (!list.length) {
     el.innerHTML=`<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Нет колод</div><div class="empty-sub">Нажмите ＋ чтобы создать первую</div></div>`;
     return;
   }
-  el.innerHTML='<div style="padding:8px 0;">'+list.map(([id,d])=>buildDeckRow(id,d)).join('')+'</div>';
+  const header = `
+    <div style="display:flex;align-items:center;padding:6px 16px 6px 56px;font-size:11px;font-weight:700;color:var(--ink4);letter-spacing:.04em;border-bottom:.5px solid var(--border);margin-bottom:4px;">
+      <span style="flex:1;">КОЛОДА</span>
+      <div style="display:flex;gap:12px;min-width:110px;justify-content:flex-end;padding-right:36px;">
+        <span style="color:var(--blue);min-width:18px;text-align:center;">НОВ</span>
+        <span style="color:var(--orange);min-width:18px;text-align:center;">УЧ</span>
+        <span style="color:var(--green);min-width:18px;text-align:center;">ПОВ</span>
+      </div>
+    </div>`;
+  el.innerHTML = header + '<div style="padding:4px 0;">' + list.map(([id,d])=>buildDeckRow(id,d)).join('') + '</div>';
 }
 
 function renderStats(){
@@ -2645,132 +2691,93 @@ function renderStats(){
   const stLearning = all.filter(c => c.sm2 && (c.sm2.state==='learning'||c.sm2.state==='relearning')).length;
   const stReview   = all.filter(c => c.sm2 && c.sm2.state==='review').length;
   const stMature   = all.filter(c => c.sm2 && c.sm2.state==='review' && c.sm2.interval>=21).length;
-  const stYoung    = stReview - stMature; // review but < 21 days interval
+  const stYoung    = stReview - stMature;
 
   // Due today
   const dueReview  = all.filter(c => c.sm2?.state==='review' && c.sm2.due<=t).length;
   const dueLearning= all.filter(c => (c.sm2?.state==='learning'||c.sm2?.state==='relearning') && isDue(c.sm2)).length;
   const shownNew   = newLog[t] || 0;
   const leftNew    = Math.max(0, cfg.newPerDay - shownNew);
-
-  // Studied today
   const studiedToday = studyLog[t] || 0;
-  const newToday     = shownNew;
 
   // Streak
   let streak=0;
-  const dd=new Date();
-  while(true){const s=dd.toISOString().slice(0,10);if(studyLog[s]){streak++;dd.setDate(dd.getDate()-1);}else break;}
+  { const dd=new Date();
+    while(true){const s=dd.toISOString().slice(0,10);if(studyLog[s]){streak++;dd.setDate(dd.getDate()-1);}else break;} }
 
-  // ── Top tiles: clear labels ──────────────────────────
-  document.getElementById('statsTop').innerHTML=`
-    <div class="stat-tile" title="Всего карточек во всех колодах">
-      <div class="stat-tile-n" style="color:var(--blue);">${total}</div>
-      <div class="stat-tile-l">Всего карточек</div>
-    </div>
-    <div class="stat-tile" title="Карточки с интервалом ≥21 день — хорошо запомнены">
-      <div class="stat-tile-n" style="color:var(--green);">${stMature}</div>
-      <div class="stat-tile-l">Зрелых 🌿<br><span style="font-size:10px;font-weight:400;color:var(--ink4);">интервал ≥21д</span></div>
-    </div>
-    <div class="stat-tile" title="Карточки в процессе — интервал &lt;21 дня">
-      <div class="stat-tile-n" style="color:var(--orange);">${stYoung}</div>
-      <div class="stat-tile-l">Молодых 🌱<br><span style="font-size:10px;font-weight:400;color:var(--ink4);">интервал &lt;21д</span></div>
-    </div>
-    <div class="stat-tile" title="Карточки ещё не изучались">
-      <div class="stat-tile-n" style="color:var(--ink3);">${stNew}</div>
-      <div class="stat-tile-l">Новых 🆕<br><span style="font-size:10px;font-weight:400;color:var(--ink4);">не изучались</span></div>
-    </div>`;
-
-  // ── Today summary ────────────────────────────────────
-  const todayHtml = `
-    <div style="background:var(--card);border-radius:16px;padding:16px 18px;margin-bottom:12px;border:.5px solid var(--border);">
-      <div style="font-size:13px;font-weight:700;color:var(--ink3);margin-bottom:12px;text-transform:uppercase;letter-spacing:.06em;">📅 Сегодня</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-        <div style="text-align:center;">
-          <div style="font-size:22px;font-weight:800;color:var(--blue);">${studiedToday}</div>
-          <div style="font-size:11px;color:var(--ink3);margin-top:2px;">Пройдено</div>
-        </div>
-        <div style="text-align:center;">
-          <div style="font-size:22px;font-weight:800;color:var(--orange);">${newToday}</div>
-          <div style="font-size:11px;color:var(--ink3);margin-top:2px;">Новых показано</div>
-        </div>
-        <div style="text-align:center;">
-          <div style="font-size:22px;font-weight:800;color:${leftNew>0?'var(--red)':'var(--green)'};">${leftNew>0?leftNew:'✓'}</div>
-          <div style="font-size:11px;color:var(--ink3);margin-top:2px;">${leftNew>0?'Осталось новых':'Лимит выполнен'}</div>
-        </div>
+  // ── TODAY ────────────────────────────────────────────
+  document.getElementById('statsTodayEl').innerHTML=`
+    <div style="background:var(--card);border-radius:16px;padding:14px 16px;border:.5px solid var(--border);">
+      <div style="font-size:11px;font-weight:700;color:var(--ink4);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;">📅 Сегодня</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
+        <div><div style="font-size:24px;font-weight:800;color:var(--blue);">${studiedToday}</div><div style="font-size:10px;color:var(--ink4);margin-top:2px;">Пройдено</div></div>
+        <div><div style="font-size:24px;font-weight:800;color:var(--orange);">${shownNew}</div><div style="font-size:10px;color:var(--ink4);margin-top:2px;">Новых показано</div></div>
+        <div><div style="font-size:24px;font-weight:800;color:${leftNew>0?'var(--red)':'var(--green)'};">${leftNew>0?leftNew:'✓'}</div><div style="font-size:10px;color:var(--ink4);margin-top:2px;">${leftNew>0?'Осталось':'Готово'}</div></div>
       </div>
-      ${dueReview>0||dueLearning>0 ? `<div style="margin-top:10px;padding-top:10px;border-top:.5px solid var(--border);font-size:12px;color:var(--ink3);">
-        ${dueReview>0?`<span style="margin-right:12px;">🔁 К повтору: <b>${dueReview}</b></span>`:''}
-        ${dueLearning>0?`<span>📚 Учатся сейчас: <b>${dueLearning}</b></span>`:''}
-      </div>` : ''}
+      ${dueReview>0||dueLearning>0?`
+      <div style="margin-top:8px;padding-top:8px;border-top:.5px solid var(--border);font-size:12px;color:var(--ink3);display:flex;gap:14px;">
+        ${dueReview>0?`<span>🔁 К повтору: <b>${dueReview}</b></span>`:''}
+        ${dueLearning>0?`<span>📚 Учатся: <b>${dueLearning}</b></span>`:''}
+      </div>`:``}
     </div>`;
 
-  // Insert today summary before streak
-  const streakEl = document.getElementById('streakEl');
-  if (streakEl) {
-    // Insert today before streak
-    let todayEl = document.getElementById('todaySummary');
-    if (!todayEl) {
-      todayEl = document.createElement('div');
-      todayEl.id = 'todaySummary';
-      streakEl.parentNode.insertBefore(todayEl, streakEl);
-    }
-    todayEl.innerHTML = todayHtml;
-  }
-
-  // ── Streak ───────────────────────────────────────────
+  // ── STREAK ───────────────────────────────────────────
   document.getElementById('streakEl').innerHTML=`
     <div class="streak-banner">
       <div class="streak-fire">${streak>0?'🔥':'❄️'}</div>
-      <div>
-        <div class="streak-n">${streak}</div>
-        <div class="streak-l">${streak===1?'день подряд':streak<5?'дня подряд':'дней подряд'}</div>
-      </div>
-      <div class="streak-right">
-        <div class="streak-today-n">${studiedToday}</div>
-        <div class="streak-today-l">сегодня</div>
-      </div>
+      <div><div class="streak-n">${streak}</div><div class="streak-l">${streak===1?'день подряд':streak<5?'дня подряд':'дней подряд'}</div></div>
+      <div class="streak-right"><div class="streak-today-n">${studiedToday}</div><div class="streak-today-l">сегодня</div></div>
     </div>`;
 
-  // ── Heatmap ──────────────────────────────────────────
+  // ── HEATMAP ──────────────────────────────────────────
   let hm='';
   for(let i=89;i>=0;i--){
     const d=new Date(); d.setDate(d.getDate()-i);
     const s=d.toISOString().slice(0,10), cnt=studyLog[s]||0;
     const lv=cnt===0?'':cnt<10?'l1':cnt<30?'l2':cnt<60?'l3':'l4';
-    hm+=`<div class="hm ${lv}" title="${s}: ${cnt} карточек"></div>`;
+    hm+=`<div class="hm ${lv}" title="${s}: ${cnt} карт"></div>`;
   }
   document.getElementById('heatmap').innerHTML=hm;
 
-  // ── Deck progress bars ───────────────────────────────
-  document.getElementById('deckBars').innerHTML=Object.entries(decks).map(([id,d])=>{
-    const dc=Object.values(cards).filter(c=>c.deckId===id);
-    const reviewed = dc.filter(c=>c.sm2&&c.sm2.state==='review').length;
-    const pct=dc.length?reviewed/dc.length*100:0;
-    const dueNow=dc.filter(c=>isDue(c.sm2)).length;
-    return `<div class="bar-row">
-      <div class="bar-lbl">${d.emoji||'📚'} ${d.name.length>14?d.name.slice(0,13)+'…':d.name}</div>
-      <div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${d.color||COLORS[0]};"></div></div>
-      <div class="bar-pct" style="min-width:48px;text-align:right;">
-        <span style="color:var(--ink2);font-weight:700;">${Math.round(pct)}%</span>
-        ${dueNow>0?`<span style="color:var(--orange);font-size:10px;margin-left:4px;">${dueNow}▶</span>`:''}
-      </div>
-    </div>`;
+  // ── DECK TABLE (Anki style) ───────────────────────────
+  const deckRows = Object.entries(decks).map(([id,d])=>{
+    const {nw,ln,rv} = getDeckDue(id);
+    const dc = Object.values(cards).filter(c=>c.deckId===id);
+    const tot = dc.length;
+    const fmtN=(n,col)=>n>0?`<td style="color:${col};font-weight:700;text-align:right;padding:5px 10px;">${n}</td>`:`<td style="color:var(--ink4);text-align:right;padding:5px 10px;">0</td>`;
+    return `<tr style="border-bottom:.5px solid var(--border);">
+      <td style="padding:7px 10px;font-size:13px;font-weight:600;">${d.emoji||'📚'} ${d.name}</td>
+      <td style="padding:5px 10px;font-size:11px;color:var(--ink4);text-align:right;">${tot}</td>
+      ${fmtN(nw,'var(--blue)')}${fmtN(ln,'var(--orange)')}${fmtN(rv,'var(--green)')}
+    </tr>`;
   }).join('');
+  document.getElementById('statsDeckTable').innerHTML=`
+    <div class="chart-title">По колодам — план на сегодня</div>
+    <div style="overflow-x:auto;">
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr style="border-bottom:1.5px solid var(--border);">
+        <th style="text-align:left;padding:5px 10px;font-size:11px;color:var(--ink4);">Колода</th>
+        <th style="text-align:right;padding:5px 10px;font-size:11px;color:var(--ink4);">Всего</th>
+        <th style="text-align:right;padding:5px 10px;font-size:11px;color:var(--blue);">Новые</th>
+        <th style="text-align:right;padding:5px 10px;font-size:11px;color:var(--orange);">Учатся</th>
+        <th style="text-align:right;padding:5px 10px;font-size:11px;color:var(--green);">К повтору</th>
+      </tr></thead>
+      <tbody>${deckRows||'<tr><td colspan="5" style="text-align:center;padding:16px;color:var(--ink4);">Нет колод</td></tr>'}</tbody>
+    </table></div>`;
 
-  // ── Card state donuts ────────────────────────────────
-  const R=30, C=2*Math.PI*R;
+  // ── CARD STATE DONUTS ─────────────────────────────────
+  const R=28, C=2*Math.PI*R;
   const donut=(n,total2,col,lbl,sub)=>{
     const pct=total2?n/total2:0, off=C-(pct*C);
     return `<div class="donut-wrap">
-      <svg class="donut-svg" width="80" height="80" viewBox="0 0 80 80">
-        <circle class="donut-bg" cx="40" cy="40" r="${R}" stroke-width="7"/>
-        <circle class="donut-fg" cx="40" cy="40" r="${R}" stroke="${col}" stroke-width="7"
-          stroke-dasharray="${C}" stroke-dashoffset="${off}" transform="rotate(-90 40 40)"/>
+      <svg class="donut-svg" width="72" height="72" viewBox="0 0 72 72">
+        <circle class="donut-bg" cx="36" cy="36" r="${R}" stroke-width="6"/>
+        <circle class="donut-fg" cx="36" cy="36" r="${R}" stroke="${col}" stroke-width="6"
+          stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" transform="rotate(-90 36 36)"/>
       </svg>
       <div class="donut-n" style="color:${col};">${n}</div>
       <div class="donut-label">${lbl}</div>
-      ${sub?`<div style="font-size:9px;color:var(--ink4);margin-top:1px;">${sub}</div>`:''}
+      <div style="font-size:9px;color:var(--ink4);">${sub}</div>
     </div>`;
   };
   document.getElementById('donuts').innerHTML=
@@ -2778,7 +2785,126 @@ function renderStats(){
     donut(stLearning,total,'var(--orange)','📚 Учатся','в процессе')+
     donut(stYoung, total,'var(--blue)',  '🌱 Молодых','< 21 дня')+
     donut(stMature,total,'var(--green)', '🌿 Зрелых', '≥ 21 дня');
+
+  // ── FORECAST — due cards next 30 days ────────────────
+  const forecastDays = 30;
+  const forecast = new Array(forecastDays).fill(0);
+  all.forEach(c => {
+    if (!c.sm2 || c.sm2.state !== 'review' || !c.sm2.due) return;
+    const daysFromNow = Math.round((new Date(c.sm2.due) - new Date(t)) / 86400000);
+    if (daysFromNow > 0 && daysFromNow <= forecastDays) forecast[daysFromNow-1]++;
+  });
+  const fMax = Math.max(...forecast, 1);
+  const tomorrow = forecast[0];
+  const avgLoad = Math.round(forecast.reduce((a,b)=>a+b,0)/forecastDays);
+  const fBars = forecast.map((n,i)=>{
+    const h = Math.round(n/fMax*60);
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
+      <div style="width:100%;background:var(--blue);border-radius:2px 2px 0 0;height:${h}px;min-height:${n>0?1:0}px;opacity:.8;" title="+${i+1}д: ${n}"></div>
+    </div>`;
+  }).join('');
+  document.getElementById('statsForecast').innerHTML=`
+    <div class="chart-title">📅 Прогноз повторений — 30 дней</div>
+    <div style="display:flex;align-items:flex-end;height:60px;gap:2px;margin-bottom:8px;">${fBars}</div>
+    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink4);margin-bottom:10px;">
+      <span>+1д</span><span>+${Math.round(forecastDays/2)}д</span><span>+${forecastDays}д</span>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
+      <div style="background:var(--bg2);border-radius:10px;padding:8px 12px;">
+        <div style="font-size:18px;font-weight:800;color:var(--blue);">${tomorrow}</div>
+        <div style="color:var(--ink3);">На завтра</div>
+      </div>
+      <div style="background:var(--bg2);border-radius:10px;padding:8px 12px;">
+        <div style="font-size:18px;font-weight:800;color:var(--ink2);">${avgLoad}</div>
+        <div style="color:var(--ink3);">В среднем/день</div>
+      </div>
+    </div>`;
+
+  // ── INTERVALS histogram ───────────────────────────────
+  const intBuckets = new Array(21).fill(0); // 0..20+ days
+  const reviewCards = all.filter(c=>c.sm2&&c.sm2.state==='review'&&c.sm2.interval>0);
+  reviewCards.forEach(c=>{
+    const idx = Math.min(Math.round(c.sm2.interval), 20);
+    intBuckets[idx]++;
+  });
+  const avgInt = reviewCards.length
+    ? Math.round(reviewCards.reduce((s,c)=>s+(c.sm2.interval||0),0)/reviewCards.length)
+    : 0;
+  const iMax = Math.max(...intBuckets, 1);
+  const iBars = intBuckets.map((n,i)=>{
+    const h = Math.round(n/iMax*50);
+    const lbl = i===20?'20+':String(i);
+    return `<div style="display:flex;flex-direction:column;align-items:center;gap:1px;flex:1;">
+      <div style="width:100%;background:#5b9bff;border-radius:2px 2px 0 0;height:${h}px;min-height:${n>0?1:0}px;opacity:.75;" title="${lbl}д: ${n}"></div>
+      ${i%5===0?`<div style="font-size:8px;color:var(--ink4);">${lbl}</div>`:'<div style="font-size:8px;color:transparent;">.</div>'}
+    </div>`;
+  }).join('');
+  document.getElementById('statsIntervals').innerHTML=`
+    <div class="chart-title">📊 Интервалы (дни до повторения)</div>
+    <div style="display:flex;align-items:flex-end;height:50px;gap:1px;margin:8px 0 2px;">${iBars}</div>
+    <div style="font-size:11px;color:var(--ink3);text-align:center;">Средний интервал: <b>${avgInt} дней</b></div>`;
+
+  // ── RETENTION (Настоящее усвоение) ───────────────────
+  // We track grades in gradeLog: {date: {again,hard,good,easy}}
+  const gl = Object.values(gradeLog||{});
+  const getRetention = (fromDate) => {
+    let correct=0, total2=0;
+    Object.entries(gradeLog||{}).forEach(([d2,g])=>{
+      if (d2 < fromDate) return;
+      const c2=(g.good||0)+(g.easy||0), tot=(g.again||0)+(g.hard||0)+c2;
+      correct+=c2; total2+=tot;
+    });
+    return total2>0 ? Math.round(correct/total2*100) : null;
+  };
+  const retToday  = getRetention(t);
+  const retYest   = getRetention(new Date(new Date(t)-86400000).toISOString().slice(0,10));
+  const retWeek   = getRetention(new Date(new Date(t)-7*86400000).toISOString().slice(0,10));
+  const retMonth  = getRetention(new Date(new Date(t)-30*86400000).toISOString().slice(0,10));
+  const retFmt = r => r===null ? '<span style="color:var(--ink4);">—</span>' : `<b style="color:${r>=85?'var(--green)':r>=70?'var(--orange)':'var(--red)'}">${r}%</b>`;
+  const gradeToday = gradeLog?.[t] || {};
+  const todayTotal = (gradeToday.again||0)+(gradeToday.hard||0)+(gradeToday.good||0)+(gradeToday.easy||0);
+  document.getElementById('statsRetention').innerHTML=`
+    <div class="chart-title">🎯 Усвоение (% правильных повторений)</div>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;">
+      <thead><tr style="border-bottom:1px solid var(--border);">
+        <th style="text-align:left;padding:5px 0;font-size:11px;color:var(--ink4);">Период</th>
+        <th style="text-align:right;padding:5px 8px;font-size:11px;color:var(--ink4);">Правильно</th>
+        <th style="text-align:right;padding:5px 0;font-size:11px;color:var(--ink4);">Кол-во</th>
+      </tr></thead>
+      <tbody>
+        <tr style="border-bottom:.5px solid var(--border);"><td style="padding:6px 0;">Сегодня</td><td style="text-align:right;padding:6px 8px;">${retFmt(retToday)}</td><td style="text-align:right;color:var(--ink4);">${todayTotal}</td></tr>
+        <tr style="border-bottom:.5px solid var(--border);"><td style="padding:6px 0;">7 дней</td><td style="text-align:right;padding:6px 8px;">${retFmt(retWeek)}</td><td style="text-align:right;color:var(--ink4);">—</td></tr>
+        <tr><td style="padding:6px 0;">30 дней</td><td style="text-align:right;padding:6px 8px;">${retFmt(retMonth)}</td><td style="text-align:right;color:var(--ink4);">—</td></tr>
+      </tbody>
+    </table>`;
+
+  // ── GRADE BREAKDOWN ───────────────────────────────────
+  const allGrades = {again:0,hard:0,good:0,easy:0};
+  Object.values(gradeLog||{}).forEach(g=>{
+    allGrades.again+=(g.again||0); allGrades.hard+=(g.hard||0);
+    allGrades.good+=(g.good||0);   allGrades.easy+=(g.easy||0);
+  });
+  const totalG = allGrades.again+allGrades.hard+allGrades.good+allGrades.easy;
+  const gBar = (n,col,lbl) => {
+    const pct = totalG>0?Math.round(n/totalG*100):0;
+    return `<div style="text-align:center;">
+      <div style="font-size:16px;font-weight:800;color:${col};">${n}</div>
+      <div style="height:4px;background:${col};border-radius:2px;margin:4px 0;opacity:.7;"></div>
+      <div style="font-size:10px;color:var(--ink4);">${lbl}</div>
+      <div style="font-size:10px;color:${col};font-weight:700;">${pct}%</div>
+    </div>`;
+  };
+  document.getElementById('statsGrades').innerHTML=`
+    <div class="chart-title">🔘 Кнопки ответа (всего)</div>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px;">
+      ${gBar(allGrades.again,'#ff3b30','Снова')}
+      ${gBar(allGrades.hard,'#ff9500','Трудно')}
+      ${gBar(allGrades.good,'#007aff','Хорошо')}
+      ${gBar(allGrades.easy,'#34c759','Легко')}
+    </div>
+    <div style="margin-top:10px;font-size:11px;color:var(--ink4);text-align:center;">Всего ответов: ${totalG}</div>`;
 }
+
 
 function updateBadge(){
   const {nw,rv,ln}=getDue(), t=nw+rv+ln;
@@ -3114,6 +3240,15 @@ function doGrade(g){
   const ns=schedCalc(c.sm2,g,deckOpt);
   save('cards/'+c.id+'/sm2',ns);
   ['again','hard','good','easy'].forEach((k,i)=>{if(i===g)rStats[k]++;});
+
+  // Track grade in Firebase gradeLog for retention stats
+  { const t2=today();
+    const gk = ['again','hard','good','easy'][g];
+    const dayGrades = gradeLog[t2] || {again:0,hard:0,good:0,easy:0};
+    dayGrades[gk] = (dayGrades[gk]||0)+1;
+    gradeLog[t2] = dayGrades;
+    save('gradeLog/'+t2, dayGrades);
+  }
 
   // Re-insert learning cards into queue at appropriate position
   if (ns.state === 'learning' || ns.state === 'relearning') {
@@ -3863,8 +3998,9 @@ function doResetProgress(){
   Object.keys(cards).forEach(id=>{u['cards/'+id+'/sm2']=null;});
   u['studyLog']=null;
   u['newLog']=null;
+  u['gradeLog']=null;
   db.ref('memorydeck/'+sess.accId+'/users/'+sess.userId).update(u).then(()=>{
-    toast('🔄 Сброшено'); studyLog={}; newLog={};
+    toast('🔄 Сброшено'); studyLog={}; newLog={}; gradeLog={};
   });
 }
 
