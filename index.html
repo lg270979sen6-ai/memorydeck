@@ -2370,6 +2370,33 @@ function initMainFirebase(accId, userId) {
       cfg      = Object.assign({newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, d.cfg||{});
       studyLog = d.studyLog ||{};
 
+      // ── Load template from Firebase (fallback: localStorage → DEFAULT_FIELDS) ──
+      if (d.template && Array.isArray(d.template) && d.template.length > 0) {
+        // Ensure all fields have required style properties (migration safety)
+        d.template.forEach(f => {
+          if (!f.style) f.style = {};
+          f.style.size   = f.style.size   || 16;
+          f.style.weight = f.style.weight || 400;
+          f.style.color  = f.style.color  || '#111111';
+          f.style.italic = f.style.italic || false;
+          f.style.align  = f.style.align  || 'left';
+        });
+        // Save to localStorage as cache
+        try { localStorage.setItem('md_template_'+accId, JSON.stringify(d.template)); } catch(e){}
+      } else {
+        // Migrate from old localStorage if exists
+        const lsKey = 'md_template_'+accId;
+        const lsOld = 'md_template';
+        try {
+          const lsData = localStorage.getItem(lsKey) || localStorage.getItem(lsOld);
+          if (lsData) {
+            const parsed = JSON.parse(lsData);
+            // Push migration to Firebase
+            db.ref('memorydeck/'+accId+'/users/'+userId+'/template').set(parsed);
+          }
+        } catch(e) {}
+      }
+
       // ── Migration: reset stale learning/relearning cards that have no dueMs ──
       // These are cards from before the dueMs change — they'd show up every session.
       // Reset them to 'new' so they restart fresh.
@@ -4261,14 +4288,36 @@ let tmplFields = [];
 let tmplEditIdx = -1; // index of field being edited in fieldEdSh
 
 function loadTemplate() {
+  // 1. Try per-account localStorage cache (populated from Firebase on sync)
+  try {
+    const accId = sess?.accId;
+    if (accId) {
+      const s = localStorage.getItem('md_template_'+accId);
+      if (s) return JSON.parse(s);
+    }
+  } catch(e){}
+  // 2. Try old global key (legacy)
   try { const s = localStorage.getItem('md_template'); if (s) return JSON.parse(s); } catch(e){}
+  // 3. Return defaults
   return JSON.parse(JSON.stringify(DEFAULT_FIELDS));
 }
 
 function saveTemplate() {
-  localStorage.setItem('md_template', JSON.stringify(tmplFields));
+  _persistTemplate(tmplFields);
   closeTemplateEd();
   toast('✅ Шаблон сохранён');
+}
+
+// Central template persist: Firebase + localStorage cache
+function _persistTemplate(fields) {
+  // Save to Firebase
+  save('template', fields);
+  // Save to per-account localStorage cache
+  try {
+    const accId = sess?.accId;
+    if (accId) localStorage.setItem('md_template_'+accId, JSON.stringify(fields));
+    else localStorage.setItem('md_template', JSON.stringify(fields));
+  } catch(e){}
 }
 
 function openTemplateEd() {
@@ -4319,12 +4368,19 @@ function tfDrop(e, el) {
   if (tfDragIdx===null || tfDragIdx===dstIdx) return;
   const [moved] = tmplFields.splice(tfDragIdx, 1);
   tmplFields.splice(dstIdx, 0, moved);
+  _persistTemplate(tmplFields);
   renderAllFieldsList();
   tfDragIdx = null;
 }
 
 function tmplAddField() {
-  tmplFields.push({ id:'field_'+Date.now(), label:'Новое поле', showFront:false, showBack:false, style:{size:16,weight:400,color:'#111111',italic:false}, defaultValue:'' });
+  tmplFields.push({
+    id: 'field_'+Date.now(),
+    label: 'Новое поле',
+    showFront: false, showBack: false,
+    style: { size:16, weight:400, color:'#111111', italic:false, align:'left' },
+    defaultValue: ''
+  });
   renderAllFieldsList();
   openFieldEd(tmplFields.length-1);
 }
@@ -4354,6 +4410,7 @@ function renderSideFieldsList(side, containerId) {
 
 function tmplToggleSide(idx, side, val) {
   tmplFields[idx][side==='front'?'showFront':'showBack'] = val;
+  _persistTemplate(tmplFields);
 }
 
 function tfDropSide(e, el, side) {
@@ -4362,6 +4419,7 @@ function tfDropSide(e, el, side) {
   if (tfDragIdx===null || tfDragIdx===dstIdx) return;
   const [moved] = tmplFields.splice(tfDragIdx, 1);
   tmplFields.splice(dstIdx, 0, moved);
+  _persistTemplate(tmplFields);
   renderSideFieldsList(side, side==='front'?'tmplFrontList':'tmplBackList');
   tfDragIdx = null;
 }
@@ -4422,8 +4480,8 @@ function saveFieldEd() {
   f.style.italic = document.getElementById('fieldEdItalic').checked;
   f.style.align  = document.getElementById('fieldEdAlign')?.value || 'left';
 
-  // ← Главный фикс: сохраняем шаблон в localStorage немедленно
-  try { localStorage.setItem('md_template', JSON.stringify(tmplFields)); } catch(e){}
+  // Save to Firebase + localStorage
+  _persistTemplate(tmplFields);
 
   closeSh('fieldEdSh');
   renderAllFieldsList();
@@ -4434,8 +4492,10 @@ function deleteFieldEd() {
   if (tmplEditIdx < DEFAULT_FIELDS.length) return; // protect built-in fields
   if (!confirm('Удалить поле «' + tmplFields[tmplEditIdx].label + '»?')) return;
   tmplFields.splice(tmplEditIdx, 1);
+  _persistTemplate(tmplFields);
   closeSh('fieldEdSh');
   renderAllFieldsList();
+  toast('🗑 Поле удалено');
 }
 
 // ── Rich text toolbar commands ───────────────────────
