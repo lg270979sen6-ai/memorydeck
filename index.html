@@ -1404,7 +1404,7 @@ body {
       </div>
       <div class="dopt-row" style="flex-direction:column;align-items:stretch;gap:6px;">
         <div class="dopt-lbl">Параметры FSRS w[0..16]<div class="dopt-hint">17 чисел через запятую — изменяйте осторожно</div></div>
-        <textarea class="dopt-params-area" id="doptFSRSParams" rows="3">0.4072,1.1829,3.1262,15.4722,7.2102,0.5316,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898</textarea>
+        <textarea class="dopt-params-area" id="doptFSRSParams" rows="3">0.2120,1.2981,3.2066,15.6426,7.2102,0.5563,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898,0.51655,1.4852,0.0,0.5</textarea>
       </div>
       <div class="dopt-row">
         <div class="dopt-lbl">Исторический уровень усвоения</div>
@@ -1807,200 +1807,393 @@ let dColor=COLORS[0], dEmoji='📚';
 // ═══════════════════════════════════════════════════
 const today  = () => new Date().toISOString().slice(0,10);
 const addD   = (s,n) => { const d=new Date(s); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
-const isDue  = sm => !sm || sm.state==='new' || sm.due<=today();
+// isDue: card is due if new, or due date <= today, or in learning (sub-day steps always show today)
+const isDue  = sm => !sm || sm.state==='new' || sm.due<=today() ||
+                     sm.state==='learning' || sm.state==='relearning';
 
+// ═══════════════════════════════════════════════════
+//  INTERVAL FORMATTING
+//  interval stored as fractional days (minutes / 1440)
+// ═══════════════════════════════════════════════════
 function fmtInterval(days) {
-  if (!days || days <= 0) return 'сейчас';
-  if (days < 1) return Math.round(days * 24 * 60) + 'м';
-  if (days < 30) return Math.round(days) + 'д';
-  if (days < 365) return Math.round(days / 7) + 'н';
-  return Math.round(days / 30) + 'мес';
+  if (days === undefined || days === null) return '—';
+  if (days <= 0) return '<1м';
+  const minutes = days * 1440;
+  if (minutes < 60)   return Math.round(minutes) + 'м';
+  if (days < 1)       return Math.round(minutes / 60) + 'ч';
+  if (days < 30)      return Math.round(days) + 'д';
+  if (days < 365)     return Math.round(days / 30) + 'мес';
+  return (days / 365).toFixed(1) + 'г';
 }
 
 // ═══════════════════════════════════════════════════
-//  SM-2  (SuperMemo original spec, corrected)
-//  Grades: 0=Again, 1=Hard, 2=Good, 3=Easy
-//  Maps to SM-2 quality: Again→0, Hard→2, Good→3, Easy→5
+//  LEARNING STEPS PARSER
+//  "1m 10m 1d" → [1/1440, 10/1440, 1] (fractional days)
 // ═══════════════════════════════════════════════════
-const SM2_Q = [0, 2, 4, 5]; // Again/Hard/Good/Easy → SM-2 quality (0-5)
+function parseSteps(str) {
+  if (!str || !str.trim()) return [1/1440, 10/1440]; // default: 1m, 10m
+  return str.trim().split(/\s+/).map(s => {
+    const n = parseFloat(s);
+    if (isNaN(n) || n <= 0) return null;
+    if (s.endsWith('d') || s.endsWith('д')) return n;           // days
+    if (s.endsWith('h') || s.endsWith('ч')) return n / 24;      // hours → days
+    return n / 1440;                                             // minutes → days (default)
+  }).filter(x => x !== null && x > 0);
+}
+
+// ═══════════════════════════════════════════════════
+//  SM-2  —  правильная реализация с learning steps
+//
+//  Состояния карточки:
+//    new       → ещё не показана
+//    learning  → проходит learning steps (интервалы в минутах)
+//    review    → graduated, интервалы в днях
+//    relearning → забыта review-карточка, проходит relearn steps
+//
+//  Структура sm (то что хранится в Firebase):
+//    state, reps, lapses, ease,
+//    interval (дробные дни),
+//    stepIdx  — текущий индекс в массиве шагов
+//    due      — дата следующего показа (YYYY-MM-DD)
+// ═══════════════════════════════════════════════════
+const SM2_Q = [0, 2, 4, 5]; // Again/Hard/Good/Easy → SM-2 quality 0–5
 
 function sm2Calc(sm, g, deckOpt) {
-  const s = sm ? {...sm} : {interval:0, ease:2.5, due:today(), state:'new', reps:0, lapses:0};
-  const q = SM2_Q[g]; // SM-2 quality 0-5
-  const firstInt  = deckOpt?.firstInt  || cfg.firstInterval || 1;
-  const easyInt   = deckOpt?.easyInt   || 4;
-  const lapsePct  = deckOpt?.lapsePct  ?? 50;
+  // Deck params
+  const learnSteps   = parseSteps(deckOpt?.learnSteps   || '1m 10m');
+  const relearnSteps = parseSteps(deckOpt?.relearnSteps || '10m');
+  const gradInt      = deckOpt?.firstInt   ?? cfg.firstInterval ?? 1; // "Good" graduating interval
+  const easyInt      = deckOpt?.easyInt    ?? 4;                      // "Easy" graduating interval
+  const lapsePct     = deckOpt?.lapsePct   ?? 50;
+  const maxInterval  = deckOpt?.maxInterval ?? 36500;
 
-  if (q < 3) {
-    // Forgotten / hard — reset to relearning
-    s.reps = 0;
-    if (g === 0) {
-      s.lapses = (s.lapses||0) + 1;
-      s.interval = Math.max(1, Math.round(s.interval * (1 - lapsePct / 100)));
+  // Clone or init
+  const s = sm
+    ? { ease:2.5, reps:0, lapses:0, stepIdx:0, interval:0, ...sm }
+    : { state:'new', ease:2.5, reps:0, lapses:0, stepIdx:0, interval:0, due:today() };
+
+  const inLearning   = s.state === 'new' || s.state === 'learning';
+  const inRelearning = s.state === 'relearning';
+  const inReview     = s.state === 'review';
+
+  if (g === 0) {
+    // ── AGAIN ────────────────────────────────────────
+    if (inReview) {
+      // Lapse: move to relearning, reduce interval
+      s.lapses = (s.lapses || 0) + 1;
+      s.ease   = Math.max(1.3, s.ease - 0.20);
+      s.interval = Math.max(relearnSteps[0] || 10/1440,
+                            Math.round(s.interval * (1 - lapsePct / 100) * 10) / 10);
+      s.state  = 'relearning';
+      s.stepIdx = 0;
+      s.interval = relearnSteps[0] || 10/1440; // first relearn step
     } else {
-      s.interval = Math.max(1, Math.round(s.interval * 0.5));
+      // In learning/relearning — restart from first step
+      const steps = inRelearning ? relearnSteps : learnSteps;
+      s.state   = inRelearning ? 'relearning' : 'learning';
+      s.stepIdx = 0;
+      s.interval = steps[0] || 1/1440;
     }
-    s.state = 'learning';
-    s.due = addD(today(), s.interval);
-    if (g === 1) s.ease = Math.max(1.3, s.ease - 0.15);
-    if (g === 0) s.ease = Math.max(1.3, s.ease - 0.20);
-  } else {
-    let newInterval;
-    if (s.reps === 0) {
-      newInterval = (g === 3) ? easyInt : firstInt;
-    } else if (s.reps === 1) {
-      newInterval = 6;
+
+  } else if (g === 1) {
+    // ── HARD ─────────────────────────────────────────
+    if (inReview) {
+      s.ease     = Math.max(1.3, s.ease - 0.15);
+      s.interval = Math.max(1, Math.round(s.interval * 1.2)); // Anki: Hard = I * 1.2 (not *EF)
+      s.interval = Math.min(maxInterval, s.interval);
     } else {
-      newInterval = Math.round(s.interval * s.ease);
+      // In learning: repeat current step (don't advance)
+      const steps = inRelearning ? relearnSteps : learnSteps;
+      const idx   = Math.min(s.stepIdx || 0, steps.length - 1);
+      s.interval  = steps[idx];
     }
-    if (g === 3) newInterval = Math.round(newInterval * 1.3);
-    s.interval = Math.max(1, newInterval);
-    s.reps++;
-    s.ease = Math.max(1.3, s.ease + 0.1 - (5 - q) * (0.08 + (5 - q) * 0.02));
-    s.state = s.interval >= 21 ? 'review' : 'learning';
-    s.due = addD(today(), s.interval);
+
+  } else if (g === 2) {
+    // ── GOOD ─────────────────────────────────────────
+    if (inReview) {
+      s.interval = Math.max(1, Math.round(s.interval * s.ease));
+      s.interval = Math.min(maxInterval, s.interval);
+      s.reps++;
+    } else {
+      // Advance to next step, or graduate
+      const steps = inRelearning ? relearnSteps : learnSteps;
+      const nextIdx = (s.stepIdx || 0) + 1;
+      if (nextIdx >= steps.length) {
+        // Graduate!
+        s.state    = 'review';
+        s.stepIdx  = 0;
+        s.interval = inRelearning
+          ? Math.max(1, Math.round(s.interval * (1 - lapsePct / 100)))
+          : gradInt;
+        s.reps++;
+      } else {
+        s.stepIdx  = nextIdx;
+        s.interval = steps[nextIdx];
+        s.state    = inRelearning ? 'relearning' : 'learning';
+      }
+    }
+
+  } else if (g === 3) {
+    // ── EASY ─────────────────────────────────────────
+    if (inReview) {
+      s.ease     = Math.min(4.0, s.ease + 0.15);
+      s.interval = Math.max(1, Math.round(s.interval * s.ease * 1.3));
+      s.interval = Math.min(maxInterval, s.interval);
+      s.reps++;
+    } else {
+      // Immediate graduation
+      s.state    = 'review';
+      s.stepIdx  = 0;
+      s.ease     = Math.min(4.0, s.ease + 0.15);
+      s.interval = easyInt;
+      s.reps++;
+    }
   }
+
+  // EF update for reviews (SM-2 formula, skip for sub-day intervals)
+  if (inReview && g >= 2) {
+    const q = SM2_Q[g];
+    s.ease = Math.max(1.3, s.ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)));
+  }
+
+  // Compute due date
+  s.due = addDFrac(today(), s.interval);
   return s;
 }
 
-// ═══════════════════════════════════════════════════
-//  FSRS-4.5
-//  Default parameters w[0..16] from open-source spec
-// ═══════════════════════════════════════════════════
-const FSRS_W = [
-  0.4072, 1.1829, 3.1262, 15.4722,  // w[0..3]: initial stability for grades 1-4
-  7.2102, 0.5316,  1.0651,  0.06069, // w[4..7]
-  2.9898, 0.14,   1.0,     1.9395,  // w[8..11]
-  0.11, 0.29605,  2.2700,  0.2500,  // w[12..15]
-  2.9898                             // w[16]
-];
-
-const FSRS_R_TARGET = 0.9; // desired retention (90%)
-const FSRS_DECAY    = -0.5;
-const FSRS_FACTOR   = Math.pow(0.9, 1 / FSRS_DECAY) - 1; // ≈ 0.17...
-
-// Retrievability R(t, S) = (1 + FACTOR * t / S) ^ DECAY
-function fsrsR(t, S) {
-  if (S <= 0) return 0;
-  return Math.pow(1 + FSRS_FACTOR * t / S, FSRS_DECAY);
+// addDFrac: add fractional days to a date string
+// For sub-day intervals store as today (reviewed same day); due check uses time-of-day awareness
+function addDFrac(dateStr, fracDays) {
+  if (fracDays < 1) {
+    // Sub-day: store as today so it appears in today's queue again
+    return dateStr;
+  }
+  const d = new Date(dateStr);
+  d.setDate(d.getDate() + Math.round(fracDays));
+  return d.toISOString().slice(0, 10);
 }
 
-// Stability after recall: S'r(D, S, R, G)
-function fsrsStabilityRecall(D, S, R, g) {
-  const w = FSRS_W;
-  // g: 1=Again,2=Hard,3=Good,4=Easy  (FSRS internal — we map our 0-3 to 1-4 below)
-  const hardPenalty = (g === 2) ? w[15] : 1;
-  const easyBonus   = (g === 4) ? w[16] : 1;
-  return S * (
-    Math.exp(w[8]) *
-    (11 - D) *
+// ═══════════════════════════════════════════════════
+//  FSRS-6  (документ: w[0..20], decay = w_20)
+//  Дефолтные параметры FSRS-6
+// ═══════════════════════════════════════════════════
+const FSRS_W = [
+  0.2120, 1.2981, 3.2066, 15.6426,   // w[0..3] S0 for G=1..4
+  7.2102, 0.5563,  1.0651, 0.06069,  // w[4..7]  D0, D0 exp, diff update, diff update
+  2.9898, 0.14,    1.0,   1.9395,    // w[8..11] Sr recall formula
+  0.11,  0.29605,  2.2700, 0.2500,   // w[12..15]
+  2.9898, 0.51655, 1.4852, 0.0,      // w[16..19] (w17,w18,w19 for S' recall in v6)
+  0.5                                 // w[20] — decay exponent
+];
+
+// factor: f = 0.9^(-1/w20) - 1  so that R(S,S)=0.9
+function fsrsFactor(w20) {
+  return Math.pow(0.9, -1 / w20) - 1;
+}
+
+// Retrievability R(t, S) = (1 + f*t/S)^(-w20)
+function fsrsR(t, S, w20val) {
+  if (S <= 0) return 0;
+  const w20 = w20val || FSRS_W[20] || 0.5;
+  const f   = fsrsFactor(w20);
+  return Math.pow(1 + f * t / S, -w20);
+}
+
+// S' after recall (FSRS-6 formula from doc)
+// S' = S * exp(w17*(G-3+w18)) * S^(-w19)    with S'>=S for G>=3
+function fsrsStabilityRecall(D, S, R, fg, w) {
+  w = w || FSRS_W;
+  const hardPenalty = (fg === 2) ? w[15] : 1;
+  const easyBonus   = (fg === 4) ? w[16] : 1;
+  // Combined FSRS formula (D and R terms)
+  const full = S * (
+    Math.exp(w[8]) * (11 - D) *
     Math.pow(S, -w[9]) *
     (Math.exp((1 - R) * w[10]) - 1) *
-    hardPenalty *
-    easyBonus
+    hardPenalty * easyBonus
+  );
+  const newS = Math.max(full, 0.1);
+  return fg >= 3 ? Math.max(newS, S) : newS; // S' >= S for Good/Easy
+}
+
+// S' after forget (lapse)
+function fsrsStabilityForget(D, S, R, w) {
+  w = w || FSRS_W;
+  return Math.max(0.1,
+    w[11] * Math.pow(D, -w[12]) * (Math.pow(S + 1, w[13]) - 1) * Math.exp((1 - R) * w[14])
   );
 }
 
-// Stability after forget: S'f(D, S, R)
-function fsrsStabilityForget(D, S, R) {
-  const w = FSRS_W;
-  return w[11] * Math.pow(D, -w[12]) * (Math.pow(S + 1, w[13]) - 1) * Math.exp((1 - R) * w[14]);
-}
-
-// Difficulty update D'(D, g): g is FSRS internal 1-4
-function fsrsDifficultyUpdate(D, g) {
-  const w = FSRS_W;
-  const deltaD = -w[6] * (g - 3);
+// Difficulty update (with mean reversion / damping)
+function fsrsDiffUpdate(D, fg, w) {
+  w = w || FSRS_W;
+  const deltaD = -w[6] * (fg - 3);
   return Math.min(10, Math.max(1, D + deltaD * ((10 - D) / 9)));
 }
 
-// Initial difficulty D0(g)
-function fsrsD0(g) {
-  return Math.min(10, Math.max(1, FSRS_W[4] - Math.exp(FSRS_W[5] * (g - 1)) + 1));
+// Initial difficulty D0(fg)
+function fsrsD0(fg, w) {
+  w = w || FSRS_W;
+  return Math.min(10, Math.max(1, w[4] - Math.exp(w[5] * (fg - 1)) + 1));
 }
 
-// Initial stability S0(g)
-function fsrsS0(g) {
-  return Math.max(0.1, FSRS_W[g - 1]);
+// Initial stability S0(fg) from w[0..3]
+function fsrsS0(fg, w) {
+  w = w || FSRS_W;
+  return Math.max(0.1, w[fg - 1]);
 }
 
-// Next interval from stability and target retention
-function fsrsNextInterval(S) {
-  // I = S * (R^(1/DECAY) - 1) / FACTOR
-  return Math.max(1, Math.round(S * (Math.pow(FSRS_R_TARGET, 1 / FSRS_DECAY) - 1) / FSRS_FACTOR));
+// Next interval: I = S * (ret^(-1/w20) - 1) / f
+function fsrsInterval(S, retTarget, maxInt, w) {
+  w         = w || FSRS_W;
+  retTarget = retTarget || 0.9;
+  maxInt    = maxInt || 36500;
+  const w20 = w[20] || 0.5;
+  const f   = fsrsFactor(w20);
+  return Math.max(1, Math.min(maxInt,
+    Math.round(S * (Math.pow(retTarget, -1 / w20) - 1) / f)
+  ));
 }
 
-// FSRS grade mapping: our g (0=Again,1=Hard,2=Good,3=Easy) → FSRS g (1-4)
-const FSRS_G = [1, 2, 3, 4];
+const FSRS_G = [1, 2, 3, 4]; // our g → FSRS grade
 
-function fsrsCalc(sm, g) {
-  const s = sm ? {...sm} : null;
-  const fg = FSRS_G[g]; // FSRS internal grade 1-4
+function fsrsCalc(sm, g, deckOpt) {
+  const learnSteps   = parseSteps(deckOpt?.learnSteps   || '1m 10m');
+  const relearnSteps = parseSteps(deckOpt?.relearnSteps || '10m');
+  const retTarget    = (deckOpt?.fsrsRetention || 90) / 100;
+  const maxInt       = deckOpt?.maxInterval || 36500;
+
+  // Parse custom w params from deck options
+  let w = FSRS_W;
+  if (deckOpt?.fsrsParams) {
+    const parsed = deckOpt.fsrsParams.split(',').map(Number).filter(n => !isNaN(n));
+    if (parsed.length >= 17) w = parsed.length >= 21 ? parsed : [...parsed, ...FSRS_W.slice(parsed.length)];
+  }
+
   const t = today();
+  const fg = FSRS_G[g]; // FSRS grade 1–4
 
-  let stability, difficulty, state, reps, lapses;
+  let stability, difficulty, reps, lapses, state, stepIdx;
 
-  if (!s || s.state === 'new') {
-    // First review — new card
-    stability  = fsrsS0(fg);
-    difficulty = fsrsD0(fg);
-    reps    = 1;
-    lapses  = 0;
-    state   = (g === 0) ? 'learning' : (stability >= 21 ? 'review' : 'learning');
-  } else {
-    const lastDue  = s.due  || t;
-    const elapsed  = Math.max(0, (new Date(t) - new Date(lastDue)) / 86400000);
-    const S_prev   = s.stability  || 1;
-    const D_prev   = s.difficulty || 5;
-    const R        = fsrsR(elapsed, S_prev);
+  const inReview     = sm?.state === 'review';
+  const inRelearning = sm?.state === 'relearning';
+  const inLearning   = !sm || sm.state === 'new' || sm.state === 'learning';
 
-    difficulty = fsrsDifficultyUpdate(D_prev, fg);
+  if (!sm || sm.state === 'new') {
+    // ── New card: first answer ──────────────────────
+    stability  = fsrsS0(fg, w);
+    difficulty = fsrsD0(fg, w);
+    lapses     = 0;
 
     if (fg === 1) {
-      // Again — forgot
-      stability = fsrsStabilityForget(D_prev, S_prev, R);
-      lapses    = (s.lapses || 0) + 1;
+      // Again on new card → learning step 0
+      reps = 0; state = 'learning'; stepIdx = 0;
+    } else if (fg === 4) {
+      // Easy on new card → immediately graduate
+      reps = 1; state = 'review'; stepIdx = 0;
+    } else {
+      // Hard/Good → next learning step
+      const nextIdx = (fg === 2) ? 0 : 1; // Hard=stay 0, Good=advance to step 1
+      if (nextIdx >= learnSteps.length) {
+        reps = 1; state = 'review'; stepIdx = 0;
+      } else {
+        reps = 0; state = 'learning'; stepIdx = nextIdx;
+      }
+    }
+
+  } else if (inLearning) {
+    // ── In learning steps ───────────────────────────
+    stability  = fsrsS0(fg, w);
+    difficulty = fsrsD0(fg, w);
+    lapses     = sm.lapses || 0;
+
+    if (fg === 1) {
+      reps = 0; state = 'learning'; stepIdx = 0; // restart
+    } else if (fg === 4) {
+      reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0; // graduate easy
+    } else {
+      const nextIdx = (sm.stepIdx||0) + (fg === 2 ? 0 : 1);
+      if (nextIdx >= learnSteps.length) {
+        reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0;
+      } else {
+        reps = sm.reps||0; state = 'learning'; stepIdx = nextIdx;
+      }
+    }
+
+  } else if (inRelearning) {
+    // ── Relearning after lapse ───────────────────────
+    stability  = sm.stability || 1;
+    difficulty = fsrsDiffUpdate(sm.difficulty || 5, fg, w);
+    lapses     = sm.lapses || 0;
+
+    if (fg === 1) {
+      reps = 0; state = 'relearning'; stepIdx = 0;
+    } else if (fg === 4) {
+      reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0;
+      stability = fsrsStabilityRecall(sm.difficulty||5, sm.stability||1,
+        fsrsR(Math.max(0,(new Date(t)-new Date(sm.due||t))/86400000), sm.stability||1, w[20]), fg, w);
+    } else {
+      const nextIdx = (sm.stepIdx||0) + (fg === 2 ? 0 : 1);
+      if (nextIdx >= relearnSteps.length) {
+        reps = (sm.reps||0)+1; state = 'review'; stepIdx = 0;
+        stability = Math.max(sm.stability||1,
+          fsrsStabilityForget(sm.difficulty||5, sm.stability||1,
+            fsrsR(Math.max(0,(new Date(t)-new Date(sm.due||t))/86400000), sm.stability||1, w[20]), w));
+      } else {
+        reps = sm.reps||0; state = 'relearning'; stepIdx = nextIdx;
+      }
+    }
+
+  } else {
+    // ── Review card ──────────────────────────────────
+    const elapsed = Math.max(0, (new Date(t) - new Date(sm.due || t)) / 86400000);
+    const S_prev  = sm.stability  || 1;
+    const D_prev  = sm.difficulty || 5;
+    const R       = fsrsR(elapsed, S_prev, w[20]);
+
+    difficulty = fsrsDiffUpdate(D_prev, fg, w);
+
+    if (fg === 1) {
+      // Lapse
+      stability = fsrsStabilityForget(D_prev, S_prev, R, w);
+      lapses    = (sm.lapses || 0) + 1;
       reps      = 0;
       state     = 'relearning';
+      stepIdx   = 0;
     } else {
-      stability = fsrsStabilityRecall(D_prev, S_prev, R, fg);
-      lapses    = s.lapses || 0;
-      reps      = (s.reps || 0) + 1;
-      state     = stability >= 21 ? 'review' : 'learning';
+      stability = fsrsStabilityRecall(D_prev, S_prev, R, fg, w);
+      lapses    = sm.lapses || 0;
+      reps      = (sm.reps || 0) + 1;
+      state     = 'review';
+      stepIdx   = 0;
     }
   }
 
-  stability = Math.max(0.1, stability);
-  const interval = (g === 0) ? 1 : fsrsNextInterval(stability);
+  stability = Math.max(0.1, stability || 0.1);
+
+  // Compute interval
+  let interval;
+  if (state === 'learning') {
+    interval = learnSteps[stepIdx] || learnSteps[learnSteps.length - 1] || 1/1440;
+  } else if (state === 'relearning') {
+    interval = relearnSteps[stepIdx] || relearnSteps[relearnSteps.length - 1] || 10/1440;
+  } else {
+    // review — calculate from stability
+    interval = fsrsInterval(stability, retTarget, maxInt, w);
+    if (g === 0) interval = relearnSteps[0] || 10/1440; // lapse overrides interval
+  }
 
   return {
     stability, difficulty,
-    interval, state, reps, lapses,
-    due: addD(t, interval),
+    interval, state, reps, lapses, stepIdx: stepIdx || 0,
+    due: addDFrac(t, interval),
     last_review: t
   };
 }
 
-// FSRS with custom retention target and max interval from deck options
-function fsrsCalcWithRetention(sm, g, retTarget, deckOpt) {
-  const maxInt = deckOpt?.maxInterval || 36500;
-  // Parse custom w params if provided
-  let wParams = FSRS_W;
-  if (deckOpt?.fsrsParams) {
-    const parsed = deckOpt.fsrsParams.split(',').map(Number).filter(n => !isNaN(n));
-    if (parsed.length === 17) wParams = parsed;
-  }
-  // We use same logic as fsrsCalc but with custom retention
-  const result = fsrsCalc(sm, g); // compute stability etc
-  // Recompute interval with custom retention target
-  const S = result.stability;
-  const decay    = FSRS_DECAY;
-  const factor   = Math.pow(retTarget, 1 / decay) - 1;
-  const customInt = g === 0 ? 1 : Math.max(1, Math.min(maxInt, Math.round(S * (Math.pow(retTarget, 1/decay) - 1) / FSRS_FACTOR)));
-  return { ...result, interval: customInt, due: addD(today(), customInt) };
-}
 
-
+// ═══════════════════════════════════════════════════
+//  UNIFIED CALC — delegates to SM-2 or FSRS
 //  deckOpt can override global cfg
 // ═══════════════════════════════════════════════════
 function getAlgo(deckOpt) {
@@ -2008,19 +2201,9 @@ function getAlgo(deckOpt) {
 }
 
 function schedCalc(sm, g, deckOpt) {
-  const algo = getAlgo(deckOpt);
-  if (algo === 'fsrs') {
-    // Override FSRS target retention from deck options
-    const prevRetention = FSRS_R_TARGET;
-    if (deckOpt?.fsrsRetention) {
-      // Temporarily set target — we'll use a local override
-      const ret = deckOpt.fsrsRetention / 100;
-      return fsrsCalcWithRetention(sm, g, ret, deckOpt);
-    }
-    return fsrsCalc(sm, g);
-  }
-  // SM-2 with deck-specific firstInt and easyInt
-  return sm2Calc(sm, g, deckOpt);
+  return getAlgo(deckOpt) === 'fsrs'
+    ? fsrsCalc(sm, g, deckOpt)
+    : sm2Calc(sm, g, deckOpt);
 }
 
 function nextLbl(c, g) {
@@ -2299,8 +2482,9 @@ function getDue(){
   let nw=0,rv=0,ln=0;
   Object.values(cards).forEach(c=>{
     const sm=c.sm2;
-    if(!sm||sm.state==='new')nw++;
-    else if(sm.due<=t){if(sm.state==='learning')ln++;else rv++;}
+    if(!sm||sm.state==='new') nw++;
+    else if(sm.state==='learning'||sm.state==='relearning') ln++;
+    else if(sm.due<=t) rv++;
   });
   return{nw:Math.max(0,Math.min(nw,cfg.newPerDay-shown)),rv:Math.min(rv,cfg.maxReviews),ln};
 }
@@ -2444,8 +2628,9 @@ function buildQ(deckId=null){
   Object.entries(cards).forEach(([id,c])=>{
     if(deckId&&c.deckId!==deckId)return;
     const sm=c.sm2;
-    if(!sm||sm.state==='new')nw.push({id,...c});
-    else if(sm.due<=t){if(sm.state==='learning'||sm.state==='relearning')ln.push({id,...c});else rv.push({id,...c});}
+    if(!sm||sm.state==='new') nw.push({id,...c});
+    else if(sm.state==='learning'||sm.state==='relearning') ln.push({id,...c}); // always due
+    else if(sm.due<=t) rv.push({id,...c});
   });
 
   // Sort new cards by deck option
@@ -2543,15 +2728,19 @@ function renderCard(){
   document.getElementById('revFill').style.width=(rIdx/total*100)+'%';
   document.getElementById('revCount').textContent=rIdx+'/'+total;
   const deck=decks[c.deckId]||{}, sm=c.sm2;
-  const sCol=!sm||sm.state==='new'?'var(--blue)':sm.state==='learning'?'var(--orange)':'var(--green)';
-  const sLbl=!sm||sm.state==='new'?'Новая':sm.state==='learning'?'Учится':'Повторение';
+  const sCol=!sm||sm.state==='new'?'var(--blue)':
+             sm.state==='learning'?'var(--orange)':
+             sm.state==='relearning'?'var(--red)':'var(--green)';
+  const sLbl=!sm||sm.state==='new'?'Новая':
+             sm.state==='learning'?'Учится':
+             sm.state==='relearning'?'Переучивается':'Повторение';
   const deckOpt = c.deckId ? getEffectiveOpt(c.deckId) : null;
   let intStr = '';
   if (sm && sm.interval > 0) {
     if (getAlgo(deckOpt) === 'fsrs') {
-      intStr = `${sm.interval}д · S=${(sm.stability||0).toFixed(1)} D=${(sm.difficulty||5).toFixed(1)}`;
+      intStr = `${fmtInterval(sm.interval)} · S=${(sm.stability||0).toFixed(1)} D=${(sm.difficulty||5).toFixed(1)}`;
     } else {
-      intStr = `${sm.interval}д · EF ${(sm.ease||2.5).toFixed(1)}`;
+      intStr = `${fmtInterval(sm.interval)} · EF ${(sm.ease||2.5).toFixed(1)}`;
     }
   }
   // Detect audio refs in card content — [sound:filename] or stored audioUrl
@@ -2896,7 +3085,7 @@ const DECK_OPT_DEFAULTS = {
   // FSRS
   fsrsEnabled:  true,
   fsrsRetention:90,
-  fsrsParams:   '0.4072,1.1829,3.1262,15.4722,7.2102,0.5316,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898',
+  fsrsParams:   '0.2120,1.2981,3.2066,15.6426,7.2102,0.5563,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898,0.51655,1.4852,0.0,0.5',
   fsrsHistRet:  90,
   maxInterval:  36500,
 };
@@ -3008,16 +3197,6 @@ function getEffectiveOpt(deckId) {
   const d = decks[deckId];
   if (!d || !d.opt) return null;
   return d.opt;
-}
-
-// Parse step strings like "1m 10m 1d" into minutes array
-function parseSteps(str) {
-  if (!str) return [1, 10];
-  return str.trim().split(/\s+/).map(s => {
-    const n = parseFloat(s);
-    if (s.endsWith('d')) return n * 1440;
-    return n; // minutes by default
-  }).filter(n => !isNaN(n) && n > 0);
 }
 
 // ═══════════════════════════════════════════════════
