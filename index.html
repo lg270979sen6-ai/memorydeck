@@ -1497,10 +1497,16 @@ body {
     <button onmousedown="event.preventDefault();ceExec('insertUnorderedList')" title="Маркированный список" class="ce-tb">≡</button>
     <button onmousedown="event.preventDefault();ceExec('insertOrderedList')"   title="Нумерованный список"  class="ce-tb">1.</button>
     <div class="ce-sep"></div>
-    <!-- Text alignment -->
-    <button onmousedown="event.preventDefault();ceExec('justifyLeft')"   title="По левому краю"  class="ce-tb" style="font-size:14px;">⬅️</button>
-    <button onmousedown="event.preventDefault();ceExec('justifyCenter')" title="По центру"       class="ce-tb" style="font-size:14px;">↔️</button>
-    <button onmousedown="event.preventDefault();ceExec('justifyRight')"  title="По правому краю" class="ce-tb" style="font-size:14px;">➡️</button>
+    <!-- Text alignment (applies to whole field) -->
+    <button onmousedown="event.preventDefault();ceAlignField('justifyLeft')"   title="По левому краю"  class="ce-tb">
+      <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor"><rect x="0" y="0" width="14" height="2"/><rect x="0" y="4" width="10" height="2"/><rect x="0" y="8" width="14" height="2"/></svg>
+    </button>
+    <button onmousedown="event.preventDefault();ceAlignField('justifyCenter')" title="По центру"       class="ce-tb">
+      <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor"><rect x="0" y="0" width="14" height="2"/><rect x="2" y="4" width="10" height="2"/><rect x="0" y="8" width="14" height="2"/></svg>
+    </button>
+    <button onmousedown="event.preventDefault();ceAlignField('justifyRight')"  title="По правому краю" class="ce-tb">
+      <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor"><rect x="0" y="0" width="14" height="2"/><rect x="4" y="4" width="10" height="2"/><rect x="0" y="8" width="14" height="2"/></svg>
+    </button>
     <div class="ce-sep"></div>
     <!-- Media -->
     <button onmousedown="event.preventDefault();document.getElementById('ceImgInput').click()" title="Вставить картинку" class="ce-tb">🖼</button>
@@ -1813,10 +1819,19 @@ let dColor=COLORS[0], dEmoji='📚';
 //  UTILS
 // ═══════════════════════════════════════════════════
 const today  = () => new Date().toISOString().slice(0,10);
+const nowMs  = () => Date.now();
 const addD   = (s,n) => { const d=new Date(s); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
-// isDue: card is due if new, or due date <= today, or in learning (sub-day steps always show today)
-const isDue  = sm => !sm || sm.state==='new' || sm.due<=today() ||
-                     sm.state==='learning' || sm.state==='relearning';
+
+// isDue: for review cards → compare date; for learning → compare timestamp (dueMs)
+const isDue  = sm => {
+  if (!sm || sm.state==='new') return true;
+  if (sm.state==='learning' || sm.state==='relearning') {
+    // Use dueMs timestamp if available; fallback: treat as due (old data)
+    if (sm.dueMs) return Date.now() >= sm.dueMs;
+    return sm.due <= today(); // legacy fallback
+  }
+  return sm.due <= today();
+};
 
 // ═══════════════════════════════════════════════════
 //  INTERVAL FORMATTING
@@ -1963,21 +1978,25 @@ function sm2Calc(sm, g, deckOpt) {
     s.ease = Math.max(1.3, s.ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)));
   }
 
-  // Compute due date
-  s.due = addDFrac(today(), s.interval);
+  // Compute due date (addDFrac returns {due, dueMs?})
+  const dueParts = addDFrac(today(), s.interval);
+  s.due   = dueParts.due;
+  if (dueParts.dueMs) s.dueMs = dueParts.dueMs;
+  else delete s.dueMs; // clear dueMs when graduating to review
   return s;
 }
 
-// addDFrac: add fractional days to a date string
-// For sub-day intervals store as today (reviewed same day); due check uses time-of-day awareness
+// addDFrac: for day+ intervals → date string; for sub-day → also set dueMs (timestamp)
+// Returns { due: string, dueMs?: number }
 function addDFrac(dateStr, fracDays) {
   if (fracDays < 1) {
-    // Sub-day: store as today so it appears in today's queue again
-    return dateStr;
+    // Sub-day: due = today, dueMs = now + fracDays in ms
+    const dueMs = Date.now() + Math.round(fracDays * 86400000);
+    return { due: dateStr, dueMs };
   }
   const d = new Date(dateStr);
   d.setDate(d.getDate() + Math.round(fracDays));
-  return d.toISOString().slice(0, 10);
+  return { due: d.toISOString().slice(0, 10) };
 }
 
 // ═══════════════════════════════════════════════════
@@ -2190,10 +2209,12 @@ function fsrsCalc(sm, g, deckOpt) {
     interval = fsrsInterval(stability, retTarget, maxInt);
   }
 
+  const dueParts = addDFrac(t, interval);
   return {
     stability, difficulty,
     interval, state, reps, lapses, stepIdx: stepIdx || 0,
-    due: addDFrac(t, interval),
+    due: dueParts.due,
+    ...(dueParts.dueMs ? { dueMs: dueParts.dueMs } : {}),
     last_review: t
   };
 }
@@ -2329,6 +2350,23 @@ function initMainFirebase(accId, userId) {
       cards    = d.cards    ||{};
       cfg      = Object.assign({newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, d.cfg||{});
       studyLog = d.studyLog ||{};
+
+      // ── Migration: reset stale learning/relearning cards that have no dueMs ──
+      // These are cards from before the dueMs change — they'd show up every session.
+      // Reset them to 'new' so they restart fresh.
+      const staleMigrations = {};
+      Object.entries(cards).forEach(([cid, c]) => {
+        const sm = c.sm2;
+        if (sm && (sm.state === 'learning' || sm.state === 'relearning') && !sm.dueMs) {
+          staleMigrations['cards/' + cid + '/sm2/state'] = 'new';
+          staleMigrations['cards/' + cid + '/sm2/stepIdx'] = 0;
+          staleMigrations['cards/' + cid + '/sm2/interval'] = 0;
+          // keep lapses, ease, stability, difficulty for future scheduling
+        }
+      });
+      if (Object.keys(staleMigrations).length > 0) {
+        db.ref('memorydeck/'+accId+'/users/'+userId).update(staleMigrations);
+      }
       const ne=document.getElementById('cfgNew'),me=document.getElementById('cfgMax'),fe=document.getElementById('cfgFirst');
       if(ne) ne.value=cfg.newPerDay;
       if(me) me.value=cfg.maxReviews;
@@ -2490,8 +2528,8 @@ function getDue(){
   Object.values(cards).forEach(c=>{
     const sm=c.sm2;
     if(!sm||sm.state==='new') nw++;
-    else if(sm.state==='learning'||sm.state==='relearning') ln++;
-    else if(sm.due<=t) rv++;
+    else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) ln++;
+    else if(sm.state==='review' && sm.due<=t) rv++;
   });
   return{nw:Math.max(0,Math.min(nw,cfg.newPerDay-shown)),rv:Math.min(rv,cfg.maxReviews),ln};
 }
@@ -2641,8 +2679,8 @@ function buildQ(deckId=null){
     if(deckId&&c.deckId!==deckId)return;
     const sm=c.sm2;
     if(!sm||sm.state==='new') nw.push({id,...c});
-    else if(sm.state==='learning'||sm.state==='relearning') ln.push({id,...c});
-    else if(sm.due<=t) rv.push({id,...c});
+    else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) ln.push({id,...c});
+    else if(sm.state==='review' && sm.due<=t) rv.push({id,...c});
   });
 
   // Sort new cards
@@ -2950,7 +2988,16 @@ function doGrade(g){
   const ns=schedCalc(c.sm2,g,deckOpt);
   save('cards/'+c.id+'/sm2',ns);
   ['again','hard','good','easy'].forEach((k,i)=>{if(i===g)rStats[k]++;});
-  if(g===0)rQ.splice(Math.min(rIdx+5,rQ.length),0,{...c,sm2:ns});
+
+  // Re-insert learning cards into queue at appropriate position
+  if (ns.state === 'learning' || ns.state === 'relearning') {
+    // Calculate delay in cards (1 card ≈ ~1 min study time, so dueMs offset / 60000 cards)
+    const delayMs = ns.dueMs ? Math.max(0, ns.dueMs - Date.now()) : 0;
+    const delayCards = Math.max(1, Math.min(20, Math.round(delayMs / 60000)));
+    const insertAt = Math.min(rIdx + delayCards + 1, rQ.length);
+    rQ.splice(insertAt, 0, {...c, sm2: ns});
+  }
+
   const t=today(), cnt=(studyLog[t]||0)+1;
   save('studyLog/'+t,cnt); studyLog[t]=cnt;
   if(!c.sm2||c.sm2.state==='new'){try{const newKey=PFX+'new_'+t+(rDeckId?'_'+rDeckId:'');localStorage.setItem(newKey,String((parseInt(localStorage.getItem(newKey)||'0')+1)));}catch(e){}}
@@ -3473,6 +3520,29 @@ function ceExec(cmd, val) {
   }
   document.execCommand(cmd, false, val || null);
   ceSaveRange();
+}
+
+// Apply alignment to ALL content in the active field, not just selection
+function ceAlignField(cmd) {
+  const fieldId = ceActiveField;
+  const el = fieldId ? document.getElementById(fieldId) : null;
+  if (!el) return;
+  el.focus();
+  // Select entire field content
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  document.execCommand(cmd, false, null);
+  // Collapse selection to end to deselect visually
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  ceSaveRange();
+  // Also set text-align style on the field itself as fallback
+  const alignMap = { justifyLeft:'left', justifyCenter:'center', justifyRight:'right', justifyFull:'justify' };
+  el.style.textAlign = alignMap[cmd] || '';
 }
 
 function ceFontSize(size) {
