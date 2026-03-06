@@ -1609,9 +1609,20 @@ body {
     <div style="margin:0 0 6px 0;">
       <label style="font-size:12px;font-weight:600;color:var(--ink3);display:block;margin-bottom:8px;">Значение по умолчанию</label>
       <div style="display:flex;gap:4px;flex-wrap:wrap;padding:8px;background:var(--bg2);border-radius:10px 10px 0 0;border:.5px solid var(--border);">
-        <button onclick="fmtDoc('bold')" title="Жирный" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink);">B</button>
-        <button onclick="fmtDoc('italic')" title="Курсив" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:14px;font-style:italic;cursor:pointer;color:var(--ink);">I</button>
-        <button onclick="fmtDoc('underline')" title="Подчёркнутый" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:14px;text-decoration:underline;cursor:pointer;color:var(--ink);">U</button>
+        <button onmousedown="event.preventDefault();fmtDoc('bold')"      title="Жирный"       style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:14px;font-weight:700;cursor:pointer;color:var(--ink);">B</button>
+        <button onmousedown="event.preventDefault();fmtDoc('italic')"    title="Курсив"       style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:14px;font-style:italic;cursor:pointer;color:var(--ink);">I</button>
+        <button onmousedown="event.preventDefault();fmtDoc('underline')" title="Подчёркнутый" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:14px;text-decoration:underline;cursor:pointer;color:var(--ink);">U</button>
+        <div style="width:1px;background:var(--border);margin:2px 4px;"></div>
+        <!-- Align whole field -->
+        <button onmousedown="event.preventDefault();fmtAlignAll('justifyLeft')"   title="По левому краю" style="width:30px;height:30px;border:none;background:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor"><rect x="0" y="0" width="14" height="2"/><rect x="0" y="4" width="10" height="2"/><rect x="0" y="8" width="14" height="2"/></svg>
+        </button>
+        <button onmousedown="event.preventDefault();fmtAlignAll('justifyCenter')" title="По центру" style="width:30px;height:30px;border:none;background:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor"><rect x="0" y="0" width="14" height="2"/><rect x="2" y="4" width="10" height="2"/><rect x="0" y="8" width="14" height="2"/></svg>
+        </button>
+        <button onmousedown="event.preventDefault();fmtAlignAll('justifyRight')"  title="По правому краю" style="width:30px;height:30px;border:none;background:none;border-radius:6px;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+          <svg width="14" height="12" viewBox="0 0 14 12" fill="currentColor"><rect x="0" y="0" width="14" height="2"/><rect x="4" y="4" width="10" height="2"/><rect x="0" y="8" width="14" height="2"/></svg>
+        </button>
         <div style="width:1px;background:var(--border);margin:2px 4px;"></div>
         <select onchange="fmtFontSize(this.value)" style="height:30px;border-radius:6px;border:.5px solid var(--border);background:var(--card);font-size:12px;padding:0 4px;cursor:pointer;">
           <option value="12">12</option><option value="14">14</option><option value="16" selected>16</option>
@@ -1620,11 +1631,12 @@ body {
         </select>
         <input type="color" onchange="fmtColor(this.value)" title="Цвет текста" style="width:30px;height:30px;border:none;border-radius:6px;cursor:pointer;padding:2px;background:none;">
         <div style="width:1px;background:var(--border);margin:2px 4px;"></div>
-        <button onclick="fieldInsertSound()" title="Добавить звук" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:16px;cursor:pointer;">🔊</button>
-        <button onclick="fieldInsertImage()" title="Добавить картинку" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:16px;cursor:pointer;">🖼️</button>
-        <button onclick="fieldInsertLink()" title="Добавить ссылку" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:16px;cursor:pointer;">🔗</button>
+        <button onmousedown="event.preventDefault();fieldInsertSound()"  title="Добавить звук"     style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:16px;cursor:pointer;">🔊</button>
+        <button onmousedown="event.preventDefault();fieldInsertImage()"  title="Добавить картинку" style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:16px;cursor:pointer;">🖼️</button>
+        <button onmousedown="event.preventDefault();fieldInsertLink()"   title="Добавить ссылку"   style="width:30px;height:30px;border:none;background:none;border-radius:6px;font-size:16px;cursor:pointer;">🔗</button>
       </div>
-      <div id="fieldEdContent" contenteditable="true" style="min-height:80px;padding:10px;border:.5px solid var(--border);border-top:none;border-radius:0 0 10px 10px;background:var(--card);font-size:15px;outline:none;line-height:1.5;"></div>
+      <div id="fieldEdContent" contenteditable="true"
+        style="min-height:80px;padding:10px;border:.5px solid var(--border);border-top:none;border-radius:0 0 10px 10px;background:var(--card);font-size:15px;outline:none;line-height:1.5;"></div>
     </div>
 
     <!-- Style settings -->
@@ -1643,6 +1655,13 @@ body {
           <option value="600">Полужирный</option>
           <option value="700" selected>Жирный</option>
           <option value="800">Очень жирный</option>
+        </select>
+      </label>
+      <label style="font-size:12px;color:var(--ink3);">Выравнивание
+        <select id="fieldEdAlign" style="display:block;width:100%;margin-top:4px;padding:8px;border-radius:8px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
+          <option value="left">По левому краю</option>
+          <option value="center">По центру</option>
+          <option value="right">По правому краю</option>
         </select>
       </label>
       <label style="font-size:12px;color:var(--ink3);display:flex;flex-direction:column;">Курсив
@@ -4322,7 +4341,7 @@ function renderSideFieldsList(side, containerId) {
       <div style="flex:1;">
         <div style="font-size:15px;font-weight:600;color:${f[prop]?'var(--ink1)':'var(--ink4)'};">${f.label}</div>
         <div style="font-size:12px;color:var(--ink4);">
-          ${f.style.size}px · ${f.style.weight>=700?'Жирный':'Обычный'}${f.style.italic?' · Курсив':''}
+          ${f.style.size}px · ${f.style.weight>=700?'Жирный':'Обычный'}${f.style.italic?' · Курсив':''}${f.style.align&&f.style.align!=='left'?' · '+{center:'Центр',right:'Право'}[f.style.align]:''}
         </div>
       </div>
       <label style="cursor:pointer;display:flex;align-items:center;gap:6px;">
@@ -4365,7 +4384,7 @@ function renderPreviewSide(elId, prop) {
   const el = document.getElementById(elId);
   const html = tmplFields.filter(f=>f[prop]).map(f => {
     const s = f.style;
-    const base = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}margin:3px 0;`;
+    const base = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}text-align:${s.align||'left'};margin:3px 0;`;
     const val = SAMPLE[f.id] || f.defaultValue || `[${f.label}]`;
     if (f.id==='image') return `<div style="${base}text-align:center;">🖼 <em style="font-size:12px;color:#aaa;">image.jpg</em></div>`;
     if (f.id.startsWith('sound')) return `<button style="padding:5px 14px;border-radius:8px;border:1px solid #ddd;background:#f5f5f7;font-size:13px;cursor:default;margin:2px 0;">🔊 Слушать</button>`;
@@ -4382,10 +4401,12 @@ function openFieldEd(idx) {
   document.getElementById('fieldEdTitle').textContent = idx < DEFAULT_FIELDS.length ? 'Редактировать поле' : 'Новое поле';
   document.getElementById('fieldEdName').value = f.label;
   document.getElementById('fieldEdContent').innerHTML = f.defaultValue || '';
-  document.getElementById('fieldEdSize').value = f.style.size;
-  document.getElementById('fieldEdColor').value = f.style.color;
-  document.getElementById('fieldEdWeight').value = f.style.weight;
-  document.getElementById('fieldEdItalic').checked = f.style.italic;
+  document.getElementById('fieldEdSize').value = f.style?.size   || 16;
+  document.getElementById('fieldEdColor').value = f.style?.color || '#111111';
+  document.getElementById('fieldEdWeight').value = f.style?.weight || 400;
+  document.getElementById('fieldEdItalic').checked = f.style?.italic || false;
+  const alignEl = document.getElementById('fieldEdAlign');
+  if (alignEl) alignEl.value = f.style?.align || 'left';
   document.getElementById('fieldEdDeleteBtn').style.display = idx >= DEFAULT_FIELDS.length ? 'block' : 'none';
   openSh('fieldEdSh');
 }
@@ -4393,14 +4414,20 @@ function openFieldEd(idx) {
 function saveFieldEd() {
   if (tmplEditIdx < 0) return;
   const f = tmplFields[tmplEditIdx];
-  f.label = document.getElementById('fieldEdName').value.trim() || f.label;
+  f.label        = document.getElementById('fieldEdName').value.trim() || f.label;
   f.defaultValue = document.getElementById('fieldEdContent').innerHTML;
-  f.style.size = +document.getElementById('fieldEdSize').value || 16;
-  f.style.color = document.getElementById('fieldEdColor').value;
+  f.style.size   = +document.getElementById('fieldEdSize').value   || 16;
+  f.style.color  = document.getElementById('fieldEdColor').value;
   f.style.weight = +document.getElementById('fieldEdWeight').value;
   f.style.italic = document.getElementById('fieldEdItalic').checked;
+  f.style.align  = document.getElementById('fieldEdAlign')?.value || 'left';
+
+  // ← Главный фикс: сохраняем шаблон в localStorage немедленно
+  try { localStorage.setItem('md_template', JSON.stringify(tmplFields)); } catch(e){}
+
   closeSh('fieldEdSh');
   renderAllFieldsList();
+  toast('✅ Поле сохранено');
 }
 
 function deleteFieldEd() {
@@ -4415,6 +4442,27 @@ function deleteFieldEd() {
 function fmtDoc(cmd) {
   document.getElementById('fieldEdContent').focus();
   document.execCommand(cmd, false, null);
+}
+
+// Align ALL content in the field (not just selection)
+function fmtAlignAll(cmd) {
+  const el = document.getElementById('fieldEdContent');
+  el.focus();
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const sel = window.getSelection();
+  sel.removeAllRanges();
+  sel.addRange(range);
+  document.execCommand(cmd, false, null);
+  range.collapse(false);
+  sel.removeAllRanges();
+  sel.addRange(range);
+  // Also update the align dropdown to reflect choice
+  const alignMap = { justifyLeft:'left', justifyCenter:'center', justifyRight:'right' };
+  const alignEl = document.getElementById('fieldEdAlign');
+  if (alignEl && alignMap[cmd]) alignEl.value = alignMap[cmd];
+  // Apply as CSS too for reliable rendering
+  el.style.textAlign = alignMap[cmd] || 'left';
 }
 function fmtFontSize(size) {
   document.getElementById('fieldEdContent').focus();
@@ -4474,7 +4522,7 @@ function renderCardWithTemplate(text, side) {
   for (const f of tmpl) {
     const s = f.style;
     const shown = side==='front' ? f.showFront : f.showBack;
-    const inlineStyle = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}margin:4px 0;`;
+    const inlineStyle = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}text-align:${s.align||'left'};margin:4px 0;`;
     if (!shown) {
       if (f.id==='image') t = t.replace(/<div[^>]*class="anki-img"[^>]*>[\s\S]*?<\/div>/gi, '');
       else t = t.replace(new RegExp(`<div[^>]*class="anki-${f.id}"[^>]*>.*?<\\/div>`,'gi'), '');
