@@ -390,6 +390,19 @@ body {
   font-size: 13px; font-weight: 800;
   color: var(--orange); flex-shrink: 0; align-self: center;
 }
+.deck-play-btn {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--bg2); border: .5px solid var(--border);
+  display: flex; align-items: center; justify-content: center;
+  font-size: 14px; cursor: pointer; color: var(--ink3);
+  flex-shrink: 0; transition: background .12s, color .12s;
+}
+.deck-play-btn:active { background: var(--border); }
+.deck-play-paused {
+  background: rgba(255,149,0,.12);
+  border-color: var(--orange);
+  color: var(--orange);
+}
 .deck-menu-btn {
   width: 30px; height: 30px; border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
@@ -1154,11 +1167,6 @@ body {
       <div class="sec-head"><div class="sec-title">Профиль</div></div>
       <div class="settings-profile fu" id="sProfCard"></div>
       <div class="settings-group fu1">
-        <div class="settings-row" onclick="openStudySett()">
-          <div class="s-row-icon" style="background:#e8f4ff;">⚙️</div>
-          <div class="s-row-info"><div class="s-row-name">Настройки обучения</div><div class="s-row-desc">Новых карточек в день, интервалы</div></div>
-          <div class="s-row-arr">›</div>
-        </div>
         <div class="settings-row" onclick="openImportEx()">
           <div class="s-row-icon" style="background:#eef8ee;">📥</div>
           <div class="s-row-info"><div class="s-row-name">Импорт / Экспорт CSV</div><div class="s-row-desc">Простой текстовый формат</div></div>
@@ -2557,10 +2565,10 @@ function checkSession(){
 // ═══════════════════════════════════════════════════
 function getDue(){
   const t=today();
-  // newLog[date] = how many NEW cards shown that day (Firebase-synced, cross-device)
   const shownNew = newLog[t] || 0;
   let nw=0,rv=0,ln=0;
   Object.values(cards).forEach(c=>{
+    if (decks[c.deckId]?.paused) return; // skip paused decks
     const sm=c.sm2;
     if(!sm||sm.state==='new') nw++;
     else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) ln++;
@@ -2593,6 +2601,14 @@ function renderHome(){
   }
 }
 
+function toggleDeckPause(id) {
+  const d = decks[id];
+  if (!d) return;
+  const nowPaused = !d.paused;
+  save('decks/'+id, {...d, paused: nowPaused});
+  toast(nowPaused ? `⏸ «${d.name}» на паузе` : `▶ «${d.name}» возобновлена`);
+}
+
 function getDeckDue(deckId) {
   const t = today();
   const shownNew = newLog[t] || 0;
@@ -2618,22 +2634,43 @@ function getDeckDue(deckId) {
 function buildDeckRow(id, d) {
   const {nw, ln, rv} = getDeckDue(id);
   const total = Object.values(cards).filter(c=>c.deckId===id).length;
+  const mature = Object.values(cards).filter(c=>c.deckId===id&&c.sm2?.state==='review'&&c.sm2.interval>=21).length;
+  const pct = total ? Math.round(mature/total*100) : 0;
   const col = d.color || COLORS[0];
-  const fmtN = (n, color) => n > 0
-    ? `<span style="color:${color};font-weight:700;">${n}</span>`
-    : `<span style="color:var(--ink4);">0</span>`;
+  const paused = d.paused || false;
+  const opt = getDeckOpt(id);
+  const algoLbl = opt.algo === 'fsrs' ? 'FSRS' : 'SM-2';
+  const totalDue = nw + ln + rv;
+
+  // Due badge colors
+  const dueParts = [];
+  if (nw > 0)  dueParts.push(`<span style="color:var(--blue);font-weight:700;">${nw}</span>`);
+  if (ln > 0)  dueParts.push(`<span style="color:var(--orange);font-weight:700;">${ln}</span>`);
+  if (rv > 0)  dueParts.push(`<span style="color:var(--green);font-weight:700;">${rv}</span>`);
+  const dueStr = dueParts.length ? dueParts.join('<span style="color:var(--ink4);margin:0 2px;">·</span>') : '<span style="color:var(--ink4);">0</span>';
+
   return `
   <div class="deck-row" onclick="openDeckDetail('${id}')">
-    <div class="deck-em" style="background:${col}18;">${d.emoji||'📚'}</div>
+    <div class="deck-em" style="background:${col}18;position:relative;">
+      ${d.emoji||'📚'}
+      ${paused ? '<div style="position:absolute;bottom:-2px;right:-2px;font-size:9px;background:var(--bg);border-radius:50%;line-height:1;">⏸</div>' : ''}
+    </div>
     <div class="deck-inf" style="flex:1;min-width:0;">
-      <div class="deck-nm">${d.name||'Без названия'}</div>
-      <div style="font-size:11px;color:var(--ink4);">${total} карт.</div>
+      <div style="display:flex;align-items:center;gap:6px;">
+        <div class="deck-nm" style="${paused?'color:var(--ink3);':''}">${d.name||'Без названия'}</div>
+        <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:5px;background:${opt.algo==='fsrs'?'rgba(175,82,222,.1)':'rgba(0,122,255,.08)'};color:${opt.algo==='fsrs'?'var(--purple)':'var(--blue)'};">${algoLbl}</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
+        <div style="flex:1;height:3px;background:var(--bg2);border-radius:2px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${col};border-radius:2px;"></div>
+        </div>
+        <span style="font-size:10px;color:var(--ink4);flex-shrink:0;">${pct}%</span>
+      </div>
+      <div style="font-size:11px;color:var(--ink4);margin-top:2px;">${total} карт. · ${dueStr}</div>
     </div>
-    <div style="display:flex;gap:12px;align-items:center;flex-shrink:0;font-size:14px;min-width:110px;justify-content:flex-end;">
-      ${fmtN(nw,'var(--blue)')}
-      ${fmtN(ln,'var(--orange)')}
-      ${fmtN(rv,'var(--green)')}
-    </div>
+    <button class="deck-play-btn ${paused?'deck-play-paused':''}" onclick="event.stopPropagation();toggleDeckPause('${id}')" title="${paused?'Возобновить':'Пауза'}">
+      ${paused ? '▶' : '⏸'}
+    </button>
     <div class="deck-menu-btn" onclick="event.stopPropagation();openDeckEd('${id}')">···</div>
   </div>`;
 }
@@ -2645,16 +2682,7 @@ function renderDecks(){
     el.innerHTML=`<div class="empty"><div class="empty-icon">📭</div><div class="empty-title">Нет колод</div><div class="empty-sub">Нажмите ＋ чтобы создать первую</div></div>`;
     return;
   }
-  const header = `
-    <div style="display:flex;align-items:center;padding:6px 16px 6px 56px;font-size:11px;font-weight:700;color:var(--ink4);letter-spacing:.04em;border-bottom:.5px solid var(--border);margin-bottom:4px;">
-      <span style="flex:1;">КОЛОДА</span>
-      <div style="display:flex;gap:12px;min-width:110px;justify-content:flex-end;padding-right:36px;">
-        <span style="color:var(--blue);min-width:18px;text-align:center;">НОВ</span>
-        <span style="color:var(--orange);min-width:18px;text-align:center;">УЧ</span>
-        <span style="color:var(--green);min-width:18px;text-align:center;">ПОВ</span>
-      </div>
-    </div>`;
-  el.innerHTML = header + '<div style="padding:4px 0;">' + list.map(([id,d])=>buildDeckRow(id,d)).join('') + '</div>';
+  el.innerHTML = '<div style="padding:4px 0;">' + list.map(([id,d])=>buildDeckRow(id,d)).join('') + '</div>';
 }
 
 function renderStats(){
@@ -2905,6 +2933,8 @@ function buildQ(deckId=null){
   let nw=[],rv=[],ln=[];
   Object.entries(cards).forEach(([id,c])=>{
     if(deckId&&c.deckId!==deckId)return;
+    // Skip paused decks unless explicitly studying that deck
+    if(!deckId && decks[c.deckId]?.paused) return;
     const sm=c.sm2;
     if(!sm||sm.state==='new') nw.push({id,...c});
     else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) ln.push({id,...c});
@@ -3241,7 +3271,8 @@ function doGrade(g){
   ['again','hard','good','easy'].forEach((k,i)=>{if(i===g)rStats[k]++;});
 
   // Track grade in Firebase gradeLog for retention stats
-  { const t2=today();
+  if (!c._drill) {
+    const t2=today();
     const gk = ['again','hard','good','easy'][g];
     const dayGrades = gradeLog[t2] || {again:0,hard:0,good:0,easy:0};
     dayGrades[gk] = (dayGrades[gk]||0)+1;
@@ -3277,12 +3308,13 @@ function doGrade(g){
     rQ.splice(insertAt, 0, {...c, sm2: ns});
   }
 
-  const t=today(), cnt=(studyLog[t]||0)+1;
-  save('studyLog/'+t,cnt); studyLog[t]=cnt;
-  // Track new cards shown today in Firebase (cross-device sync)
-  if(!c.sm2||c.sm2.state==='new'){
-    const nc=(newLog[t]||0)+1;
-    save('newLog/'+t,nc); newLog[t]=nc;
+  if (!c._drill) {
+    const t=today(), cnt=(studyLog[t]||0)+1;
+    save('studyLog/'+t,cnt); studyLog[t]=cnt;
+    if(!c.sm2||c.sm2.state==='new'){
+      const nc=(newLog[t]||0)+1;
+      save('newLog/'+t,nc); newLog[t]=nc;
+    }
   }
   rIdx++;
   setTimeout(renderCard,80);
@@ -3321,35 +3353,111 @@ document.addEventListener('keydown',e=>{
 // ═══════════════════════════════════════════════════
 function openDeckDetail(id){
   eDetailDeck=id;
-  const d=decks[id], dc=Object.entries(cards).filter(([,c])=>c.deckId===id);
-  const due=dc.filter(([,c])=>isDue(c.sm2)).length;
-  const opt = getDeckOpt(id);
-  const algoTag = opt.algo === 'fsrs'
-    ? `<span style="background:rgba(175,82,222,.1);color:var(--purple);padding:3px 8px;border-radius:8px;font-size:11px;font-weight:700;">FSRS-4.5</span>`
-    : `<span style="background:rgba(0,122,255,.08);color:var(--blue);padding:3px 8px;border-radius:8px;font-size:11px;font-weight:700;">SM-2</span>`;
+  const d=decks[id];
+  const dc=Object.entries(cards).filter(([,c])=>c.deckId===id);
+  const total=dc.length;
+  const mature=dc.filter(([,c])=>c.sm2?.state==='review'&&c.sm2.interval>=21).length;
+  const pct=total?Math.round(mature/total*100):0;
+  const opt=getDeckOpt(id);
+  const {nw,ln,rv}=getDeckDue(id);
+  const totalDue=nw+ln+rv;
+  const paused=d.paused||false;
+  const col=d.color||COLORS[0];
+  const algoLbl=opt.algo==='fsrs'?'FSRS-4.5':'SM-2';
+  const algoCol=opt.algo==='fsrs'?'var(--purple)':'var(--blue)';
+  const algoBg=opt.algo==='fsrs'?'rgba(175,82,222,.1)':'rgba(0,122,255,.08)';
+
   document.getElementById('ddTitle').textContent=(d.emoji||'📚')+' '+d.name;
   document.getElementById('ddMeta').innerHTML=`
-    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-      <span style="background:${d.color||COLORS[0]}18;color:${d.color||COLORS[0]};padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;">${dc.length} карточек</span>
-      <span style="background:rgba(255,149,0,.1);color:var(--orange);padding:5px 12px;border-radius:20px;font-size:12px;font-weight:700;">${due} к повтору</span>
-      ${algoTag}
-      <button onclick="openTemplateEd()" style="padding:6px 12px;border-radius:10px;background:var(--bg2);border:.5px solid var(--border);font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;">🎨 Шаблон</button>
-      <button onclick="openDeckOpt('${id}')" style="padding:6px 12px;border-radius:10px;background:var(--bg2);border:.5px solid var(--border);font-size:12px;font-weight:600;color:var(--ink2);cursor:pointer;">⚙️ Параметры</button>
-      <button onclick="startReview('${id}')" style="margin-left:auto;padding:8px 16px;border-radius:10px;background:var(--blue);color:white;border:none;font-family:var(--font);font-size:13px;font-weight:800;cursor:pointer;"${due===0?' disabled style="opacity:.4;cursor:default;"':''}>▶ Повторить</button>
+    <div style="padding:12px 16px;border-bottom:.5px solid var(--border);">
+
+      <!-- Row 1: indicators -->
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
+        <span style="background:${col}15;color:${col};padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;">${total} карточек</span>
+        <span style="background:${algoBg};color:${algoCol};padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;">${algoLbl}</span>
+        <span style="background:rgba(52,199,89,.1);color:var(--green);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;">🌿 ${mature} зрелых</span>
+        ${paused?`<span style="background:rgba(255,149,0,.1);color:var(--orange);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;">⏸ Пауза</span>`:''}
+      </div>
+
+      <!-- Row 2: progress bar -->
+      <div style="margin-bottom:12px;">
+        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink4);margin-bottom:4px;">
+          <span>Прогресс</span><span style="font-weight:700;color:${col};">${pct}%</span>
+        </div>
+        <div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:${col};border-radius:3px;transition:width .4s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink4);margin-top:4px;">
+          <span>Новых ${nw} · Учатся ${ln} · Повторить ${rv}</span>
+        </div>
+      </div>
+
+      <!-- Row 3: action buttons -->
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button onclick="openDeckSettings('${id}')" style="display:flex;align-items:center;gap:5px;padding:9px 14px;border-radius:12px;background:var(--bg2);border:.5px solid var(--border);font-size:13px;font-weight:600;color:var(--ink2);cursor:pointer;flex-shrink:0;">
+          ⚙️ Настройки
+        </button>
+        <div style="flex:1;"></div>
+        <button onclick="toggleDeckPause('${id}')" style="padding:9px 14px;border-radius:12px;background:${paused?'rgba(255,149,0,.12)':'var(--bg2)'};border:.5px solid ${paused?'var(--orange)':'var(--border)'};font-size:13px;font-weight:700;color:${paused?'var(--orange)':'var(--ink2)'};cursor:pointer;flex-shrink:0;">
+          ${paused?'▶ Возобновить':'⏸ Пауза'}
+        </button>
+        <button onclick="startReview('${id}')" style="display:flex;align-items:center;gap:6px;padding:10px 20px;border-radius:12px;background:${totalDue===0||paused?'var(--bg2)':'var(--blue)'};color:${totalDue===0||paused?'var(--ink3)':'white'};border:none;font-family:var(--font);font-size:14px;font-weight:800;cursor:${totalDue===0||paused?'default':'pointer'};flex-shrink:0;"
+          ${totalDue===0||paused?'disabled':''}>
+          ▶ Учить ${totalDue>0&&!paused?'('+totalDue+')':''}
+        </button>
+      </div>
     </div>`;
+
   const pipCol=sm=>!sm||sm.state==='new'?'var(--blue)':sm.state==='learning'?'var(--orange)':isDue(sm)?'var(--red)':'var(--green)';
   document.getElementById('ddCards').innerHTML=dc.length?dc.map(([cid,c])=>`
     <div class="card-row">
       <div class="card-state-pip" style="background:${pipCol(c.sm2)};"></div>
       <div class="card-front-t">${esc(stripHtml(c.front))}</div>
       <div class="card-back-t">${esc(stripHtml(c.back))}</div>
-      <div class="hbtn" onclick="openCardEd('${cid}')" style="background:transparent;border:none;color:var(--ink3);">✏️</div>
-      <div class="row-del" onclick="deleteCard('${cid}')">🗑</div>
+      <div style="display:flex;gap:4px;flex-shrink:0;">
+        <button onclick="startDrillCard('${cid}')" style="padding:4px 8px;border-radius:7px;background:rgba(0,122,255,.08);border:none;font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;" title="Тренировка">▶</button>
+        <div class="hbtn" onclick="openCardEd('${cid}')" style="background:transparent;border:none;color:var(--ink3);">✏️</div>
+        <div class="row-del" onclick="deleteCard('${cid}')">🗑</div>
+      </div>
     </div>`).join('')
   :'<div style="padding:40px;text-align:center;color:var(--ink3);font-weight:600;">Нет карточек — нажмите ＋</div>';
   document.getElementById('deckDetailOv').classList.add('open');
 }
 function closeDeckDetail(){document.getElementById('deckDetailOv').classList.remove('open');}
+
+function openDeckSettings(id) {
+  // Show a small action sheet: choose Template or Params
+  const existing = document.getElementById('deckSettingsSheet');
+  if (existing) existing.remove();
+  const sheet = document.createElement('div');
+  sheet.id = 'deckSettingsSheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;justify-content:flex-end;';
+  sheet.innerHTML = `
+    <div onclick="document.getElementById('deckSettingsSheet').remove()" style="flex:1;background:rgba(0,0,0,.4);"></div>
+    <div style="background:var(--card);border-radius:22px 22px 0 0;padding:16px 16px calc(var(--safe-b) + 16px);display:flex;flex-direction:column;gap:8px;">
+      <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 8px;"></div>
+      <div style="font-size:15px;font-weight:800;text-align:center;margin-bottom:4px;">⚙️ Настройки колоды</div>
+      <button onclick="document.getElementById('deckSettingsSheet').remove();openDeckOpt('${id}')" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;text-align:left;">📐 Параметры обучения</button>
+      <button onclick="document.getElementById('deckSettingsSheet').remove();openTemplateEd()" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;text-align:left;">🎨 Шаблон карточек</button>
+      <button onclick="document.getElementById('deckSettingsSheet').remove();" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink3);cursor:pointer;">Отмена</button>
+    </div>`;
+  document.body.appendChild(sheet);
+}
+
+// Drill a single card as extra practice (doesn't count toward daily limits)
+function startDrillCard(cardId) {
+  const c = cards[cardId];
+  if (!c) return;
+  closeDeckDetail();
+  // Build a single-card queue in drill mode
+  rQ = [{id: cardId, ...c, _drill: true}];
+  rIdx = 0; rFlipped = false; rStats = {again:0,hard:0,good:0,easy:0};
+  document.getElementById('revScreen').classList.add('open');
+  renderCard();
+  toast('🎯 Тренировка карточки');
+}
+
+
 
 // ═══════════════════════════════════════════════════
 //  DECK EDITOR
