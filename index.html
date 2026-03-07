@@ -3497,15 +3497,20 @@ function doGrade(g){
     rQ.splice(Math.min(rIdx+1+skip,rQ.length),0,{...c,sm2:ns});
   }
 
-  // studyLog: count unique cards graded today (not each button press)
-  // A card counts once: when it's first graded (wasNew) OR when it's a review/relearn
-  // Learning cards that bounce back in queue should NOT be double-counted
-  const isFirstGrade = wasNew || (c.sm2?.state === 'review') || (c.sm2?.state === 'relearning' && !c._alreadyCountedToday);
-  if (isFirstGrade) {
-    const t=today(), cnt=(studyLog[t]||0)+1;
-    save('studyLog/'+t,cnt); studyLog[t]=cnt;
+  // studyLog: count unique cards graded today (Anki rule: 1 card = 1 count)
+  // New card: count once on first grade (wasNew)
+  // Review card: count once per day (state was 'review' before grading)
+  // Learning/relearning: NOT counted here — they bounce back and would double-count
+  const t = today();
+  const prevState = c.sm2?.state; // state BEFORE this grade
+  if (wasNew || prevState === 'review') {
+    const cnt = (studyLog[t]||0) + 1;
+    save('studyLog/'+t, cnt); studyLog[t] = cnt;
   }
-  if(wasNew){ const nc=(newLog[t]||0)+1; save('newLog/'+t,nc); newLog[t]=nc; }
+  if (wasNew) {
+    const nc = (newLog[t]||0) + 1;
+    save('newLog/'+t, nc); newLog[t] = nc;
+  }
   rIdx++;
   setTimeout(renderCard,80);
 }
