@@ -1403,6 +1403,27 @@ body {
       </div>
     </div>
 
+    <!-- Коэффициенты кнопок -->
+    <div class="dopt-section">
+      <div class="dopt-section-title">Настройка кнопок <span style="font-size:11px;font-weight:400;color:#9ca3af;">— множитель к интервалу (-1 = стандарт)</span></div>
+      <div class="dopt-row">
+        <div class="dopt-lbl" style="color:var(--red);">🔴 Снова<div class="dopt-hint">Перезапуск шагов изучения</div></div>
+        <input class="dopt-input" type="number" id="doptBtnAgain" min="-1" max="5" step="0.1" value="-1" style="width:80px;">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl" style="color:#b45309;">🟡 Трудно<div class="dopt-hint">Стандарт: интервал × 1.2</div></div>
+        <input class="dopt-input" type="number" id="doptBtnHard" min="-1" max="5" step="0.1" value="-1" style="width:80px;">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl" style="color:var(--green);">🟢 Хорошо<div class="dopt-hint">Стандарт: интервал × ease</div></div>
+        <input class="dopt-input" type="number" id="doptBtnGood" min="-1" max="5" step="0.1" value="-1" style="width:80px;">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl" style="color:var(--blue);">🔵 Легко<div class="dopt-hint">Стандарт: интервал × ease × 1.3</div></div>
+        <input class="dopt-input" type="number" id="doptBtnEasy" min="-1" max="5" step="0.1" value="-1" style="width:80px;">
+      </div>
+    </div>
+
     <!-- Таймер -->
     <div class="dopt-section">
       <div class="dopt-section-title">Таймер</div>
@@ -2057,6 +2078,22 @@ function sm2Calc(sm, g, deckOpt) {
     // Easy already updated ease above
     // Clamp
     s.ease = Math.max(1.3, Math.min(4.0, s.ease));
+  }
+
+  // ── Применяем пользовательский коэффициент кнопки ──
+  // Только для review-интервалов (в днях), не для learning-шагов (в минутах)
+  if (inReview && s.state === 'review') {
+    const mults = [
+      deckOpt?.btnAgainMult ?? -1,  // g=0 Снова
+      deckOpt?.btnHardMult  ?? -1,  // g=1 Трудно
+      deckOpt?.btnGoodMult  ?? -1,  // g=2 Хорошо
+      deckOpt?.btnEasyMult  ?? -1,  // g=3 Легко
+    ];
+    const m = parseFloat(mults[g]);
+    if (!isNaN(m) && m >= 0) {
+      // -1 = стандарт (не применять), >=0 = пользовательский множитель
+      s.interval = Math.max(1, Math.round(s.interval * m));
+    }
   }
 
   // Compute due date
@@ -3459,18 +3496,29 @@ function doGrade(g){
   // DRILL MODE: show feedback only, never alter scheduling
   if (c._drill) { rIdx++; setTimeout(renderCard,80); return; }
 
-  const wasNew = !c.sm2 || c.sm2.state === 'new';
+  const t = today();
+  // prevState = state of this card BEFORE this grade
+  // Use the snapshot stored in rQ (c.sm2), not the live cards[] cache
+  const prevState = c.sm2?.state || 'new';
+  const wasNew    = prevState === 'new' || !c.sm2;
+
   const deckOpt = c.deckId ? getEffectiveOpt(c.deckId) : null;
   const ns = schedCalc(c.sm2, g, deckOpt);
-  if (wasNew && !ns.firstReview) ns.firstReview = today();
-  if (cards[c.id]) cards[c.id] = {...cards[c.id], sm2: ns};
+
+  // Set firstReview on very first grade of a new card
+  if (wasNew && !ns.firstReview) ns.firstReview = t;
+
+  // ── Update local cache ALWAYS (even if key wasn't there before) ──
+  cards[c.id] = {...(cards[c.id]||{}), ...c, sm2: ns};
   save('cards/'+c.id+'/sm2', ns);
 
-  const t2=today(), gk=['again','hard','good','easy'][g];
-  const dayGrades=gradeLog[t2]||{again:0,hard:0,good:0,easy:0};
-  dayGrades[gk]=(dayGrades[gk]||0)+1; gradeLog[t2]=dayGrades;
-  save('gradeLog/'+t2, dayGrades);
+  // ── Grade log ──
+  const gk=['again','hard','good','easy'][g];
+  const dayGrades=gradeLog[t]||{again:0,hard:0,good:0,easy:0};
+  dayGrades[gk]=(dayGrades[gk]||0)+1; gradeLog[t]=dayGrades;
+  save('gradeLog/'+t, dayGrades);
 
+  // ── Re-insert learning cards into queue ──
   if (ns.state==='learning'||ns.state==='relearning') {
     const remaining=rQ.length-rIdx-1;
     const delayMin=ns.dueMs?Math.max(0,ns.dueMs-Date.now())/60000:0;
@@ -3481,21 +3529,21 @@ function doGrade(g){
     rQ.splice(Math.min(rIdx+1+skip,rQ.length),0,{...c,sm2:ns});
   }
 
-  // Anki rule: count unique cards graded today (not button presses)
-  // new → newLog + studyLog (once, on wasNew)
-  // review → studyLog only (once, on prevState==='review')
-  // learning/relearning bouncing in queue → NOT counted
-  const t = today();
-  const prevState = c.sm2?.state; // state BEFORE schedCalc
+  // ── Anki counters ──
+  // A card counts ONCE:
+  //   new card (wasNew)       → +1 newLog,  +1 studyLog
+  //   review card             → +1 studyLog
+  //   learning bounce-back   → nothing (already counted on wasNew, or not yet graduated)
+  // "prevState===learning" means card was already counted on its first grade (wasNew),
+  // so we skip it here to avoid double-counting.
   if (wasNew) {
-    const nc = (newLog[t]||0) + 1;
-    save('newLog/'+t, nc); newLog[t] = nc;
+    const nc=(newLog[t]||0)+1; save('newLog/'+t,nc); newLog[t]=nc;
+    const cnt=(studyLog[t]||0)+1; save('studyLog/'+t,cnt); studyLog[t]=cnt;
+  } else if (prevState==='review') {
+    const cnt=(studyLog[t]||0)+1; save('studyLog/'+t,cnt); studyLog[t]=cnt;
   }
-  if (wasNew || prevState === 'review') {
-    const cnt = (studyLog[t]||0) + 1;
-    save('studyLog/'+t, cnt); studyLog[t] = cnt;
-  }
-  // learning / relearning: no increment — they come back in queue
+  // prevState==='learning' or 'relearning': skip — bounce-back, already counted
+
   rIdx++;
   setTimeout(renderCard,80);
 }
@@ -3823,6 +3871,11 @@ const DECK_OPT_DEFAULTS = {
   fsrsParams:   '0.4072,1.1829,3.1262,15.4722,7.2102,0.5316,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898',
   fsrsHistRet:  90,
   maxInterval:  36500,
+  // Коэффициенты кнопок (множитель к рассчитанному интервалу, -1 = стандарт)
+  btnAgainMult: -1,
+  btnHardMult:  -1,
+  btnGoodMult:  -1,
+  btnEasyMult:  -1,
 };
 
 function getDeckOpt(deckId) {
@@ -3865,6 +3918,10 @@ function openDeckOpt(deckId) {
   document.getElementById('doptHistRet').value     = opt.fsrsHistRet;
   document.getElementById('doptMaxInterval').value = opt.maxInterval;
 
+  document.getElementById('doptBtnAgain').value = opt.btnAgainMult ?? -1;
+  document.getElementById('doptBtnHard').value  = opt.btnHardMult  ?? -1;
+  document.getElementById('doptBtnGood').value  = opt.btnGoodMult  ?? -1;
+  document.getElementById('doptBtnEasy').value  = opt.btnEasyMult  ?? -1;
   doptPickAlgo(opt.algo, false); // update UI without changing opt
   document.getElementById('deckOptOv').classList.add('open');
 }
@@ -3902,6 +3959,10 @@ function saveDeckOpt() {
     fsrsParams:   document.getElementById('doptFSRSParams').value.trim(),
     fsrsHistRet:  parseInt(document.getElementById('doptHistRet').value)     || 90,
     maxInterval:  parseInt(document.getElementById('doptMaxInterval').value) || 36500,
+    btnAgainMult: parseFloat(document.getElementById('doptBtnAgain').value) ?? -1,
+    btnHardMult:  parseFloat(document.getElementById('doptBtnHard').value)  ?? -1,
+    btnGoodMult:  parseFloat(document.getElementById('doptBtnGood').value)  ?? -1,
+    btnEasyMult:  parseFloat(document.getElementById('doptBtnEasy').value)  ?? -1,
   };
   // Merge with existing deck, preserving name/emoji/color/createdAt
   const existing = decks[doptDeckId] || {};
