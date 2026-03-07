@@ -1153,18 +1153,20 @@ body {
           <div class="today-count"><div class="today-n" id="cRev">0</div><div class="today-l">Повторить</div></div>
           <div class="today-count"><div class="today-n" id="cLearn">0</div><div class="today-l">Учатся</div></div>
         </div>
-        <div id="todayDoneRow" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.25);display:flex;gap:12px;justify-content:center;">
-          <div style="text-align:center;">
-            <div style="font-size:18px;font-weight:800;" id="cDoneNew">0</div>
-            <div style="font-size:10px;opacity:.8;font-weight:600;">изучено</div>
-          </div>
-          <div style="text-align:center;">
-            <div style="font-size:18px;font-weight:800;" id="cDoneRev">0</div>
-            <div style="font-size:10px;opacity:.8;font-weight:600;">повторено</div>
-          </div>
-          <div style="text-align:center;">
-            <div style="font-size:18px;font-weight:800;" id="cDoneTotal">0</div>
-            <div style="font-size:10px;opacity:.8;font-weight:600;">всего за день</div>
+        <div id="todayDoneRow" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.25);gap:8px;">
+          <div style="display:flex;gap:8px;">
+            <div style="flex:1;background:rgba(255,255,255,.15);border-radius:10px;padding:10px 6px;text-align:center;">
+              <div style="font-size:22px;font-weight:800;line-height:1;" id="cDoneNew">0</div>
+              <div style="font-size:10px;opacity:.85;font-weight:600;margin-top:4px;">изучено</div>
+            </div>
+            <div style="flex:1;background:rgba(255,255,255,.15);border-radius:10px;padding:10px 6px;text-align:center;">
+              <div style="font-size:22px;font-weight:800;line-height:1;" id="cDoneRev">0</div>
+              <div style="font-size:10px;opacity:.85;font-weight:600;margin-top:4px;">повторено</div>
+            </div>
+            <div style="flex:1;background:rgba(255,255,255,.15);border-radius:10px;padding:10px 6px;text-align:center;">
+              <div style="font-size:22px;font-weight:800;line-height:1;" id="cDoneTotal">0</div>
+              <div style="font-size:10px;opacity:.85;font-weight:600;margin-top:4px;">всего за день</div>
+            </div>
           </div>
         </div>
       </div>
@@ -2877,7 +2879,7 @@ function renderHome(){
   // Done stats row — show only if something was done today
   const doneRow = document.getElementById('todayDoneRow');
   if(doneTotal > 0){
-    doneRow.style.display='flex';
+    doneRow.style.display='block';
     document.getElementById('cDoneNew').textContent   = doneNew;
     document.getElementById('cDoneRev').textContent   = doneRev;
     document.getElementById('cDoneTotal').textContent = doneTotal;
