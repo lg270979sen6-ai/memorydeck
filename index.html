@@ -3272,7 +3272,11 @@ function showRaw() {
 
 
 function renderCard(){
-  if(rIdx>=rQ.length){showDone();return;}
+  console.log('[renderCard] rIdx='+rIdx+' rQ.length='+rQ.length+(rQ[rIdx]?' state='+( rQ[rIdx].sm2?.state||'new'):''));
+  if(rIdx>=rQ.length){
+    console.log('[renderCard] → showDone');
+    showDone();return;
+  }
   rFlipped=false;
   const c=rQ[rIdx], total=rQ.length;
   // DEBUG: log actual card content
@@ -3489,8 +3493,14 @@ function closeReview(){
   renderAll();
 }
 
+let _grading = false; // guard against double-call
 function doGrade(g){
+  if (_grading) return;           // prevent double-tap/double-click
+  _grading = true;
+  setTimeout(() => _grading = false, 300); // release after 300ms
+
   const c=rQ[rIdx];
+  if (!c) { console.warn('doGrade: no card at rIdx', rIdx, 'rQ.length', rQ.length); return; }
   ['again','hard','good','easy'].forEach((k,i)=>{if(i===g)rStats[k]++;});
 
   // DRILL MODE: show feedback only, never alter scheduling
@@ -3526,6 +3536,7 @@ function doGrade(g){
     const remaining = rQ.length - rIdx;              // сколько карточек впереди
     const skip = Math.min(5, remaining);             // через 5 или в конец
     rQ.splice(rIdx + skip, 0, {...c, sm2: ns});      // вставить позже
+    console.log('[doGrade] learning reinsert: rQ.length='+rQ.length+' rIdx='+rIdx+' skip='+skip);
     // rIdx не трогаем — рендерим следующую карточку на этой же позиции
     setTimeout(renderCard, 80);
     return;
@@ -3570,7 +3581,7 @@ function showDone(){
   renderAll();
 }
 
-function closeReview(){document.getElementById('revScreen').classList.remove('open');renderAll();}
+// closeReview defined above
 
 document.addEventListener('keydown',e=>{
   if(!document.getElementById('revScreen').classList.contains('open'))return;
