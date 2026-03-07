@@ -260,37 +260,68 @@ body {
 .nav {
   position: fixed; bottom: 0; left: 0; right: 0;
   height: calc(var(--nav-h) + var(--safe-b));
-  background: rgba(255,255,255,.92);
+  background: rgba(255,255,255,.94);
   backdrop-filter: saturate(180%) blur(20px);
   -webkit-backdrop-filter: saturate(180%) blur(20px);
   border-top: .5px solid var(--border);
-  display: flex; align-items: flex-start; padding-top: 6px;
+  display: flex; align-items: flex-start; padding-top: 8px;
   z-index: 50;
 }
 .nav-item {
   flex: 1; display: flex; flex-direction: column;
-  align-items: center; gap: 2px; padding: 4px 2px;
+  align-items: center; gap: 3px; padding: 2px;
   cursor: pointer; position: relative;
 }
 .nav-icon {
-  width: 48px; height: 28px;
+  width: 44px; height: 30px;
   display: flex; align-items: center; justify-content: center;
-  border-radius: 14px; transition: background .15s;
+  border-radius: 12px; transition: background .15s;
 }
-.nav-icon svg { width: 24px; height: 24px; transition: all .15s; }
-.nav-item.active .nav-icon { background: rgba(0,122,255,.10); }
-.nav-item.active .nav-icon svg { stroke: var(--blue); }
-.nav-item:not(.active) .nav-icon svg { stroke: var(--ink4); }
+.nav-icon svg {
+  width: 22px; height: 22px;
+  stroke: #48484a;
+  stroke-width: 2.1;
+  fill: none;
+  transition: stroke .15s;
+}
+.nav-item.active .nav-icon { background: rgba(0,112,243,.12); }
+.nav-item.active .nav-icon svg { stroke: #0070f3; }
 .nav-label {
-  font-size: 10px; font-weight: 600; color: var(--ink4);
+  font-size: 10px; font-weight: 600;
+  color: #48484a;
   letter-spacing: .01em; transition: color .15s;
 }
-.nav-item.active .nav-label { color: var(--blue); font-weight: 700; }
+.nav-item.active .nav-label { color: #0070f3; font-weight: 700; }
 .nav-badge {
-  position: absolute; top: 1px; right: calc(50% - 26px);
+  position: absolute; top: 0px; right: calc(50% - 24px);
   background: var(--red); color: white;
   font-size: 9px; font-weight: 800; border-radius: 9px;
   padding: 1px 5px; min-width: 16px; text-align: center; line-height: 14px;
+}
+
+/* ── Desktop: sidebar nav ─────────────────────────────── */
+@media (min-width: 640px) {
+  .nav {
+    top: 0; bottom: 0; left: 0; right: auto; width: 76px;
+    height: 100dvh; height: 100vh;
+    flex-direction: column; justify-content: flex-start;
+    align-items: center;
+    padding: 24px 0 32px; gap: 6px;
+    border-top: none; border-right: .5px solid var(--border);
+  }
+  .nav-item {
+    flex: 0; width: 60px;
+    padding: 8px 6px 7px; border-radius: 16px;
+    gap: 4px;
+    transition: background .15s;
+  }
+  .nav-item.active { background: rgba(0,112,243,.07); }
+  .nav-badge { top: 4px; right: 2px; }
+  .app { padding-left: 76px; }
+  .views { padding-bottom: 16px; }
+  .review { left: 76px; }
+  .overlay { left: 76px; }
+  .dopt-overlay { left: 76px; }
 }
 
 /* ═══════════════════════════════════
@@ -2654,43 +2685,45 @@ function buildDeckRow(id, d) {
   const pct = total ? Math.round(mature/total*100) : 0;
   const col = d.color || COLORS[0];
   const paused = d.paused || false;
-  const opt = getDeckOpt(id);
   const totalDue = nw + ln + rv;
+  const canPlay = totalDue > 0 && !paused;
 
-  // Today task counts
-  const taskParts = [];
-  if (nw > 0) taskParts.push(`<span style="color:var(--blue);font-weight:700;font-size:11px;">${nw} нов.</span>`);
-  if (rv > 0 || ln > 0) taskParts.push(`<span style="color:var(--green);font-weight:700;font-size:11px;">${rv+ln} повт.</span>`);
-  const taskStr = taskParts.length
-    ? taskParts.join('<span style="color:var(--ink4);margin:0 3px;font-size:11px;">·</span>')
-    : `<span style="color:var(--ink4);font-size:11px;">готово ✓</span>`;
+  // Status pills
+  let statusHtml = '';
+  if (paused) {
+    statusHtml = `<span style="background:rgba(255,149,0,.13);color:#c85000;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;letter-spacing:.02em;">⏸ ПАУЗА</span>`;
+  } else if (totalDue === 0) {
+    statusHtml = `<span style="background:rgba(52,199,89,.12);color:#1a8f3c;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">✓ ГОТОВО</span>`;
+  } else {
+    const parts = [];
+    if (nw > 0) parts.push(`<span style="background:rgba(0,112,243,.1);color:#0060d0;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">${nw} нов.</span>`);
+    if (rv+ln > 0) parts.push(`<span style="background:rgba(52,199,89,.1);color:#1a8f3c;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">${rv+ln} повт.</span>`);
+    statusHtml = parts.join('');
+  }
 
-  // Play/pause SVG button
-  const playBtn = paused
-    ? `<button class="deck-play-btn deck-play-paused" onclick="event.stopPropagation();toggleDeckPause('${id}')" title="Возобновить">
-        <svg viewBox="0 0 24 24" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:18px;height:18px;stroke:var(--ink3);fill:none;"><rect x="6" y="4" width="4" height="16" rx="1" fill="var(--ink3)" stroke="none"/><rect x="14" y="4" width="4" height="16" rx="1" fill="var(--ink3)" stroke="none"/></svg>
-       </button>`
-    : `<button class="deck-play-btn" onclick="event.stopPropagation();${totalDue>0?`startReview('${id}')`:`toggleDeckPause('${id}')`}" title="Учить">
-        <svg viewBox="0 0 24 24" fill="white" stroke="none" style="width:18px;height:18px;margin-left:2px;"><polygon points="5,3 19,12 5,21"/></svg>
-       </button>`;
+  // Play button SVG
+  const playBtnClass = canPlay ? 'deck-play-btn' : 'deck-play-btn deck-play-paused';
+  const playIcon = paused
+    ? `<svg viewBox="0 0 20 20" width="16" height="16"><rect x="3" y="2" width="5" height="16" rx="1.5" fill="currentColor"/><rect x="12" y="2" width="5" height="16" rx="1.5" fill="currentColor"/></svg>`
+    : `<svg viewBox="0 0 20 20" width="16" height="16"><polygon points="4,2 18,10 4,18" fill="white"/></svg>`;
+  const playAction = canPlay ? `startReview('${id}')` : `openDeckDetail('${id}')`;
 
   return `
   <div class="deck-row" onclick="openDeckDetail('${id}')">
-    <div class="deck-em" style="background:${col}18;position:relative;">
+    <div class="deck-em" style="background:${col}18;position:relative;flex-shrink:0;">
       ${d.emoji||'📚'}
-      ${paused?'<div style="position:absolute;bottom:-3px;right:-3px;width:14px;height:14px;background:var(--orange);border-radius:50%;border:2px solid var(--card);display:flex;align-items:center;justify-content:center;font-size:7px;line-height:1;">⏸</div>':''}
+      ${paused?`<div style="position:absolute;bottom:-3px;right:-3px;width:13px;height:13px;background:#ff9500;border-radius:50%;border:2px solid var(--card);display:flex;align-items:center;justify-content:center;"><svg viewBox="0 0 10 10" width="7" height="7"><rect x="1" y="1" width="3" height="8" rx=".5" fill="white"/><rect x="6" y="1" width="3" height="8" rx=".5" fill="white"/></svg></div>`:''}
     </div>
-    <div class="deck-inf" style="flex:1;min-width:0;">
+    <div class="deck-inf" style="flex:1;min-width:0;overflow:hidden;">
       <div class="deck-nm" style="${paused?'color:var(--ink3);':''}">${d.name||'Без названия'}</div>
-      <div style="display:flex;align-items:center;gap:6px;margin-top:3px;">
-        <div style="flex:1;height:3px;background:var(--bg2);border-radius:2px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:${col};border-radius:2px;"></div>
-        </div>
-        <span style="font-size:10px;color:var(--ink4);flex-shrink:0;">${pct}%</span>
+      <div style="height:3px;background:var(--bg2);border-radius:2px;overflow:hidden;margin:4px 0 5px;">
+        <div style="height:100%;width:${pct}%;background:${col};border-radius:2px;transition:width .4s;"></div>
       </div>
-      <div style="margin-top:4px;">${taskStr}</div>
+      <div style="display:flex;gap:5px;align-items:center;">${statusHtml}</div>
     </div>
-    ${playBtn}
+    <button class="${playBtnClass}" onclick="event.stopPropagation();${playAction}" title="${canPlay?'Начать обучение':paused?'На паузе':'Готово'}">
+      ${playIcon}
+    </button>
   </div>`;
 }
 
@@ -3386,58 +3419,79 @@ function openDeckDetail(id){
   const paused=d.paused||false;
   const col=d.color||COLORS[0];
   const algoLbl=opt.algo==='fsrs'?'FSRS-4.5':'SM-2';
-  const algoCol=opt.algo==='fsrs'?'var(--purple)':'var(--blue)';
-  const algoBg=opt.algo==='fsrs'?'rgba(175,82,222,.1)':'rgba(0,122,255,.08)';
+  const algoCol=opt.algo==='fsrs'?'var(--purple)':'#0070f3';
+  const algoBg=opt.algo==='fsrs'?'rgba(175,82,222,.1)':'rgba(0,112,243,.1)';
 
   document.getElementById('ddTitle').textContent=(d.emoji||'📚')+' '+d.name;
   document.getElementById('ddMeta').innerHTML=`
-    <div style="padding:12px 16px;border-bottom:.5px solid var(--border);">
+    <div style="padding:14px 16px 0;">
 
-      <!-- Row 1: indicators -->
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;">
-        <span style="background:${col}15;color:${col};padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;">${total} карточек</span>
-        <span style="background:${algoBg};color:${algoCol};padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;">${algoLbl}</span>
-        <span style="background:rgba(52,199,89,.1);color:var(--green);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;">🌿 ${mature} зрелых</span>
-        ${paused?`<span style="background:rgba(255,149,0,.1);color:var(--orange);padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;">⏸ Пауза</span>`:''}
-      </div>
-
-      <!-- Row 2: progress bar -->
-      <div style="margin-bottom:12px;">
-        <div style="display:flex;justify-content:space-between;font-size:11px;color:var(--ink4);margin-bottom:4px;">
-          <span>Прогресс</span><span style="font-weight:700;color:${col};">${pct}%</span>
+      <!-- Stats row -->
+      <div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;">
+        <div style="flex:1;min-width:80px;background:var(--bg2);border-radius:12px;padding:10px 12px;">
+          <div style="font-size:20px;font-weight:800;color:var(--ink);">${total}</div>
+          <div style="font-size:11px;color:var(--ink4);font-weight:600;">карточек</div>
         </div>
-        <div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;">
-          <div style="height:100%;width:${pct}%;background:${col};border-radius:3px;transition:width .4s;"></div>
+        <div style="flex:1;min-width:80px;background:rgba(0,112,243,.07);border-radius:12px;padding:10px 12px;">
+          <div style="font-size:20px;font-weight:800;color:#0060d0;">${nw}</div>
+          <div style="font-size:11px;color:#0060d0;font-weight:600;">новых сегодня</div>
         </div>
-        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink4);margin-top:4px;">
-          <span>Новых ${nw} · Учатся ${ln} · Повторить ${rv}</span>
+        <div style="flex:1;min-width:80px;background:rgba(52,199,89,.08);border-radius:12px;padding:10px 12px;">
+          <div style="font-size:20px;font-weight:800;color:#1a8f3c;">${rv+ln}</div>
+          <div style="font-size:11px;color:#1a8f3c;font-weight:600;">повторить</div>
         </div>
       </div>
 
-      <!-- Row 3: action buttons -->
-      <div style="display:flex;gap:8px;align-items:center;">
-        <button onclick="openDeckSettings('${id}')" style="display:flex;align-items:center;gap:5px;padding:9px 14px;border-radius:12px;background:var(--bg2);border:.5px solid var(--border);font-size:13px;font-weight:600;color:var(--ink2);cursor:pointer;flex-shrink:0;">
-          ⚙️ Настройки
+      <!-- Progress bar -->
+      <div style="margin-bottom:14px;">
+        <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">
+          <span style="font-size:12px;font-weight:700;color:var(--ink3);">Прогресс освоения</span>
+          <span style="font-size:14px;font-weight:800;color:${col};">${pct}%</span>
+        </div>
+        <div style="height:8px;background:var(--bg2);border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,${col}cc,${col});border-radius:4px;transition:width .4s;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink4);margin-top:5px;">
+          <span>${mature} зрелых из ${total}</span>
+          <span style="background:${algoBg};color:${algoCol};padding:1px 7px;border-radius:5px;font-weight:700;">${algoLbl}</span>
+        </div>
+      </div>
+
+      <!-- Toggle: обучение включено / пауза -->
+      <div style="display:flex;align-items:center;justify-content:space-between;background:var(--bg2);border-radius:14px;padding:12px 14px;margin-bottom:14px;">
+        <div>
+          <div style="font-size:14px;font-weight:700;color:var(--ink);">Обучение</div>
+          <div style="font-size:11px;color:var(--ink4);margin-top:1px;">${paused?'Колода на паузе':'Карточки включены в план'}</div>
+        </div>
+        <label style="position:relative;display:inline-block;width:50px;height:28px;cursor:pointer;" onclick="event.stopPropagation();">
+          <input type="checkbox" ${paused?'':'checked'} onchange="toggleDeckPause('${id}')" style="opacity:0;width:0;height:0;position:absolute;">
+          <span style="position:absolute;inset:0;background:${paused?'#d1d1d6':'#34c759'};border-radius:14px;transition:background .25s;">
+            <span style="position:absolute;top:3px;left:${paused?'3px':'23px'};width:22px;height:22px;background:white;border-radius:50%;box-shadow:0 1px 4px rgba(0,0,0,.25);transition:left .25s;"></span>
+          </span>
+        </label>
+      </div>
+
+      <!-- Buttons row -->
+      <div style="display:flex;gap:8px;padding-bottom:14px;border-bottom:.5px solid var(--border);">
+        <button onclick="openDeckSettings('${id}')" style="flex:1;display:flex;align-items:center;justify-content:center;gap:6px;padding:11px;border-radius:12px;background:var(--bg2);border:.5px solid var(--border);font-size:13px;font-weight:700;color:var(--ink2);cursor:pointer;">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="#48484a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="2.5"/><path d="M10 1v2M10 17v2M1 10h2M17 10h2M3.05 3.05l1.42 1.42M15.54 15.54l1.41 1.41M15.54 4.46l1.41-1.41M3.05 16.95l1.42-1.41"/></svg>
+          Настройки
         </button>
-        <div style="flex:1;"></div>
-        <button onclick="toggleDeckPause('${id}')" style="padding:9px 14px;border-radius:12px;background:${paused?'rgba(255,149,0,.12)':'var(--bg2)'};border:.5px solid ${paused?'var(--orange)':'var(--border)'};font-size:13px;font-weight:700;color:${paused?'var(--orange)':'var(--ink2)'};cursor:pointer;flex-shrink:0;">
-          ${paused?'▶ Возобновить':'⏸ Пауза'}
-        </button>
-        <button onclick="startReview('${id}')" style="display:flex;align-items:center;gap:6px;padding:10px 20px;border-radius:12px;background:${totalDue===0||paused?'var(--bg2)':'var(--blue)'};color:${totalDue===0||paused?'var(--ink3)':'white'};border:none;font-family:var(--font);font-size:14px;font-weight:800;cursor:${totalDue===0||paused?'default':'pointer'};flex-shrink:0;"
-          ${totalDue===0||paused?'disabled':''}>
-          ▶ Учить ${totalDue>0&&!paused?'('+totalDue+')':''}
+        <button onclick="startReview('${id}')" style="flex:2;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:12px;background:${totalDue===0||paused?'var(--bg2)':'#0070f3'};color:${totalDue===0||paused?'var(--ink3)':'white'};border:none;font-family:var(--font);font-size:14px;font-weight:800;cursor:${totalDue===0||paused?'default':'pointer'};" ${totalDue===0||paused?'disabled':''}>
+          <svg viewBox="0 0 20 20" width="14" height="14"><polygon points="3,2 17,10 3,18" fill="${totalDue===0||paused?'var(--ink3)':'white'}"/></svg>
+          ${paused?'На паузе':totalDue>0?`Учить · ${totalDue}`:'Готово на сегодня'}
         </button>
       </div>
     </div>`;
 
-  const pipCol=sm=>!sm||sm.state==='new'?'var(--blue)':sm.state==='learning'?'var(--orange)':isDue(sm)?'var(--red)':'var(--green)';
+  const pipCol=sm=>!sm||sm.state==='new'?'#0070f3':sm.state==='learning'?'var(--orange)':isDue(sm)?'var(--red)':'var(--green)';
   document.getElementById('ddCards').innerHTML=dc.length?dc.map(([cid,c])=>`
     <div class="card-row">
       <div class="card-state-pip" style="background:${pipCol(c.sm2)};"></div>
       <div class="card-front-t">${esc(stripHtml(c.front))}</div>
       <div class="card-back-t">${esc(stripHtml(c.back))}</div>
       <div style="display:flex;gap:4px;flex-shrink:0;">
-        <button onclick="startDrillCard('${cid}')" style="padding:4px 8px;border-radius:7px;background:rgba(0,122,255,.08);border:none;font-size:11px;font-weight:700;color:var(--blue);cursor:pointer;" title="Тренировка">▶</button>
+        <button onclick="startDrillCard('${cid}')" style="padding:4px 8px;border-radius:7px;background:rgba(0,112,243,.1);border:none;font-size:11px;font-weight:700;color:#0060d0;cursor:pointer;" title="Тренировка">▶</button>
         <div class="hbtn" onclick="openCardEd('${cid}')" style="background:transparent;border:none;color:var(--ink3);">✏️</div>
         <div class="row-del" onclick="deleteCard('${cid}')">🗑</div>
       </div>
@@ -3448,21 +3502,77 @@ function openDeckDetail(id){
 function closeDeckDetail(){document.getElementById('deckDetailOv').classList.remove('open');}
 
 function openDeckSettings(id) {
-  // Show a small action sheet: choose Template or Params
   const existing = document.getElementById('deckSettingsSheet');
   if (existing) existing.remove();
+  const d = decks[id] || {};
+  const opt = getDeckOpt(id);
+  const col = d.color || COLORS[0];
   const sheet = document.createElement('div');
   sheet.id = 'deckSettingsSheet';
   sheet.style.cssText = 'position:fixed;inset:0;z-index:9999;display:flex;flex-direction:column;justify-content:flex-end;';
   sheet.innerHTML = `
-    <div onclick="document.getElementById('deckSettingsSheet').remove()" style="flex:1;background:rgba(0,0,0,.4);"></div>
-    <div style="background:var(--card);border-radius:22px 22px 0 0;padding:16px 16px calc(var(--safe-b) + 16px);display:flex;flex-direction:column;gap:8px;">
-      <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 8px;"></div>
-      <div style="font-size:15px;font-weight:800;text-align:center;margin-bottom:4px;">⚙️ Настройки колоды</div>
-      <button onclick="document.getElementById('deckSettingsSheet').remove();openDeckEd('${id}')" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;text-align:left;">✏️ Редактировать колоду</button>
-      <button onclick="document.getElementById('deckSettingsSheet').remove();openDeckOpt('${id}')" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;text-align:left;">📐 Параметры обучения</button>
-      <button onclick="document.getElementById('deckSettingsSheet').remove();openTemplateEd()" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink);cursor:pointer;text-align:left;">🎨 Шаблон карточек</button>
-      <button onclick="document.getElementById('deckSettingsSheet').remove();" style="width:100%;padding:14px;border-radius:14px;background:var(--bg2);border:.5px solid var(--border);font-size:15px;font-weight:700;color:var(--ink3);cursor:pointer;">Отмена</button>
+    <div onclick="document.getElementById('deckSettingsSheet').remove()" style="flex:1;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);"></div>
+    <div style="background:var(--card);border-radius:28px 28px 0 0;padding:0 0 calc(var(--safe-b,0px) + 12px);overflow:hidden;">
+      <!-- Handle + header -->
+      <div style="padding:14px 20px 16px;border-bottom:.5px solid var(--border);">
+        <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 14px;"></div>
+        <div style="display:flex;align-items:center;gap:12px;">
+          <div style="width:42px;height:42px;border-radius:13px;background:${col}18;display:flex;align-items:center;justify-content:center;font-size:22px;">${d.emoji||'📚'}</div>
+          <div>
+            <div style="font-size:16px;font-weight:800;color:var(--ink);">${d.name||'Колода'}</div>
+            <div style="font-size:12px;color:var(--ink4);margin-top:1px;">${opt.algo==='fsrs'?'FSRS-4.5':'SM-2'} · ${opt.newPerDay} новых/день</div>
+          </div>
+        </div>
+      </div>
+      <!-- Menu items -->
+      <div style="padding:10px 12px;display:flex;flex-direction:column;gap:4px;">
+        <button onclick="document.getElementById('deckSettingsSheet').remove();openDeckEd('${id}')"
+          style="display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:16px;background:transparent;border:none;cursor:pointer;text-align:left;transition:background .12s;"
+          onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background='transparent'">
+          <div style="width:38px;height:38px;border-radius:11px;background:rgba(0,112,243,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="#0060d0" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14.5 2.5a2.12 2.12 0 013 3L6 17l-4 1 1-4L14.5 2.5z"/></svg>
+          </div>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--ink);">Редактировать</div>
+            <div style="font-size:12px;color:var(--ink4);">Название, эмодзи, цвет</div>
+          </div>
+          <svg style="margin-left:auto;flex-shrink:0;" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#c7c7cc" stroke-width="2" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>
+        </button>
+
+        <button onclick="document.getElementById('deckSettingsSheet').remove();openDeckOpt('${id}')"
+          style="display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:16px;background:transparent;border:none;cursor:pointer;text-align:left;transition:background .12s;"
+          onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background='transparent'">
+          <div style="width:38px;height:38px;border-radius:11px;background:rgba(88,86,214,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="#5856d6" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="2.5"/><path d="M10 1v2M10 17v2M1 10h2M17 10h2M3.05 3.05l1.42 1.42M15.54 15.54l1.41 1.41M15.54 4.46l1.41-1.41M3.05 16.95l1.42-1.41"/></svg>
+          </div>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--ink);">Параметры обучения</div>
+            <div style="font-size:12px;color:var(--ink4);">Шаги, лимиты, алгоритм</div>
+          </div>
+          <svg style="margin-left:auto;flex-shrink:0;" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#c7c7cc" stroke-width="2" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>
+        </button>
+
+        <button onclick="document.getElementById('deckSettingsSheet').remove();openTemplateEd()"
+          style="display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:16px;background:transparent;border:none;cursor:pointer;text-align:left;transition:background .12s;"
+          onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background='transparent'">
+          <div style="width:38px;height:38px;border-radius:11px;background:rgba(255,149,0,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="#c85000" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="16" height="14" rx="2"/><path d="M6 7h8M6 10h5M6 13h3"/></svg>
+          </div>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--ink);">Шаблон карточек</div>
+            <div style="font-size:12px;color:var(--ink4);">Поля, оформление, шрифты</div>
+          </div>
+          <svg style="margin-left:auto;flex-shrink:0;" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#c7c7cc" stroke-width="2" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>
+        </button>
+      </div>
+
+      <!-- Cancel -->
+      <div style="padding:0 12px 4px;">
+        <button onclick="document.getElementById('deckSettingsSheet').remove()"
+          style="width:100%;padding:14px;border-radius:16px;background:var(--bg2);border:none;font-size:15px;font-weight:600;color:var(--ink3);cursor:pointer;">
+          Отмена
+        </button>
+      </div>
     </div>`;
   document.body.appendChild(sheet);
 }
