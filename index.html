@@ -2640,48 +2640,126 @@ function checkSession(){
 // ═══════════════════════════════════════════════════
 //  RENDER
 // ═══════════════════════════════════════════════════
-// ── Single source of truth for due counts ──
-// Uses newLog[t] (written once per new card shown) as the authoritative
-// "how many new cards were already shown today" counter.
-function _deckShown(deckId, t) {
-  // How many new cards from this deck were shown today
-  // We track this via cards that have firstReview===t in this deck
-  return Object.values(cards).filter(c =>
-    c.deckId === deckId && c.sm2 && c.sm2.firstReview === t
-  ).length;
+// ═══════════════════════════════════════════════════════════
+//  SINGLE SOURCE OF TRUTH — computeCards(deckId)
+//  All due-counting and queue-building goes through here.
+//  deckId=null  → all active (non-paused) decks
+//  deckId='xyz' → single deck
+//
+//  Returns:
+//    nw    — new cards remaining today (respects per-deck limit)
+//    rv    — review cards due
+//    ln    — learning/relearning cards due now (intraday)
+//    queue — interleaved array ready for startReview()
+// ═══════════════════════════════════════════════════════════
+function computeCards(deckId = null) {
+  const t = today();
+
+  // ── Per-deck limits: how many new slots remain today ──
+  const deckInfo = {}; // did → { remaining, maxRev, opt }
+  const initDeck = (did) => {
+    if (deckInfo[did]) return;
+    if (!decks[did]) { deckInfo[did] = {remaining:0, maxRev:0, opt:null}; return; }
+    const paused = decks[did]?.paused;
+    const opt    = getDeckOpt(did);
+    const hasOpt = decks[did]?.opt;
+    const maxNew = hasOpt ? (opt.newPerDay ?? cfg.newPerDay) : cfg.newPerDay;
+    const maxRev = hasOpt ? (opt.maxReviews ?? cfg.maxReviews) : cfg.maxReviews;
+    // Shown today = cards with firstReview===today in this deck
+    const shown  = Object.values(cards).filter(c =>
+      c.deckId === did && c.sm2?.firstReview === t
+    ).length;
+    deckInfo[did] = {
+      paused,
+      remaining : paused ? 0 : Math.max(0, maxNew - shown),
+      maxRev    : paused ? 0 : maxRev,
+      opt,
+    };
+  };
+
+  // Pre-init all relevant decks
+  if (deckId) {
+    initDeck(deckId);
+  } else {
+    Object.keys(decks).forEach(initDeck);
+  }
+
+  // ── Single pass over cards ──
+  const nwCards = [], rvCards = [], lnCards = [];
+
+  Object.entries(cards).forEach(([id, c]) => {
+    const did = c.deckId;
+    // Filter by target deck
+    if (deckId && did !== deckId) return;
+    // Skip suspended leeches
+    if (c.suspended) return;
+    // Skip paused decks (unless studying that deck directly)
+    if (!deckId && decks[did]?.paused) return;
+
+    initDeck(did); // ensure initialized
+    const di = deckInfo[did];
+    if (!di) return;
+
+    const sm = c.sm2;
+    const card = {id, ...c};
+
+    if (!sm || sm.state === 'new') {
+      if (di.remaining > 0) {
+        nwCards.push(card);
+        di.remaining--;
+      }
+    } else if ((sm.state === 'learning' || sm.state === 'relearning') && isDue(sm)) {
+      // Interday learning (dueMs spans day boundary) → counts as review
+      if (sm.dueMs && new Date(sm.dueMs).toISOString().slice(0,10) > t) {
+        rvCards.push(card);
+      } else {
+        lnCards.push(card);
+      }
+    } else if (sm.state === 'review' && sm.due <= t) {
+      rvCards.push(card);
+    }
+  });
+
+  // ── Totals (capped by per-deck maxRev) ──
+  const nw = nwCards.length;
+  const ln = lnCards.length;
+  // Cap reviews: if single deck use deck maxRev, else global
+  const globalMaxRev = cfg.maxReviews || 200;
+  const rv = deckId
+    ? Math.min(rvCards.length, deckInfo[deckId]?.maxRev ?? globalMaxRev)
+    : Math.min(rvCards.length, globalMaxRev);
+
+  // ── Build interleaved queue ──
+  const opt      = deckId ? deckInfo[deckId]?.opt : null;
+  const newOrder = opt?.newOrder || 'sequential';
+  const revSort  = opt?.revSort  || 'due_random';
+  const sh = a => [...a].sort(() => Math.random() - .5);
+
+  const sortedNw = newOrder === 'random' ? sh(nwCards) : nwCards;
+  const sortedRv = revSort  === 'random'
+    ? sh(rvCards)
+    : [...rvCards].sort((a,b) => (a.sm2?.due||''). localeCompare(b.sm2?.due||'')); 
+  const sortedLn = sh(lnCards);
+
+  const revSlice = sortedRv.slice(0, rv);
+  const queue    = [...sortedLn]; // learning cards first (time-sensitive)
+  let ni = 0, ri = 0;
+  const newEvery = 5;
+  while (ri < revSlice.length || ni < sortedNw.length) {
+    for (let i = 0; i < newEvery && ri < revSlice.length; i++, ri++) {
+      queue.push(revSlice[ri]);
+    }
+    if (ni < sortedNw.length) queue.push(sortedNw[ni++]);
+  }
+
+  return { nw, rv, ln, queue };
 }
 
-function getDue(){
-  const t=today();
-  let nw=0,rv=0,ln=0;
-  // Pre-compute per-deck shown counts and limits
-  const deckInfo = {};
-  Object.keys(decks).forEach(did => {
-    if (decks[did]?.paused) return;
-    const opt=getDeckOpt(did);
-    const hasDeckOpt=decks[did]?.opt;
-    const deckMax=hasDeckOpt?(opt.newPerDay??cfg.newPerDay):cfg.newPerDay;
-    const shown=_deckShown(did, t);
-    deckInfo[did]={remaining: Math.max(0, deckMax - shown), max: deckMax};
-  });
-
-  Object.values(cards).forEach(c=>{
-    if (!deckInfo[c.deckId]) return; // paused or unknown deck
-    if (c.suspended) return;
-    const sm=c.sm2;
-    if(!sm||sm.state==='new'){
-      if(deckInfo[c.deckId].remaining > 0){
-        nw++;
-        deckInfo[c.deckId].remaining--;
-      }
-    }
-    else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) {
-      if (sm.dueMs && new Date(sm.dueMs).toISOString().slice(0,10) > t) rv++;
-      else ln++;
-    }
-    else if(sm.state==='review' && sm.due<=t) rv++;
-  });
-  return{nw, rv:Math.min(rv,cfg.maxReviews), ln};
+// Thin wrappers so existing call sites still work
+function getDue()     { const r=computeCards(null);    return {nw:r.nw, rv:r.rv, ln:r.ln}; }
+function getDeckDue(deckId) {
+  if (decks[deckId]?.paused) return {nw:0, rv:0, ln:0};
+  const r=computeCards(deckId); return {nw:r.nw, rv:r.rv, ln:r.ln};
 }
 
 function renderAll(){renderHome();renderDecks();updateBadge();}
@@ -2752,35 +2830,7 @@ function toggleDeckPause(id) {
   }
 }
 
-function getDeckDue(deckId) {
-  const t = today();
-  if (decks[deckId]?.paused) return {nw:0, ln:0, rv:0};
-  const opt = getDeckOpt(deckId);
-  const hasDeckOpt = decks[deckId]?.opt;
-  const deckMax = hasDeckOpt ? (opt.newPerDay ?? cfg.newPerDay) : cfg.newPerDay;
-  const shown = _deckShown(deckId, t);
-  let remaining = Math.max(0, deckMax - shown);
 
-  let nw=0, ln=0, rv=0;
-  Object.values(cards).forEach(c => {
-    if (c.deckId !== deckId) return;
-    if (c.suspended) return;
-    const sm = c.sm2;
-    if (!sm || sm.state==='new') {
-      if (remaining > 0) { nw++; remaining--; }
-    }
-    else if ((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) {
-      if (sm.dueMs && new Date(sm.dueMs).toISOString().slice(0,10) > t) rv++;
-      else ln++;
-    }
-    else if (sm.state==='review' && sm.due<=t) rv++;
-  });
-  return {
-    nw,
-    ln,
-    rv: Math.min(rv, hasDeckOpt ? (opt.maxReviews ?? cfg.maxReviews) : cfg.maxReviews)
-  };
-}
 
 function buildDeckRow(id, d) {
   const {nw, ln, rv} = getDeckDue(id);
@@ -3107,70 +3157,10 @@ function updateBadge(){
 }
 
 // ═══════════════════════════════════════════════════
-//  REVIEW
+//  REVIEW — buildQ delegates to computeCards
 // ═══════════════════════════════════════════════════
 function buildQ(deckId=null){
-  const t=today();
-  // Use Firebase newLog for cross-device new card count (falls back to 0)
-  const shownNew = newLog[t] || 0;
-
-  // Effective limits: deck opt > global cfg
-  const opt = deckId ? getDeckOpt(deckId) : null;
-  const hasDeckOpt = deckId && decks[deckId]?.opt;
-  const maxNew = hasDeckOpt ? (opt.newPerDay ?? cfg.newPerDay) : cfg.newPerDay;
-  const maxRev = hasDeckOpt ? (opt.maxReviews ?? cfg.maxReviews) : cfg.maxReviews;
-
-  let nw=[],rv=[],ln=[];
-  Object.entries(cards).forEach(([id,c])=>{
-    if(deckId&&c.deckId!==deckId)return;
-    // Skip paused decks unless explicitly studying that deck
-    if(!deckId && decks[c.deckId]?.paused) return;
-    const sm=c.sm2;
-    if(c.suspended) return; // skip suspended (leech) cards
-    if(!sm||sm.state==='new') nw.push({id,...c});
-    else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) ln.push({id,...c});
-    else if(sm.state==='review' && sm.due<=t) rv.push({id,...c});
-  });
-
-  // Sort new cards
-  const newOrder = opt?.newOrder || 'sequential';
-  if (newOrder === 'random') nw = nw.sort(()=>Math.random()-.5);
-
-  // Sort reviews
-  const revSort = opt?.revSort || 'due_random';
-  if (revSort === 'random') rv = rv.sort(()=>Math.random()-.5);
-  else rv = rv.sort((a,b)=>(a.sm2?.due||'').localeCompare(b.sm2?.due||''));
-
-  const sh=a=>[...a].sort(()=>Math.random()-.5);
-  // Anki: if newIgnoreRev=true, new cards shown regardless of review limit
-  const newIgnoreRev = opt?.newIgnoreRev ?? false;
-  const newSlice = nw.slice(0, Math.max(0, maxNew - shownNew));
-  const revSlice = rv.slice(0, maxRev);
-
-  // Interleave: reviews first, then mix new cards throughout
-  // Learning (due now) go first since they're time-sensitive
-  // New cards are spread among reviews, not blocked until the end
-  const mixed = [];
-  const lnShuffled = sh(ln);
-  const revArr = revSlice;
-  const newArr = newSlice;
-
-  // Build: [learning...] then interleave reviews and new cards (1 new per 5 reviews)
-  mixed.push(...lnShuffled);
-  // If newIgnoreRev: always include all new cards regardless of revSlice length
-  const effectiveNewArr = newIgnoreRev ? newArr : newArr;
-  let ni = 0, ri = 0;
-  const newEvery = 5; // insert 1 new card every 5 review cards
-  while (ri < revArr.length || ni < effectiveNewArr.length) {
-    // Add up to 5 reviews
-    for (let i = 0; i < newEvery && ri < revArr.length; i++, ri++) {
-      mixed.push(revArr[ri]);
-    }
-    // Add 1 new card
-    if (ni < newArr.length) mixed.push(newArr[ni++]);
-  }
-
-  return mixed;
+  return computeCards(deckId).queue;
 }
 
 function startReview(deckId=null){
