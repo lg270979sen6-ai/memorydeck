@@ -3550,8 +3550,11 @@ function doGrade(g){
   const deckOpt = c.deckId ? getEffectiveOpt(c.deckId) : null;
   const ns = schedCalc(c.sm2, g, deckOpt);
 
-  // Set firstReview on very first grade of a new card
-  if (wasNew && !ns.firstReview) ns.firstReview = t;
+  // Preserve firstReview: set on first grade of new card, carry forward through all steps
+  if (!ns.firstReview) {
+    if (wasNew) ns.firstReview = t;                   // first ever grade
+    else if (c.sm2?.firstReview) ns.firstReview = c.sm2.firstReview; // carry forward
+  }
 
   // ── Update local cache ALWAYS (even if key wasn't there before) ──
   cards[c.id] = {...(cards[c.id]||{}), ...c, sm2: ns};
@@ -3599,16 +3602,22 @@ function doGrade(g){
 function showDone(){
   const tot=rStats.again+rStats.hard+rStats.good+rStats.easy;
   const pct=tot?Math.round((rStats.good+rStats.easy)/tot*100):0;
+  // Count unique cards seen (not bounces) = cards that graduated or were reviewed
+  const t=today();
+  const uniqueNew = Object.values(cards).filter(c=>c.sm2?.firstReview===t && (!rDeckId||c.deckId===rDeckId)).length;
+  const uniqueRev = Math.max(0,(studyLog[t]||0)-uniqueNew);
   document.getElementById('cardStage').innerHTML=`
     <div class="done-screen">
       <div class="done-icon">${pct>=80?'🏆':pct>=50?'⭐':'💪'}</div>
       <div class="done-title">Отлично!</div>
-      <div class="done-sub">${tot} карточек · ${pct}% правильно</div>
+      <div class="done-sub">${uniqueNew+uniqueRev} карточек · ${pct}% правильно</div>
       <div class="done-stats">
         <div class="done-stat"><div class="done-n" style="color:var(--red);">${rStats.again}</div><div class="done-l">Снова</div></div>
+        <div class="done-stat"><div class="done-n" style="color:var(--orange,#ea580c);">${rStats.hard}</div><div class="done-l">Трудно</div></div>
         <div class="done-stat"><div class="done-n" style="color:var(--blue);">${rStats.good}</div><div class="done-l">Хорошо</div></div>
         <div class="done-stat"><div class="done-n" style="color:var(--green);">${rStats.easy}</div><div class="done-l">Легко</div></div>
       </div>
+      <div style="font-size:12px;color:#9ca3af;margin-top:6px;">🆕 ${uniqueNew} новых · 🔄 ${uniqueRev} повторных</div>
       <button class="done-btn" onclick="closeReview()">Закрыть</button>
     </div>`;
   document.getElementById('revFill').style.width='100%';
