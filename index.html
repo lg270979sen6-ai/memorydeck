@@ -1352,9 +1352,20 @@ body {
         <div class="dopt-lbl">Порог «Приставучих» карточек<div class="dopt-hint">Сколько ошибок до пометки</div></div>
         <input class="dopt-input" type="number" id="doptLeechThresh" min="1" max="20" value="8">
       </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Действие с приставучими<div class="dopt-hint">Приостановить или только пометить</div></div>
+        <select class="dopt-select" id="doptLeechAction">
+          <option value="suspend">Приостановить</option>
+          <option value="tag">Только пометить</option>
+        </select>
+      </div>
       <div class="dopt-row" id="doptLapsePctRow">
         <div class="dopt-lbl">Штраф за забывание (%)<div class="dopt-hint">Снижение интервала при ошибке</div></div>
         <input class="dopt-input" type="number" id="doptLapsePct" min="0" max="100" value="50">
+      </div>
+      <div class="dopt-row">
+        <div class="dopt-lbl">Новые игнорируют лимит повторений<div class="dopt-hint">Как в Anki: новые карточки показываются даже если лимит повторений достигнут</div></div>
+        <label class="ios-toggle"><input type="checkbox" id="doptNewIgnoreRev"><span class="ios-slider"></span></label>
       </div>
     </div>
 
@@ -1933,9 +1944,9 @@ function sm2Calc(sm, g, deckOpt) {
   // Deck params
   const learnSteps   = parseSteps(deckOpt?.learnSteps   || '1m 10m');
   const relearnSteps = parseSteps(deckOpt?.relearnSteps || '10m');
-  const gradInt      = deckOpt?.firstInt   ?? cfg.firstInterval ?? 1; // "Good" graduating interval
-  const easyInt      = deckOpt?.easyInt    ?? 4;                      // "Easy" graduating interval
-  const lapsePct     = deckOpt?.lapsePct   ?? 50;
+  const gradInt      = deckOpt?.firstInt   ?? cfg.firstInterval ?? 1;
+  const easyInt      = deckOpt?.easyInt    ?? 4;
+  const minInterval  = deckOpt?.minInterval ?? 1;   // minimum interval after relearning
   const maxInterval  = deckOpt?.maxInterval ?? 36500;
 
   // Clone or init
@@ -1950,55 +1961,52 @@ function sm2Calc(sm, g, deckOpt) {
   if (g === 0) {
     // ── AGAIN ────────────────────────────────────────
     if (inReview) {
-      // Lapse: move to relearning, reduce interval
-      s.lapses = (s.lapses || 0) + 1;
-      s.ease   = Math.max(1.3, s.ease - 0.20);
-      s.interval = Math.max(relearnSteps[0] || 10/1440,
-                            Math.round(s.interval * (1 - lapsePct / 100) * 10) / 10);
-      s.state  = 'relearning';
-      s.stepIdx = 0;
+      // Lapse: ease -0.20, interval reset to 0 (New Interval = 0.00 per Anki default)
+      s.lapses   = (s.lapses || 0) + 1;
+      s.ease     = Math.max(1.3, s.ease - 0.20);
       s.interval = relearnSteps[0] || 10/1440; // first relearn step
+      s.state    = 'relearning';
+      s.stepIdx  = 0;
     } else {
       // In learning/relearning — restart from first step
       const steps = inRelearning ? relearnSteps : learnSteps;
-      s.state   = inRelearning ? 'relearning' : 'learning';
-      s.stepIdx = 0;
+      s.state    = inRelearning ? 'relearning' : 'learning';
+      s.stepIdx  = 0;
       s.interval = steps[0] || 1/1440;
     }
 
   } else if (g === 1) {
     // ── HARD ─────────────────────────────────────────
     if (inReview) {
+      // ease -0.15, interval × hardInterval (1.20)
       s.ease     = Math.max(1.3, s.ease - 0.15);
-      s.interval = Math.max(1, Math.round(s.interval * 1.2));
-      s.interval = Math.min(maxInterval, s.interval);
+      s.interval = Math.min(maxInterval, Math.max(1, Math.round(s.interval * 1.2)));
     } else {
-      // In learning: Anki formula = average of current step and next step
-      // If only one step, use current step * 1.5 (minimum ~6m for 1m/10m steps)
+      // In learning/relearning: repeat current step with avg interval, stepIdx unchanged
       const steps = inRelearning ? relearnSteps : learnSteps;
       const idx   = Math.min(s.stepIdx || 0, steps.length - 1);
       const curr  = steps[idx];
       const next  = steps[idx + 1] !== undefined ? steps[idx + 1] : curr * 2;
-      s.interval  = (curr + next) / 2; // Average = for "1m 10m": (1m+10m)/2 = 5.5m
+      s.interval  = (curr + next) / 2;
+      // stepIdx does NOT change — Hard never advances or resets the step
     }
+    // ease never changes in learning/relearning
 
   } else if (g === 2) {
     // ── GOOD ─────────────────────────────────────────
     if (inReview) {
-      s.interval = Math.max(1, Math.round(s.interval * s.ease));
-      s.interval = Math.min(maxInterval, s.interval);
+      // interval × ease, ease unchanged
+      s.interval = Math.min(maxInterval, Math.max(1, Math.round(s.interval * s.ease)));
       s.reps++;
     } else {
       // Advance to next step, or graduate
       const steps = inRelearning ? relearnSteps : learnSteps;
       const nextIdx = (s.stepIdx || 0) + 1;
       if (nextIdx >= steps.length) {
-        // Graduate!
+        // Graduate to review
         s.state    = 'review';
         s.stepIdx  = 0;
-        s.interval = inRelearning
-          ? Math.max(1, Math.round(s.interval * (1 - lapsePct / 100)))
-          : gradInt;
+        s.interval = inRelearning ? minInterval : gradInt;
         s.reps++;
       } else {
         s.stepIdx  = nextIdx;
@@ -2006,35 +2014,42 @@ function sm2Calc(sm, g, deckOpt) {
         s.state    = inRelearning ? 'relearning' : 'learning';
       }
     }
+    // ease never changes in learning/relearning
 
   } else if (g === 3) {
     // ── EASY ─────────────────────────────────────────
     if (inReview) {
+      // interval × ease × easyBonus (1.30), ease +0.15
       s.ease     = Math.min(4.0, s.ease + 0.15);
-      s.interval = Math.max(1, Math.round(s.interval * s.ease * 1.3));
-      s.interval = Math.min(maxInterval, s.interval);
+      s.interval = Math.min(maxInterval, Math.max(1, Math.round(s.interval * s.ease * 1.3)));
       s.reps++;
     } else {
-      // Immediate graduation
+      // Immediate graduation regardless of step
       s.state    = 'review';
       s.stepIdx  = 0;
-      s.ease     = Math.min(4.0, s.ease + 0.15);
       s.interval = easyInt;
       s.reps++;
     }
+    // ease never changes in learning/relearning
   }
 
-  // EF update for reviews (SM-2 formula, skip for sub-day intervals)
-  if (inReview && g >= 2) {
-    const q = SM2_Q[g];
-    s.ease = Math.max(1.3, s.ease + (0.1 - (5 - q) * (0.08 + (5 - q) * 0.02)));
+  // ── Ease update: ONLY for review cards (never in learning/relearning) ──
+  if (inReview) {
+    if (g === 2) {
+      // Good: ease unchanged (SM-2 Good = q=4 → delta = 0)
+      // no-op, already handled above
+    }
+    // Again and Hard already updated ease above
+    // Easy already updated ease above
+    // Clamp
+    s.ease = Math.max(1.3, Math.min(4.0, s.ease));
   }
 
-  // Compute due date (addDFrac returns {due, dueMs?})
+  // Compute due date
   const dueParts = addDFrac(today(), s.interval);
-  s.due   = dueParts.due;
+  s.due = dueParts.due;
   if (dueParts.dueMs) s.dueMs = dueParts.dueMs;
-  else delete s.dueMs; // clear dueMs when graduating to review
+  else delete s.dueMs;
   return s;
 }
 
@@ -2619,6 +2634,7 @@ function getDue(){
   const deckNewCounts = {}; // deckId -> {rawNew, shownNew, maxNew}
   Object.values(cards).forEach(c=>{
     if (decks[c.deckId]?.paused) return;
+    if (c.suspended) return; // skip leeches
     const sm=c.sm2;
     if(!sm||sm.state==='new'){
       if(!deckNewCounts[c.deckId]) {
@@ -2628,7 +2644,10 @@ function getDue(){
       }
       deckNewCounts[c.deckId].raw++;
     }
-    else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) ln++;
+    else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) {
+      if (sm.dueMs && new Date(sm.dueMs).toISOString().slice(0,10) > today()) rv++;
+      else ln++;
+    }
     else if(sm.state==='review' && sm.due<=t) rv++;
   });
   // Sum capped new counts per deck
@@ -2697,7 +2716,10 @@ function getDeckDue(deckId) {
     if (c.deckId !== deckId) return;
     const sm = c.sm2;
     if (!sm || sm.state==='new') nw++;
-    else if ((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) ln++;
+    else if ((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) {
+      if (sm.dueMs && new Date(sm.dueMs).toISOString().slice(0,10) > today()) rv++;
+      else ln++;
+    }
     else if (sm.state==='review' && sm.due<=t) rv++;
   });
   return {
@@ -3018,6 +3040,7 @@ function buildQ(deckId=null){
     // Skip paused decks unless explicitly studying that deck
     if(!deckId && decks[c.deckId]?.paused) return;
     const sm=c.sm2;
+    if(c.suspended) return; // skip suspended (leech) cards
     if(!sm||sm.state==='new') nw.push({id,...c});
     else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) ln.push({id,...c});
     else if(sm.state==='review' && sm.due<=t) rv.push({id,...c});
@@ -3033,6 +3056,8 @@ function buildQ(deckId=null){
   else rv = rv.sort((a,b)=>(a.sm2?.due||'').localeCompare(b.sm2?.due||''));
 
   const sh=a=>[...a].sort(()=>Math.random()-.5);
+  // Anki: if newIgnoreRev=true, new cards shown regardless of review limit
+  const newIgnoreRev = opt?.newIgnoreRev ?? false;
   const newSlice = nw.slice(0, Math.max(0, maxNew - shownNew));
   const revSlice = rv.slice(0, maxRev);
 
@@ -3046,9 +3071,11 @@ function buildQ(deckId=null){
 
   // Build: [learning...] then interleave reviews and new cards (1 new per 5 reviews)
   mixed.push(...lnShuffled);
+  // If newIgnoreRev: always include all new cards regardless of revSlice length
+  const effectiveNewArr = newIgnoreRev ? newArr : newArr;
   let ni = 0, ri = 0;
   const newEvery = 5; // insert 1 new card every 5 review cards
-  while (ri < revArr.length || ni < newArr.length) {
+  while (ri < revArr.length || ni < effectiveNewArr.length) {
     // Add up to 5 reviews
     for (let i = 0; i < newEvery && ri < revArr.length; i++, ri++) {
       mixed.push(revArr[ri]);
@@ -3664,6 +3691,8 @@ const DECK_OPT_DEFAULTS = {
   easyInt:      4,
   relearnSteps: '10m',
   leechThresh:  8,
+  leechAction:  'suspend',  // 'suspend' or 'tag'
+  newIgnoreRev:  false,     // new cards shown even if review limit reached
   lapsePct:     50,
   newSort:      'card_type',
   revSort:      'due_random',
@@ -3701,8 +3730,10 @@ function openDeckOpt(deckId) {
   document.getElementById('doptFirstInt').value    = opt.firstInt;
   document.getElementById('doptEasyInt').value     = opt.easyInt;
   document.getElementById('doptRelearSteps').value = opt.relearnSteps;
-  document.getElementById('doptLeechThresh').value = opt.leechThresh;
-  document.getElementById('doptLapsePct').value    = opt.lapsePct;
+  document.getElementById('doptLeechThresh').value  = opt.leechThresh;
+  document.getElementById('doptLeechAction').value  = opt.leechAction || 'suspend';
+  document.getElementById('doptLapsePct').value     = opt.lapsePct;
+  document.getElementById('doptNewIgnoreRev').checked = opt.newIgnoreRev || false;
   document.getElementById('doptNewSort').value     = opt.newSort;
   document.getElementById('doptRevSort').value     = opt.revSort;
   document.getElementById('doptTimerSec').value    = opt.timerSec;
@@ -3741,7 +3772,9 @@ function saveDeckOpt() {
     easyInt:      parseInt(document.getElementById('doptEasyInt').value)     || 4,
     relearnSteps: document.getElementById('doptRelearSteps').value.trim()    || '10m',
     leechThresh:  parseInt(document.getElementById('doptLeechThresh').value) || 8,
+    leechAction:  document.getElementById('doptLeechAction').value || 'suspend',
     lapsePct:     parseInt(document.getElementById('doptLapsePct').value)    || 50,
+    newIgnoreRev: document.getElementById('doptNewIgnoreRev').checked,
     newSort:      document.getElementById('doptNewSort').value,
     revSort:      document.getElementById('doptRevSort').value,
     timerSec:     parseInt(document.getElementById('doptTimerSec').value)    || 0,
