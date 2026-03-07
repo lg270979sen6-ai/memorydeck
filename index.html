@@ -2094,7 +2094,7 @@ function sm2Calc(sm, g, deckOpt) {
   }
 
   // ── Применяем пользовательский коэффициент кнопки ──
-  if (inReview && s.state === 'review') {
+  {
     const mults = [
       deckOpt?.btnAgainMult ?? -1,
       deckOpt?.btnHardMult  ?? -1,
@@ -2102,14 +2102,15 @@ function sm2Calc(sm, g, deckOpt) {
       deckOpt?.btnEasyMult  ?? -1,
     ];
     const m = parseFloat(mults[g]);
-    console.log('[mult] g='+g+' inReview='+inReview+' m='+m+' interval_before='+s.interval+' deckOpt='+JSON.stringify(deckOpt));
     if (!isNaN(m) && m >= 0) {
-      const before = s.interval;
-      s.interval = Math.max(1, Math.round(s.interval * m));
-      console.log('[mult] applied: '+before+' × '+m+' = '+s.interval);
+      if (s.interval >= 1) {
+        // Review interval (days) — minimum 1 day
+        s.interval = Math.max(1, Math.round(s.interval * m));
+      } else {
+        // Learning step (fraction of day = minutes) — no minimum
+        s.interval = s.interval * m;
+      }
     }
-  } else {
-    console.log('[mult] SKIP: inReview='+inReview+' state='+s.state);
   }
 
   // Compute due date
