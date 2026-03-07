@@ -1897,9 +1897,10 @@ const isDue = sm => {
   if (!sm || sm.state==='new') return true;
   if (sm.state==='learning' || sm.state==='relearning') {
     if (sm.dueMs) {
-      // If dueMs is today or past → due now. Only block if it's a future calendar day.
+      // Intraday steps: check actual millisecond timestamp
       const dueDay = new Date(sm.dueMs).toISOString().slice(0,10);
-      return dueDay <= today();
+      if (dueDay > today()) return false;        // future calendar day → not due
+      return sm.dueMs <= Date.now();             // same day: check exact time
     }
     return sm.due <= today();
   }
