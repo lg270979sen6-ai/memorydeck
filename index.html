@@ -2438,17 +2438,21 @@ function initMainFirebase(accId, userId) {
         } catch(e) {}
       }
 
-      // ── Migration: reset stale learning/relearning cards that have no dueMs ──
-      // These are cards from before the dueMs change — they'd show up every session.
-      // Reset them to 'new' so they restart fresh.
+      // ── Migration: fix stale / drill-corrupted learning cards ──
       const staleMigrations = {};
+      const todayStr = today();
       Object.entries(cards).forEach(([cid, c]) => {
         const sm = c.sm2;
-        if (sm && (sm.state === 'learning' || sm.state === 'relearning') && !sm.dueMs) {
-          staleMigrations['cards/' + cid + '/sm2/state'] = 'new';
-          staleMigrations['cards/' + cid + '/sm2/stepIdx'] = 0;
-          staleMigrations['cards/' + cid + '/sm2/interval'] = 0;
-          // keep lapses, ease, stability, difficulty for future scheduling
+        if (!sm) return;
+        if (sm.state === 'learning' || sm.state === 'relearning') {
+          // Case 1: no dueMs (pre-dueMs era) — reset to new
+          if (!sm.dueMs) {
+            staleMigrations['cards/' + cid + '/sm2/state'] = 'new';
+            staleMigrations['cards/' + cid + '/sm2/stepIdx'] = 0;
+            staleMigrations['cards/' + cid + '/sm2/interval'] = 0;
+          }
+          // Case 2: dueMs is in the past AND due date is today or past — card is stuck,
+          // but with day-based isDue it will now show correctly, so no fix needed.
         }
       });
       if (Object.keys(staleMigrations).length > 0) {
@@ -2722,7 +2726,8 @@ function buildDeckRow(id, d) {
   } else {
     const parts = [];
     if (nw > 0) parts.push(`<span style="background:rgba(0,112,243,.1);color:#0060d0;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">${nw} нов.</span>`);
-    if (rv+ln > 0) parts.push(`<span style="background:rgba(52,199,89,.1);color:#1a8f3c;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">${rv+ln} повт.</span>`);
+    if (ln > 0) parts.push(`<span style="background:rgba(255,149,0,.1);color:#c85000;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">${ln} учатся</span>`);
+    if (rv > 0) parts.push(`<span style="background:rgba(52,199,89,.1);color:#1a8f3c;font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;">${rv} повт.</span>`);
     statusHtml = parts.join('');
   }
 
@@ -3345,62 +3350,36 @@ function closeReview(){
 
 function doGrade(g){
   const c=rQ[rIdx];
-  const wasNew = !c.sm2 || c.sm2.state === 'new';
-  const deckOpt = c.deckId ? getEffectiveOpt(c.deckId) : null;
-  const ns=schedCalc(c.sm2,g,deckOpt);
-  // Mark firstReview date so getDeckDue can count how many new cards shown today
-  if (wasNew && !ns.firstReview) ns.firstReview = today();
-  // Also update local cards cache so deck counts refresh immediately
-  if (cards[c.id]) cards[c.id] = {...cards[c.id], sm2: ns};
-  save('cards/'+c.id+'/sm2',ns);
   ['again','hard','good','easy'].forEach((k,i)=>{if(i===g)rStats[k]++;});
 
-  // Track grade in Firebase gradeLog for retention stats
-  if (!c._drill) {
-    const t2=today();
-    const gk = ['again','hard','good','easy'][g];
-    const dayGrades = gradeLog[t2] || {again:0,hard:0,good:0,easy:0};
-    dayGrades[gk] = (dayGrades[gk]||0)+1;
-    gradeLog[t2] = dayGrades;
-    save('gradeLog/'+t2, dayGrades);
+  // DRILL MODE: show feedback only, never alter scheduling
+  if (c._drill) { rIdx++; setTimeout(renderCard,80); return; }
+
+  const wasNew = !c.sm2 || c.sm2.state === 'new';
+  const deckOpt = c.deckId ? getEffectiveOpt(c.deckId) : null;
+  const ns = schedCalc(c.sm2, g, deckOpt);
+  if (wasNew && !ns.firstReview) ns.firstReview = today();
+  if (cards[c.id]) cards[c.id] = {...cards[c.id], sm2: ns};
+  save('cards/'+c.id+'/sm2', ns);
+
+  const t2=today(), gk=['again','hard','good','easy'][g];
+  const dayGrades=gradeLog[t2]||{again:0,hard:0,good:0,easy:0};
+  dayGrades[gk]=(dayGrades[gk]||0)+1; gradeLog[t2]=dayGrades;
+  save('gradeLog/'+t2, dayGrades);
+
+  if (ns.state==='learning'||ns.state==='relearning') {
+    const remaining=rQ.length-rIdx-1;
+    const delayMin=ns.dueMs?Math.max(0,ns.dueMs-Date.now())/60000:0;
+    let skip;
+    if(delayMin<=1.5)     skip=Math.max(5, Math.min(10,remaining));
+    else if(delayMin<=7)  skip=Math.max(10,Math.min(remaining,Math.round(delayMin*2)));
+    else                  skip=Math.max(15,Math.min(remaining,Math.round(delayMin*1.5)));
+    rQ.splice(Math.min(rIdx+1+skip,rQ.length),0,{...c,sm2:ns});
   }
 
-  // Re-insert learning cards into queue at appropriate position
-  // Anki logic: space them out so they don't block new cards
-  if (ns.state === 'learning' || ns.state === 'relearning') {
-    const delayMs = ns.dueMs ? Math.max(0, ns.dueMs - Date.now()) : 0;
-    const delayMin = delayMs / 60000;
-
-    // Calculate insert position based on delay:
-    // - Again (1m): insert after min 5 cards (so you see 5 new/review cards first)
-    // - Hard (~5-6m): insert after ~10 cards
-    // - Prefer to position AFTER new cards that are already in queue
-    const remaining = rQ.length - rIdx - 1; // cards still in queue after current
-
-    let skipCards;
-    if (delayMin <= 1.5) {
-      // Again: ~1 min → insert after at least 5 cards
-      skipCards = Math.max(5, Math.min(10, remaining));
-    } else if (delayMin <= 7) {
-      // Hard: ~5-6 min → insert after ~10-15 cards
-      skipCards = Math.max(10, Math.min(remaining, Math.round(delayMin * 2)));
-    } else {
-      // Longer steps (10m+): insert near end of current queue
-      skipCards = Math.max(15, Math.min(remaining, Math.round(delayMin * 1.5)));
-    }
-
-    const insertAt = Math.min(rIdx + 1 + skipCards, rQ.length);
-    rQ.splice(insertAt, 0, {...c, sm2: ns});
-  }
-
-  if (!c._drill) {
-    const t=today(), cnt=(studyLog[t]||0)+1;
-    save('studyLog/'+t,cnt); studyLog[t]=cnt;
-    if(!c.sm2||c.sm2.state==='new'){
-      const nc=(newLog[t]||0)+1;
-      save('newLog/'+t,nc); newLog[t]=nc;
-    }
-  }
+  const t=today(), cnt=(studyLog[t]||0)+1;
+  save('studyLog/'+t,cnt); studyLog[t]=cnt;
+  if(wasNew){ const nc=(newLog[t]||0)+1; save('newLog/'+t,nc); newLog[t]=nc; }
   rIdx++;
   setTimeout(renderCard,80);
 }
