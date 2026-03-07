@@ -2094,19 +2094,22 @@ function sm2Calc(sm, g, deckOpt) {
   }
 
   // ── Применяем пользовательский коэффициент кнопки ──
-  // Только для review-интервалов (в днях), не для learning-шагов (в минутах)
   if (inReview && s.state === 'review') {
     const mults = [
-      deckOpt?.btnAgainMult ?? -1,  // g=0 Снова
-      deckOpt?.btnHardMult  ?? -1,  // g=1 Трудно
-      deckOpt?.btnGoodMult  ?? -1,  // g=2 Хорошо
-      deckOpt?.btnEasyMult  ?? -1,  // g=3 Легко
+      deckOpt?.btnAgainMult ?? -1,
+      deckOpt?.btnHardMult  ?? -1,
+      deckOpt?.btnGoodMult  ?? -1,
+      deckOpt?.btnEasyMult  ?? -1,
     ];
     const m = parseFloat(mults[g]);
+    console.log('[mult] g='+g+' inReview='+inReview+' m='+m+' interval_before='+s.interval+' deckOpt='+JSON.stringify(deckOpt));
     if (!isNaN(m) && m >= 0) {
-      // -1 = стандарт (не применять), >=0 = пользовательский множитель
+      const before = s.interval;
       s.interval = Math.max(1, Math.round(s.interval * m));
+      console.log('[mult] applied: '+before+' × '+m+' = '+s.interval);
     }
+  } else {
+    console.log('[mult] SKIP: inReview='+inReview+' state='+s.state);
   }
 
   // Compute due date
