@@ -486,7 +486,7 @@ body {
 .rev-count { font-family: var(--mono); font-size: 12px; color: var(--ink3); flex-shrink: 0; }
 
 /* Card stage — fills all remaining space */
-.card-stage { flex: 1; display: flex; flex-direction: column; padding: 0 14px 8px; min-height: 0; }
+.card-stage { flex: 1; display: flex; flex-direction: column; padding: 0 12px 8px; min-height: 0; }
 .card-flipper {
   flex: 1; position: relative; cursor: pointer;
 }
@@ -496,10 +496,11 @@ body {
   box-shadow: 0 4px 24px rgba(0,0,0,.08), 0 1px 4px rgba(0,0,0,.04);
   display: flex; flex-direction: column;
   align-items: center; justify-content: flex-start;
-  padding: 44px 16px 12px; text-align: center;
+  padding: 42px 16px 10px; text-align: center;
   border: .5px solid var(--border);
   overflow-y: auto; -webkit-overflow-scrolling: touch;
   transition: opacity .2s;
+  gap: 0;
 }
 .c-back {
   background: linear-gradient(160deg, #f8f9ff 0%, #eef2ff 100%);
@@ -549,10 +550,10 @@ body {
   width: 100%;
 }
 .anki-img img, .c-body img {
-  max-width: 100% !important; max-height: 220px !important;
-  border-radius: 14px !important; object-fit: contain !important;
-  display: block !important; margin: 4px auto !important;
-  box-shadow: 0 2px 12px rgba(0,0,0,.1) !important;
+  max-width: 100% !important; max-height: 150px !important;
+  border-radius: 12px !important; object-fit: contain !important;
+  display: block !important; margin: 0 auto !important;
+  box-shadow: 0 2px 10px rgba(0,0,0,.08) !important;
 }
 .c-int {
   font-family: var(--mono); font-size: 11px;
@@ -603,13 +604,13 @@ body {
 .gb-easy  { background: #edfff3; color: #1a9e42; box-shadow: 0 2px 10px rgba(52,199,89,.12); }
 .gb-easy  .g-dot { background: #34c759; box-shadow: 0 3px 8px rgba(52,199,89,.35); }
 
-.anki-word { font-size: 28px !important; font-weight: 800 !important; color: var(--ink1) !important; margin: 0 0 1px 0 !important; display: block !important; letter-spacing: -0.5px; }
-.anki-ipa  { font-size: 14px !important; color: var(--blue) !important; font-style: italic !important; font-weight: 400 !important; margin: 0 0 3px 0 !important; display: block !important; }
-.anki-translation { font-size: 22px !important; font-weight: 700 !important; color: var(--green) !important; margin: 2px 0 3px !important; display: block !important; }
-.anki-meaning { font-size: 12px !important; font-weight: 400 !important; color: var(--ink2) !important; line-height: 1.4 !important; margin: 3px 0 !important; background: rgba(0,122,255,.07) !important; border-left: 3px solid var(--blue) !important; padding: 4px 9px !important; border-radius: 0 8px 8px 0 !important; display: block !important; text-align:left !important; }
-.anki-example { font-size: 12px !important; font-weight: 400 !important; color: var(--ink2) !important; font-style: italic !important; margin: 3px 0 0 0 !important; line-height: 1.4 !important; display: block !important; text-align:left !important; padding: 0 !important; }
-.anki-img { text-align: center !important; margin: 3px 0 !important; display: block !important; }
-.anki-img img, .c-body img { max-width: 100% !important; max-height: 160px !important; border-radius: 10px !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
+.anki-word { font-size: 28px !important; font-weight: 800 !important; color: var(--ink1) !important; margin: 0 !important; display: block !important; letter-spacing: -0.5px; line-height: 1.2 !important; }
+.anki-ipa  { font-size: 14px !important; color: var(--blue) !important; font-style: italic !important; font-weight: 400 !important; margin: 0 !important; display: block !important; line-height: 1.4 !important; }
+.anki-translation { font-size: 20px !important; font-weight: 700 !important; color: var(--green) !important; margin: 2px 0 0 !important; display: block !important; line-height: 1.3 !important; }
+.anki-meaning { font-size: 12px !important; font-weight: 400 !important; color: var(--ink2) !important; line-height: 1.4 !important; margin: 4px 0 0 !important; background: rgba(0,122,255,.07) !important; border-left: 3px solid var(--blue) !important; padding: 4px 8px !important; border-radius: 0 8px 8px 0 !important; display: block !important; text-align:left !important; width: 100% !important; box-sizing: border-box !important; }
+.anki-example { font-size: 12px !important; font-weight: 400 !important; color: var(--ink2) !important; font-style: italic !important; margin: 4px 0 0 !important; line-height: 1.4 !important; display: block !important; text-align:left !important; width: 100% !important; }
+.anki-img { text-align: center !important; margin: 4px 0 0 !important; display: block !important; width: 100% !important; }
+.anki-img img, .c-body img { max-width: 100% !important; max-height: 150px !important; border-radius: 10px !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
 .c-int {
   font-family: var(--mono); font-size: 11px;
   color: var(--ink4); margin-top: 10px;
@@ -1268,7 +1269,7 @@ body {
     <div class="overlay-title" id="ddTitle"></div>
     <div class="hbtn" onclick="openCardEd(null)" style="font-size:20px;background:var(--bg);">＋</div>
   </div>
-  <div id="ddMeta" style="padding:12px 16px;border-bottom:.5px solid var(--border);display:flex;align-items:center;gap:8px;">
+  <div id="ddMeta" style="border-bottom:.5px solid var(--border);">
     <button onclick="openTemplateEd()" style="margin-left:auto;padding:7px 14px;border-radius:10px;background:var(--bg2);border:.5px solid var(--border);font-size:13px;font-weight:600;color:var(--ink2);cursor:pointer;flex-shrink:0;">🎨 Шаблон карточек</button>
   </div>
   <div class="overlay-body" id="ddCards"></div>
@@ -2658,12 +2659,15 @@ function toggleDeckPause(id) {
 
 function getDeckDue(deckId) {
   const t = today();
-  // Use per-deck newLog key so each deck tracks its own shown-new count
-  const deckNewKey = t + '_' + deckId;
-  const shownNew = (newLog[deckNewKey] !== undefined) ? newLog[deckNewKey] : (newLog[t] || 0);
   const opt = getDeckOpt(deckId);
   const hasDeckOpt = decks[deckId]?.opt;
-  const maxNew = hasDeckOpt ? (opt.newPerDay ?? cfg.newPerDay) : cfg.newPerDay;
+  const deckMax = hasDeckOpt ? (opt.newPerDay ?? cfg.newPerDay) : cfg.newPerDay;
+
+  // Count how many new cards from THIS deck were already seen today
+  // (they transitioned from state 'new' — their lastReview date is today)
+  const deckShownNew = Object.values(cards).filter(c =>
+    c.deckId === deckId && c.sm2 && c.sm2.state !== 'new' && c.sm2.firstReview === t
+  ).length;
 
   let nw=0, ln=0, rv=0;
   Object.values(cards).forEach(c => {
@@ -2674,7 +2678,7 @@ function getDeckDue(deckId) {
     else if (sm.state==='review' && sm.due<=t) rv++;
   });
   return {
-    nw: Math.max(0, Math.min(nw, maxNew - shownNew)),
+    nw: Math.max(0, Math.min(nw, deckMax - deckShownNew)),
     ln,
     rv: Math.min(rv, hasDeckOpt ? (opt.maxReviews ?? cfg.maxReviews) : cfg.maxReviews)
   };
@@ -3322,8 +3326,13 @@ function closeReview(){
 
 function doGrade(g){
   const c=rQ[rIdx];
+  const wasNew = !c.sm2 || c.sm2.state === 'new';
   const deckOpt = c.deckId ? getEffectiveOpt(c.deckId) : null;
   const ns=schedCalc(c.sm2,g,deckOpt);
+  // Mark firstReview date so getDeckDue can count how many new cards shown today
+  if (wasNew && !ns.firstReview) ns.firstReview = today();
+  // Also update local cards cache so deck counts refresh immediately
+  if (cards[c.id]) cards[c.id] = {...cards[c.id], sm2: ns};
   save('cards/'+c.id+'/sm2',ns);
   ['again','hard','good','easy'].forEach((k,i)=>{if(i===g)rStats[k]++;});
 
