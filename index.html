@@ -1867,13 +1867,17 @@ const today  = () => new Date().toISOString().slice(0,10);
 const nowMs  = () => Date.now();
 const addD   = (s,n) => { const d=new Date(s); d.setDate(d.getDate()+n); return d.toISOString().slice(0,10); };
 
-// isDue: for review cards → compare date; for learning → compare timestamp (dueMs)
-const isDue  = sm => {
+// isDue: learning cards due today = available immediately (Anki day-based logic)
+// Only hide learning cards scheduled for a FUTURE DAY (overnight steps like 1d)
+const isDue = sm => {
   if (!sm || sm.state==='new') return true;
   if (sm.state==='learning' || sm.state==='relearning') {
-    // Use dueMs timestamp if available; fallback: treat as due (old data)
-    if (sm.dueMs) return Date.now() >= sm.dueMs;
-    return sm.due <= today(); // legacy fallback
+    if (sm.dueMs) {
+      // If dueMs is today or past → due now. Only block if it's a future calendar day.
+      const dueDay = new Date(sm.dueMs).toISOString().slice(0,10);
+      return dueDay <= today();
+    }
+    return sm.due <= today();
   }
   return sm.due <= today();
 };
@@ -2606,16 +2610,31 @@ function checkSession(){
 // ═══════════════════════════════════════════════════
 function getDue(){
   const t=today();
-  const shownNew = newLog[t] || 0;
   let nw=0,rv=0,ln=0;
+  // Group cards by deck, apply per-deck limits
+  const deckNewCounts = {}; // deckId -> {rawNew, shownNew, maxNew}
   Object.values(cards).forEach(c=>{
-    if (decks[c.deckId]?.paused) return; // skip paused decks
+    if (decks[c.deckId]?.paused) return;
     const sm=c.sm2;
-    if(!sm||sm.state==='new') nw++;
+    if(!sm||sm.state==='new'){
+      if(!deckNewCounts[c.deckId]) {
+        const opt=getDeckOpt(c.deckId);
+        const hasDeckOpt=decks[c.deckId]?.opt;
+        deckNewCounts[c.deckId]={raw:0,max:hasDeckOpt?(opt.newPerDay??cfg.newPerDay):cfg.newPerDay};
+      }
+      deckNewCounts[c.deckId].raw++;
+    }
     else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) ln++;
     else if(sm.state==='review' && sm.due<=t) rv++;
   });
-  return{nw:Math.max(0,Math.min(nw,cfg.newPerDay-shownNew)),rv:Math.min(rv,cfg.maxReviews),ln};
+  // Sum capped new counts per deck
+  const shownNew = newLog[t] || 0;
+  let totalNew=0;
+  Object.values(deckNewCounts).forEach(d=>{
+    totalNew += Math.min(d.raw, d.max);
+  });
+  nw = Math.max(0, Math.min(totalNew, cfg.newPerDay - shownNew));
+  return{nw, rv:Math.min(rv,cfg.maxReviews), ln};
 }
 
 function renderAll(){renderHome();renderDecks();updateBadge();}
