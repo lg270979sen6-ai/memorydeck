@@ -3581,7 +3581,7 @@ function doGrade(g){
   ['again','hard','good','easy'].forEach((k,i)=>{if(i===g)rStats[k]++;});
 
   // DRILL MODE: show feedback only, never alter scheduling
-  if (c._drill) { rIdx++; setTimeout(renderCard,80); return; }
+
 
   const t = today();
   // prevState = state of this card BEFORE this grade
@@ -3884,7 +3884,7 @@ function startDrillCard(cardId) {
   if (!c) return;
   closeDeckDetail();
   // Build a single-card queue in drill mode
-  rQ = [{id: cardId, ...c, _drill: true}];
+  rQ = [{id: cardId, ...c}];
   rIdx = 0; rFlipped = false; rStats = {again:0,hard:0,good:0,easy:0};
   document.getElementById('revScreen').classList.add('open');
   renderCard();
