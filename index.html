@@ -2695,9 +2695,9 @@ function renderHome(){
   const t=today();
 
   // Today's done stats
-  const doneNew  = Object.values(cards).filter(c=>c.sm2?.firstReview===t).length;
-  const doneRev  = (studyLog[t]||0) - doneNew; // total graded minus new ones
-  const doneTotal = studyLog[t]||0;
+  const doneNew   = Object.values(cards).filter(c=>c.sm2?.firstReview===t).length;
+  const doneRev   = studyLog[t+'_rv'] || 0;
+  const doneTotal = studyLog[t] || 0;
 
   // Pending counts
   document.getElementById('cNew').textContent   = nw;
@@ -2869,7 +2869,7 @@ function renderStats(){
   const {nw:leftNew2,rv:leftRev,ln:leftLn} = getDue();
   const leftNew      = leftNew2;
   const studiedToday = studyLog[t] || 0;
-  const studiedRev   = Math.max(0, studiedToday - shownNew);
+  const studiedRev   = studyLog[t+'_rv'] || 0;
 
   // Streak
   let streak=0;
@@ -3497,20 +3497,24 @@ function doGrade(g){
     rQ.splice(Math.min(rIdx+1+skip,rQ.length),0,{...c,sm2:ns});
   }
 
-  // studyLog: count unique cards graded today (Anki rule: 1 card = 1 count)
-  // New card: count once on first grade (wasNew)
-  // Review card: count once per day (state was 'review' before grading)
-  // Learning/relearning: NOT counted here — they bounce back and would double-count
+  // Anki rule: count unique cards, not button presses
+  // new → count in newLog + studyLog once (on wasNew)
+  // review → count in studyLog + rvLog once (prevState==='review')
+  // learning/relearning → NOT counted (they re-enter the queue)
   const t = today();
   const prevState = c.sm2?.state; // state BEFORE this grade
-  if (wasNew || prevState === 'review') {
-    const cnt = (studyLog[t]||0) + 1;
-    save('studyLog/'+t, cnt); studyLog[t] = cnt;
-  }
   if (wasNew) {
     const nc = (newLog[t]||0) + 1;
     save('newLog/'+t, nc); newLog[t] = nc;
+    const cnt = (studyLog[t]||0) + 1;
+    save('studyLog/'+t, cnt); studyLog[t] = cnt;
+  } else if (prevState === 'review') {
+    const cnt = (studyLog[t]||0) + 1;
+    save('studyLog/'+t, cnt); studyLog[t] = cnt;
+    const rc = (studyLog[t+'_rv']||0) + 1;
+    save('studyLog/'+t+'_rv', rc); studyLog[t+'_rv'] = rc;
   }
+  // learning/relearning: no count
   rIdx++;
   setTimeout(renderCard,80);
 }
@@ -3617,7 +3621,7 @@ function openDeckDetail(id){
           <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="#48484a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="2.5"/><path d="M10 1v2M10 17v2M1 10h2M17 10h2M3.05 3.05l1.42 1.42M15.54 15.54l1.41 1.41M15.54 4.46l1.41-1.41M3.05 16.95l1.42-1.41"/></svg>
           Настройки
         </button>
-        <button onclick="startReview('${id}')" style="flex:2;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:12px;background:${totalDue===0||paused?'var(--bg2)':'#0070f3'};color:${totalDue===0||paused?'var(--ink3)':'white'};border:none;font-family:var(--font);font-size:14px;font-weight:800;cursor:${totalDue===0||paused?'default':'pointer'};" ${totalDue===0||paused?'disabled':''}>
+        <button onclick="if(${totalDue>0&&!paused?'true':'false'}){startReview('${id}')}" style="flex:2;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:12px;background:${totalDue===0||paused?'var(--bg2)':'#0070f3'};color:${totalDue===0||paused?'var(--ink3)':'white'};border:none;font-family:var(--font);font-size:14px;font-weight:800;cursor:${totalDue===0||paused?'default':'pointer'};">
           <svg viewBox="0 0 20 20" width="14" height="14"><polygon points="3,2 17,10 3,18" fill="${totalDue===0||paused?'var(--ink3)':'white'}"/></svg>
           ${paused?'На паузе':totalDue>0?`Учить · ${totalDue}`:'Готово на сегодня'}
         </button>
@@ -3625,8 +3629,8 @@ function openDeckDetail(id){
     </div>`;
 
   const pipCol=sm=>!sm||sm.state==='new'?'#0070f3':sm.state==='learning'?'var(--orange)':isDue(sm)?'var(--red)':'var(--green)';
-  document.getElementById('ddCards').innerHTML=dc.length?dc.map(([cid,c])=>`
-    <div class="card-row">
+  function buildCardRow(cid,c){
+    return `<div class="card-row" data-front="${esc(stripHtml(c.front)).toLowerCase()}" data-back="${esc(stripHtml(c.back)).toLowerCase()}">
       <div class="card-state-pip" style="background:${pipCol(c.sm2)};"></div>
       <div class="card-front-t">${esc(stripHtml(c.front))}</div>
       <div class="card-back-t">${esc(stripHtml(c.back))}</div>
@@ -3635,11 +3639,37 @@ function openDeckDetail(id){
         <div class="hbtn" onclick="openCardEd('${cid}')" style="background:transparent;border:none;color:var(--ink3);">✏️</div>
         <div class="row-del" onclick="deleteCard('${cid}')">🗑</div>
       </div>
-    </div>`).join('')
+    </div>`;
+  }
+  document.getElementById('ddCards').innerHTML=dc.length?`
+    <div style="padding:10px 16px 4px;position:sticky;top:0;background:var(--card);z-index:2;">
+      <div style="display:flex;align-items:center;gap:8px;background:var(--bg2);border-radius:12px;padding:8px 12px;border:.5px solid var(--border);">
+        <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="var(--ink4)" stroke-width="1.8" stroke-linecap="round"><circle cx="8.5" cy="8.5" r="5.5"/><line x1="13" y1="13" x2="18" y2="18"/></svg>
+        <input id="ddSearch" type="text" placeholder="Поиск карточек..." oninput="filterDdCards('${id}')"
+          style="flex:1;background:none;border:none;outline:none;font-size:14px;font-family:var(--font);color:var(--ink);">
+        <span id="ddSearchCount" style="font-size:11px;color:var(--ink4);font-weight:600;">${dc.length}</span>
+      </div>
+    </div>
+    <div id="ddCardsList">${dc.map(([cid,c])=>buildCardRow(cid,c)).join('')}</div>`
   :'<div style="padding:40px;text-align:center;color:var(--ink3);font-weight:600;">Нет карточек — нажмите ＋</div>';
   document.getElementById('deckDetailOv').classList.add('open');
 }
 function closeDeckDetail(){document.getElementById('deckDetailOv').classList.remove('open');}
+
+function filterDdCards(deckId) {
+  const q = (document.getElementById('ddSearch')?.value || '').toLowerCase().trim();
+  const rows = document.querySelectorAll('#ddCardsList .card-row');
+  let visible = 0;
+  rows.forEach(row => {
+    const front = row.dataset.front || '';
+    const back  = row.dataset.back  || '';
+    const match = !q || front.includes(q) || back.includes(q);
+    row.style.display = match ? '' : 'none';
+    if (match) visible++;
+  });
+  const cnt = document.getElementById('ddSearchCount');
+  if (cnt) cnt.textContent = q ? `${visible}/${rows.length}` : rows.length;
+}
 
 function openDeckSettings(id) {
   const existing = document.getElementById('deckSettingsSheet');
