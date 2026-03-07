@@ -2864,9 +2864,12 @@ function renderStats(){
   // Due today
   const dueReview  = all.filter(c => c.sm2?.state==='review' && c.sm2.due<=t).length;
   const dueLearning= all.filter(c => (c.sm2?.state==='learning'||c.sm2?.state==='relearning') && isDue(c.sm2)).length;
-  const shownNew   = newLog[t] || 0;
-  const leftNew    = Math.max(0, cfg.newPerDay - shownNew);
+  // Source of truth: firstReview counts new cards shown; studyLog counts total graded
+  const shownNew     = Object.values(cards).filter(c=>c.sm2?.firstReview===t).length;
+  const {nw:leftNew2,rv:leftRev,ln:leftLn} = getDue();
+  const leftNew      = leftNew2;
   const studiedToday = studyLog[t] || 0;
+  const studiedRev   = Math.max(0, studiedToday - shownNew);
 
   // Streak
   let streak=0;
@@ -2879,8 +2882,8 @@ function renderStats(){
       <div style="font-size:11px;font-weight:700;color:var(--ink4);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;">📅 Сегодня</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
         <div><div style="font-size:24px;font-weight:800;color:var(--blue);">${studiedToday}</div><div style="font-size:10px;color:var(--ink4);margin-top:2px;">Пройдено</div></div>
-        <div><div style="font-size:24px;font-weight:800;color:var(--orange);">${shownNew}</div><div style="font-size:10px;color:var(--ink4);margin-top:2px;">Новых показано</div></div>
-        <div><div style="font-size:24px;font-weight:800;color:${leftNew>0?'var(--red)':'var(--green)'};">${leftNew>0?leftNew:'✓'}</div><div style="font-size:10px;color:var(--ink4);margin-top:2px;">${leftNew>0?'Осталось':'Готово'}</div></div>
+        <div><div style="font-size:24px;font-weight:800;color:var(--orange);">${shownNew}</div><div style="font-size:10px;color:var(--ink4);margin-top:2px;">Новых изучено</div></div>
+        <div><div style="font-size:24px;font-weight:800;color:${studiedRev>0?'var(--blue)':'var(--ink4)'};">${studiedRev}</div><div style="font-size:10px;color:var(--ink4);margin-top:2px;">Повторено</div></div>
       </div>
       ${dueReview>0||dueLearning>0?`
       <div style="margin-top:8px;padding-top:8px;border-top:.5px solid var(--border);font-size:12px;color:var(--ink3);display:flex;gap:14px;">
@@ -2954,39 +2957,69 @@ function renderStats(){
     donut(stYoung, total,'var(--blue)',  '🌱 Молодых','< 21 дня')+
     donut(stMature,total,'var(--green)', '🌿 Зрелых', '≥ 21 дня');
 
-  // ── FORECAST — due cards next 30 days ────────────────
+  // ── FORECAST (Anki style) ────────────────────────────
+  // Day 0 = today remaining, day 1 = tomorrow, etc.
   const forecastDays = 30;
   const forecast = new Array(forecastDays).fill(0);
+
+  // Day 0: today's remaining (new + review + learning not yet done)
+  const {nw:fNw, rv:fRv, ln:fLn} = getDue();
+  forecast[0] = fNw + fRv + fLn;
+
+  // Days 1..29: scheduled review cards
   all.forEach(c => {
-    if (!c.sm2 || c.sm2.state !== 'review' || !c.sm2.due) return;
-    const daysFromNow = Math.round((new Date(c.sm2.due) - new Date(t)) / 86400000);
-    if (daysFromNow > 0 && daysFromNow <= forecastDays) forecast[daysFromNow-1]++;
+    if (!c.sm2 || !c.sm2.due) return;
+    if (c.suspended) return;
+    // Only review-state cards (learning/relearning are short-term, skip)
+    if (c.sm2.state !== 'review') return;
+    const daysFromNow = Math.ceil((new Date(c.sm2.due) - new Date(t)) / 86400000);
+    if (daysFromNow >= 1 && daysFromNow < forecastDays) forecast[daysFromNow]++;
   });
+
   const fMax = Math.max(...forecast, 1);
-  const tomorrow = forecast[0];
-  const avgLoad = Math.round(forecast.reduce((a,b)=>a+b,0)/forecastDays);
+  const todayLeft = forecast[0];
+  const tomorrow  = forecast[1] || 0;
+  const avg7  = Math.round(forecast.slice(1,8).reduce((a,b)=>a+b,0)/7);
+  const total30 = forecast.reduce((a,b)=>a+b,0);
+
   const fBars = forecast.map((n,i)=>{
-    const h = Math.round(n/fMax*60);
-    return `<div style="display:flex;flex-direction:column;align-items:center;gap:2px;flex:1;">
-      <div style="width:100%;background:var(--blue);border-radius:2px 2px 0 0;height:${h}px;min-height:${n>0?1:0}px;opacity:.8;" title="+${i+1}д: ${n}"></div>
+    const h = Math.round(n/fMax*72);
+    const isToday = i===0;
+    const col = isToday ? 'var(--orange)' : 'var(--green)';
+    const label = isToday ? 'Сегодня' : i===1 ? 'Завтра' : '+'+i+'д';
+    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;">
+      <div style="width:100%;background:${col};border-radius:3px 3px 0 0;height:${h}px;min-height:${n>0?2:0}px;opacity:${isToday?.9:.75};" title="${label}: ${n} карт"></div>
     </div>`;
   }).join('');
+
+  // X-axis labels
+  const xLabels = `<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink4);margin-top:4px;">
+    <span>Сегодня</span><span>+${Math.round(forecastDays/3)}д</span><span>+${Math.round(forecastDays*2/3)}д</span><span>+${forecastDays-1}д</span>
+  </div>`;
+
   document.getElementById('statsForecast').innerHTML=`
     <div class="chart-title">📅 Прогноз повторений — 30 дней</div>
-    <div style="display:flex;align-items:flex-end;height:60px;gap:2px;margin-bottom:8px;">${fBars}</div>
-    <div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink4);margin-bottom:10px;">
-      <span>+1д</span><span>+${Math.round(forecastDays/2)}д</span><span>+${forecastDays}д</span>
+    <div style="font-size:11px;color:var(--ink4);margin-bottom:8px;text-align:center;">
+      <span style="display:inline-block;width:10px;height:10px;background:var(--orange);border-radius:2px;margin-right:4px;"></span>Сегодня
+      <span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;margin:0 4px 0 12px;"></span>Будущие повторения
     </div>
-    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px;">
-      <div style="background:var(--bg2);border-radius:10px;padding:8px 12px;">
-        <div style="font-size:18px;font-weight:800;color:var(--blue);">${tomorrow}</div>
-        <div style="color:var(--ink3);">На завтра</div>
+    <div style="display:flex;align-items:flex-end;height:72px;gap:1px;">${fBars}</div>
+    ${xLabels}
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;font-size:12px;">
+      <div style="background:var(--bg2);border-radius:10px;padding:8px 10px;text-align:center;">
+        <div style="font-size:20px;font-weight:800;color:var(--orange);">${todayLeft}</div>
+        <div style="color:var(--ink3);font-size:11px;">Осталось сегодня</div>
       </div>
-      <div style="background:var(--bg2);border-radius:10px;padding:8px 12px;">
-        <div style="font-size:18px;font-weight:800;color:var(--ink2);">${avgLoad}</div>
-        <div style="color:var(--ink3);">В среднем/день</div>
+      <div style="background:var(--bg2);border-radius:10px;padding:8px 10px;text-align:center;">
+        <div style="font-size:20px;font-weight:800;color:var(--green);">${tomorrow}</div>
+        <div style="color:var(--ink3);font-size:11px;">Завтра</div>
       </div>
-    </div>`;
+      <div style="background:var(--bg2);border-radius:10px;padding:8px 10px;text-align:center;">
+        <div style="font-size:20px;font-weight:800;color:var(--ink2);">${avg7}</div>
+        <div style="color:var(--ink3);font-size:11px;">В среднем/день</div>
+      </div>
+    </div>
+    <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--ink4);">Всего за 30 дней: <b>${total30}</b> повторений</div>`;
 
   // ── INTERVALS histogram ───────────────────────────────
   const intBuckets = new Array(21).fill(0); // 0..20+ days
@@ -3464,8 +3497,14 @@ function doGrade(g){
     rQ.splice(Math.min(rIdx+1+skip,rQ.length),0,{...c,sm2:ns});
   }
 
-  const t=today(), cnt=(studyLog[t]||0)+1;
-  save('studyLog/'+t,cnt); studyLog[t]=cnt;
+  // studyLog: count unique cards graded today (not each button press)
+  // A card counts once: when it's first graded (wasNew) OR when it's a review/relearn
+  // Learning cards that bounce back in queue should NOT be double-counted
+  const isFirstGrade = wasNew || (c.sm2?.state === 'review') || (c.sm2?.state === 'relearning' && !c._alreadyCountedToday);
+  if (isFirstGrade) {
+    const t=today(), cnt=(studyLog[t]||0)+1;
+    save('studyLog/'+t,cnt); studyLog[t]=cnt;
+  }
   if(wasNew){ const nc=(newLog[t]||0)+1; save('newLog/'+t,nc); newLog[t]=nc; }
   rIdx++;
   setTimeout(renderCard,80);
