@@ -1153,6 +1153,20 @@ body {
           <div class="today-count"><div class="today-n" id="cRev">0</div><div class="today-l">Повторить</div></div>
           <div class="today-count"><div class="today-n" id="cLearn">0</div><div class="today-l">Учатся</div></div>
         </div>
+        <div id="todayDoneRow" style="display:none;margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,.25);display:flex;gap:12px;justify-content:center;">
+          <div style="text-align:center;">
+            <div style="font-size:18px;font-weight:800;" id="cDoneNew">0</div>
+            <div style="font-size:10px;opacity:.8;font-weight:600;">изучено</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:18px;font-weight:800;" id="cDoneRev">0</div>
+            <div style="font-size:10px;opacity:.8;font-weight:600;">повторено</div>
+          </div>
+          <div style="text-align:center;">
+            <div style="font-size:18px;font-weight:800;" id="cDoneTotal">0</div>
+            <div style="font-size:10px;opacity:.8;font-weight:600;">всего за день</div>
+          </div>
+        </div>
       </div>
       <button class="start-btn fu1" id="startBtn" onclick="startReview(null)">▶ Начать повторение</button>
       <div class="sec-head fu2">
@@ -2627,30 +2641,39 @@ function checkSession(){
 // ═══════════════════════════════════════════════════
 //  RENDER
 // ═══════════════════════════════════════════════════
+// ── Single source of truth for due counts ──
+// Uses newLog[t] (written once per new card shown) as the authoritative
+// "how many new cards were already shown today" counter.
+function _deckShown(deckId, t) {
+  // How many new cards from this deck were shown today
+  // We track this via cards that have firstReview===t in this deck
+  return Object.values(cards).filter(c =>
+    c.deckId === deckId && c.sm2 && c.sm2.firstReview === t
+  ).length;
+}
+
 function getDue(){
   const t=today();
   let nw=0,rv=0,ln=0;
-  // Per-deck: count remaining new cards using firstReview (same as getDeckDue)
-  const deckNewCounts = {}; // deckId -> {remaining}
+  // Pre-compute per-deck shown counts and limits
+  const deckInfo = {};
+  Object.keys(decks).forEach(did => {
+    if (decks[did]?.paused) return;
+    const opt=getDeckOpt(did);
+    const hasDeckOpt=decks[did]?.opt;
+    const deckMax=hasDeckOpt?(opt.newPerDay??cfg.newPerDay):cfg.newPerDay;
+    const shown=_deckShown(did, t);
+    deckInfo[did]={remaining: Math.max(0, deckMax - shown), max: deckMax};
+  });
+
   Object.values(cards).forEach(c=>{
-    if (decks[c.deckId]?.paused) return;
+    if (!deckInfo[c.deckId]) return; // paused or unknown deck
     if (c.suspended) return;
     const sm=c.sm2;
-    const did = c.deckId;
-    if (!deckNewCounts[did]) {
-      const opt=getDeckOpt(did);
-      const hasDeckOpt=decks[did]?.opt;
-      const deckMax=hasDeckOpt?(opt.newPerDay??cfg.newPerDay):cfg.newPerDay;
-      // Count already shown today for this deck via firstReview
-      const shown=Object.values(cards).filter(x=>
-        x.deckId===did && x.sm2 && x.sm2.state!=='new' && x.sm2.firstReview===t
-      ).length;
-      deckNewCounts[did]={remaining: Math.max(0, deckMax - shown)};
-    }
     if(!sm||sm.state==='new'){
-      if(deckNewCounts[did].remaining > 0){
+      if(deckInfo[c.deckId].remaining > 0){
         nw++;
-        deckNewCounts[did].remaining--;
+        deckInfo[c.deckId].remaining--;
       }
     }
     else if((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) {
@@ -2669,29 +2692,46 @@ function renderHome(){
   const g=h<12?'Доброе утро':h<18?'Добрый день':'Добрый вечер';
   document.getElementById('todayGreet').textContent=g+', '+(sess.ud?.name||'')+'!';
   const {nw,rv,ln}=getDue(), total=nw+rv+ln;
-
-  // Today's progress: how many studied, how many reviewed
   const t=today();
-  const doneSt = studyLog[t] || 0; // total cards graded today
 
-  document.getElementById('cNew').textContent=nw;
-  document.getElementById('cRev').textContent=rv;
-  document.getElementById('cLearn').textContent=ln;
+  // Today's done stats
+  const doneNew  = Object.values(cards).filter(c=>c.sm2?.firstReview===t).length;
+  const doneRev  = (studyLog[t]||0) - doneNew; // total graded minus new ones
+  const doneTotal = studyLog[t]||0;
 
-  if(total>0){
-    document.getElementById('todayHead').textContent=`Сегодня ${total} карточек`;
+  // Pending counts
+  document.getElementById('cNew').textContent   = nw;
+  document.getElementById('cRev').textContent   = rv;
+  document.getElementById('cLearn').textContent = ln;
+
+  // Done stats row — show only if something was done today
+  const doneRow = document.getElementById('todayDoneRow');
+  if(doneTotal > 0){
+    doneRow.style.display='flex';
+    document.getElementById('cDoneNew').textContent   = doneNew;
+    document.getElementById('cDoneRev').textContent   = Math.max(0,doneRev);
+    document.getElementById('cDoneTotal').textContent = doneTotal;
   } else {
-    document.getElementById('todayHead').textContent= doneSt>0
-      ? `Всё готово! Пройдено ${doneSt} карточек 🎉`
-      : 'Всё повторено! 🎉';
+    doneRow.style.display='none';
+  }
+
+  // Headline and button
+  if(total>0){
+    document.getElementById('todayHead').textContent=`Осталось ${total} карточек`;
+  } else {
+    document.getElementById('todayHead').textContent= doneTotal>0
+      ? `Готово! Пройдено ${doneTotal} 🎉`
+      : 'Нет карточек на сегодня';
   }
 
   const btn=document.getElementById('startBtn');
   if(total===0){
     btn.disabled=true;
-    btn.textContent='✅ Готово на сегодня';
+    btn.style.opacity='0.5';
+    btn.textContent='✅ Всё готово на сегодня';
   } else {
     btn.disabled=false;
+    btn.style.opacity='1';
     btn.textContent=`▶  Начать  ·  ${total} карточек`;
   }
 
@@ -2721,30 +2761,29 @@ function toggleDeckPause(id) {
 
 function getDeckDue(deckId) {
   const t = today();
+  if (decks[deckId]?.paused) return {nw:0, ln:0, rv:0};
   const opt = getDeckOpt(deckId);
   const hasDeckOpt = decks[deckId]?.opt;
   const deckMax = hasDeckOpt ? (opt.newPerDay ?? cfg.newPerDay) : cfg.newPerDay;
-
-  // Count how many new cards from THIS deck were already seen today
-  // (they transitioned from state 'new' — their lastReview date is today)
-  const deckShownNew = Object.values(cards).filter(c =>
-    c.deckId === deckId && c.sm2 && c.sm2.state !== 'new' && c.sm2.firstReview === t
-  ).length;
+  const shown = _deckShown(deckId, t);
+  let remaining = Math.max(0, deckMax - shown);
 
   let nw=0, ln=0, rv=0;
   Object.values(cards).forEach(c => {
     if (c.deckId !== deckId) return;
-    if (c.suspended) return; // skip leeches
+    if (c.suspended) return;
     const sm = c.sm2;
-    if (!sm || sm.state==='new') nw++;
+    if (!sm || sm.state==='new') {
+      if (remaining > 0) { nw++; remaining--; }
+    }
     else if ((sm.state==='learning'||sm.state==='relearning') && isDue(sm)) {
-      if (sm.dueMs && new Date(sm.dueMs).toISOString().slice(0,10) > today()) rv++;
+      if (sm.dueMs && new Date(sm.dueMs).toISOString().slice(0,10) > t) rv++;
       else ln++;
     }
     else if (sm.state==='review' && sm.due<=t) rv++;
   });
   return {
-    nw: Math.max(0, Math.min(nw, deckMax - deckShownNew)),
+    nw,
     ln,
     rv: Math.min(rv, hasDeckOpt ? (opt.maxReviews ?? cfg.maxReviews) : cfg.maxReviews)
   };
