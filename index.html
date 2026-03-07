@@ -2759,6 +2759,12 @@ function computeCards(deckId = null) {
     }
   });
 
+  // ── Debug: log what computeCards sees ──
+  console.log('[computeCards] nwCards='+nwCards.length+' rvCards='+rvCards.length+' lnCards='+lnCards.length);
+  Object.entries(deckInfo).forEach(([did,di])=>console.log('  deck '+did+': remaining='+di.remaining+' maxRev='+di.maxRev));
+  const today_shown = Object.values(cards).filter(card=>card.sm2?.firstReview===t);
+  console.log('  firstReview===today count:', today_shown.length, today_shown.map(card=>card.id+':'+card.sm2?.state).join(', '));
+
   // ── Totals (capped by per-deck maxRev) ──
   const nw = nwCards.length;
   const ln = lnCards.length;
@@ -3559,6 +3565,7 @@ function doGrade(g){
   // ── Update local cache ALWAYS (even if key wasn't there before) ──
   cards[c.id] = {...(cards[c.id]||{}), ...c, sm2: ns};
   save('cards/'+c.id+'/sm2', ns);
+  console.log('[doGrade] saved sm2 for', c.id, '| state='+ns.state+' firstReview='+ns.firstReview+' due='+ns.due);
 
   // ── Grade log ──
   const gk=['again','hard','good','easy'][g];
@@ -3581,19 +3588,21 @@ function doGrade(g){
   }
 
   // ── Anki counters ──
-  // A card counts ONCE:
-  //   new card (wasNew)       → +1 newLog,  +1 studyLog
-  //   review card             → +1 studyLog
-  //   learning bounce-back   → nothing (already counted on wasNew, or not yet graduated)
-  // "prevState===learning" means card was already counted on its first grade (wasNew),
-  // so we skip it here to avoid double-counting.
-  if (wasNew) {
+  // Карточка считается ОДИН РАЗ:
+  //   new/learning → review  : +1 newLog, +1 studyLog  (карточка окончательно изучена)
+  //   review → review        : +1 studyLog              (повторение)
+  //   любой → learning/relearning : уже обработано выше через return
+  const graduatedFromNew = (prevState==='new' || prevState==='learning') && ns.state==='review';
+  const graduatedFromRelearn = prevState==='relearning' && ns.state==='review';
+  if (graduatedFromNew) {
     const nc=(newLog[t]||0)+1; save('newLog/'+t,nc); newLog[t]=nc;
     const cnt=(studyLog[t]||0)+1; save('studyLog/'+t,cnt); studyLog[t]=cnt;
-  } else if (prevState==='review') {
+    console.log('[doGrade] ✅ graduated new card → newLog='+newLog[t]+' studyLog='+studyLog[t]);
+  } else if (prevState==='review' && ns.state==='review') {
+    const cnt=(studyLog[t]||0)+1; save('studyLog/'+t,cnt); studyLog[t]=cnt;
+  } else if (graduatedFromRelearn) {
     const cnt=(studyLog[t]||0)+1; save('studyLog/'+t,cnt); studyLog[t]=cnt;
   }
-  // prevState==='learning' or 'relearning': skip — bounce-back, already counted
 
   rIdx++;
   setTimeout(renderCard,80);
