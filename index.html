@@ -1168,12 +1168,11 @@ body {
           </div>
         </div>
       </div>
-      <button class="start-btn fu1" id="startBtn" onclick="startReview(null)">▶ Начать повторение</button>
-      <div class="sec-head fu2">
+      <div class="sec-head fu1">
         <div class="sec-title">Колоды</div>
         <div class="sec-more" onclick="switchView('decks')">Все →</div>
       </div>
-      <div id="homeDecks" class="fu3"></div>
+      <div id="homeDecks" class="fu2"></div>
     </div>
 
     <!-- DECKS -->
@@ -2694,10 +2693,13 @@ function renderHome(){
   const {nw,rv,ln}=getDue(), total=nw+rv+ln;
   const t=today();
 
-  // Today's done stats
+  // Today's done stats — source of truth:
+  // doneNew = cards with firstReview===today (set once when new card first graded)
+  // doneRev = studyLog[t] - doneNew  (review cards graded today)
+  // doneTotal = studyLog[t]
   const doneNew   = Object.values(cards).filter(c=>c.sm2?.firstReview===t).length;
-  const doneRev   = studyLog[t+'_rv'] || 0;
   const doneTotal = studyLog[t] || 0;
+  const doneRev   = Math.max(0, doneTotal - doneNew);
 
   // Pending counts
   document.getElementById('cNew').textContent   = nw;
@@ -2709,7 +2711,7 @@ function renderHome(){
   if(doneTotal > 0){
     doneRow.style.display='flex';
     document.getElementById('cDoneNew').textContent   = doneNew;
-    document.getElementById('cDoneRev').textContent   = Math.max(0,doneRev);
+    document.getElementById('cDoneRev').textContent   = doneRev;
     document.getElementById('cDoneTotal').textContent = doneTotal;
   } else {
     doneRow.style.display='none';
@@ -2724,16 +2726,7 @@ function renderHome(){
       : 'Нет карточек на сегодня';
   }
 
-  const btn=document.getElementById('startBtn');
-  if(total===0){
-    btn.disabled=true;
-    btn.style.opacity='0.5';
-    btn.textContent='✅ Всё готово на сегодня';
-  } else {
-    btn.disabled=false;
-    btn.style.opacity='1';
-    btn.textContent=`▶  Начать  ·  ${total} карточек`;
-  }
+  // Learning starts only per-deck (no global start button)
 
   const el=document.getElementById('homeDecks');
   const list=Object.entries(decks).slice(0,5);
@@ -2869,7 +2862,7 @@ function renderStats(){
   const {nw:leftNew2,rv:leftRev,ln:leftLn} = getDue();
   const leftNew      = leftNew2;
   const studiedToday = studyLog[t] || 0;
-  const studiedRev   = studyLog[t+'_rv'] || 0;
+  const studiedRev   = Math.max(0, studiedToday - shownNew);
 
   // Streak
   let streak=0;
@@ -3497,24 +3490,21 @@ function doGrade(g){
     rQ.splice(Math.min(rIdx+1+skip,rQ.length),0,{...c,sm2:ns});
   }
 
-  // Anki rule: count unique cards, not button presses
-  // new → count in newLog + studyLog once (on wasNew)
-  // review → count in studyLog + rvLog once (prevState==='review')
-  // learning/relearning → NOT counted (they re-enter the queue)
+  // Anki rule: count unique cards graded today (not button presses)
+  // new → newLog + studyLog (once, on wasNew)
+  // review → studyLog only (once, on prevState==='review')
+  // learning/relearning bouncing in queue → NOT counted
   const t = today();
-  const prevState = c.sm2?.state; // state BEFORE this grade
+  const prevState = c.sm2?.state; // state BEFORE schedCalc
   if (wasNew) {
     const nc = (newLog[t]||0) + 1;
     save('newLog/'+t, nc); newLog[t] = nc;
-    const cnt = (studyLog[t]||0) + 1;
-    save('studyLog/'+t, cnt); studyLog[t] = cnt;
-  } else if (prevState === 'review') {
-    const cnt = (studyLog[t]||0) + 1;
-    save('studyLog/'+t, cnt); studyLog[t] = cnt;
-    const rc = (studyLog[t+'_rv']||0) + 1;
-    save('studyLog/'+t+'_rv', rc); studyLog[t+'_rv'] = rc;
   }
-  // learning/relearning: no count
+  if (wasNew || prevState === 'review') {
+    const cnt = (studyLog[t]||0) + 1;
+    save('studyLog/'+t, cnt); studyLog[t] = cnt;
+  }
+  // learning / relearning: no increment — they come back in queue
   rIdx++;
   setTimeout(renderCard,80);
 }
