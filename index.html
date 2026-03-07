@@ -3518,15 +3518,17 @@ function doGrade(g){
   dayGrades[gk]=(dayGrades[gk]||0)+1; gradeLog[t]=dayGrades;
   save('gradeLog/'+t, dayGrades);
 
-  // ── Re-insert learning cards into queue ──
+  // ── Re-insert learning cards into queue (как в симуляторе) ──
+  // Убираем карточку с текущей позиции и вставляем её позже.
+  // rIdx НЕ меняется — на текущую позицию встаёт следующая карточка.
   if (ns.state==='learning'||ns.state==='relearning') {
-    const remaining=rQ.length-rIdx-1;
-    const delayMin=ns.dueMs?Math.max(0,ns.dueMs-Date.now())/60000:0;
-    let skip;
-    if(delayMin<=1.5)     skip=Math.max(5, Math.min(10,remaining));
-    else if(delayMin<=7)  skip=Math.max(10,Math.min(remaining,Math.round(delayMin*2)));
-    else                  skip=Math.max(15,Math.min(remaining,Math.round(delayMin*1.5)));
-    rQ.splice(Math.min(rIdx+1+skip,rQ.length),0,{...c,sm2:ns});
+    rQ.splice(rIdx, 1);                              // убрать с текущей позиции
+    const remaining = rQ.length - rIdx;              // сколько карточек впереди
+    const skip = Math.min(5, remaining);             // через 5 или в конец
+    rQ.splice(rIdx + skip, 0, {...c, sm2: ns});      // вставить позже
+    // rIdx не трогаем — рендерим следующую карточку на этой же позиции
+    setTimeout(renderCard, 80);
+    return;
   }
 
   // ── Anki counters ──
