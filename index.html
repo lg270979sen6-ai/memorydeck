@@ -4101,9 +4101,8 @@ function doptPickAlgo(algo, updateField = true) {
 // Returns effective options for current review deck (falls back to global cfg)
 function getEffectiveOpt(deckId) {
   if (!deckId) return null;
-  const d = decks[deckId];
-  if (!d || !d.opt) return null;
-  return d.opt;
+  if (!decks[deckId]) return null;
+  return getDeckOpt(deckId); // merged with DECK_OPT_DEFAULTS
 }
 
 // ═══════════════════════════════════════════════════
