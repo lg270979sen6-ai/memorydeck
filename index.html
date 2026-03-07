@@ -302,26 +302,28 @@ body {
 /* ── Desktop: sidebar nav ─────────────────────────────── */
 @media (min-width: 640px) {
   .nav {
-    top: 0; bottom: 0; left: 0; right: auto; width: 76px;
-    height: 100dvh; height: 100vh;
+    top: 0; bottom: 0; left: 0; right: auto; width: 80px;
+    height: 100vh;
     flex-direction: column; justify-content: flex-start;
     align-items: center;
-    padding: 24px 0 32px; gap: 6px;
+    padding: 28px 0 32px; gap: 4px;
     border-top: none; border-right: .5px solid var(--border);
   }
   .nav-item {
-    flex: 0; width: 60px;
-    padding: 8px 6px 7px; border-radius: 16px;
+    flex: 0; width: 64px;
+    padding: 9px 6px 8px; border-radius: 16px;
     gap: 4px;
     transition: background .15s;
   }
-  .nav-item.active { background: rgba(0,112,243,.07); }
-  .nav-badge { top: 4px; right: 2px; }
-  .app { padding-left: 76px; }
-  .views { padding-bottom: 16px; }
-  .review { left: 76px; }
-  .overlay { left: 76px; }
-  .dopt-overlay { left: 76px; }
+  .nav-item.active { background: rgba(0,112,243,.08); }
+  .nav-badge { top: 4px; right: 4px; }
+  #app { margin-left: 80px; }
+  .view { padding-bottom: 20px; }
+  .review { left: 80px; }
+  .overlay { left: 80px; }
+  .dopt-overlay { left: 80px; }
+  /* Sheet overlays should cover full width except sidebar */
+  #deckSettingsSheet > div:last-child { margin-left: 0; }
 }
 
 /* ═══════════════════════════════════
@@ -601,14 +603,13 @@ body {
 .gb-easy  { background: #edfff3; color: #1a9e42; box-shadow: 0 2px 10px rgba(52,199,89,.12); }
 .gb-easy  .g-dot { background: #34c759; box-shadow: 0 3px 8px rgba(52,199,89,.35); }
 
-.anki-word { font-size: 30px !important; font-weight: 800 !important; color: var(--ink1) !important; margin: 0 0 2px 0 !important; display: block !important; letter-spacing: -0.5px; }
-.anki-ipa  { font-size: 15px !important; color: var(--blue) !important; font-style: italic !important; font-weight: 400 !important; margin: 0 0 4px 0 !important; display: block !important; }
-.anki-translation { font-size: 24px !important; font-weight: 700 !important; color: var(--green) !important; margin: 2px 0 4px !important; display: block !important; }
-.anki-meaning { font-size: 13px !important; font-weight: 400 !important; color: var(--ink2) !important; line-height: 1.45 !important; margin: 4px 0 !important; background: rgba(0,122,255,.07) !important; border-left: 3px solid var(--blue) !important; padding: 5px 10px !important; border-radius: 0 8px 8px 0 !important; display: block !important; text-align:left !important; }
-.anki-example { font-size: 13px !important; font-weight: 400 !important; color: var(--ink2) !important; font-style: italic !important; margin: 4px 0 0 0 !important; line-height: 1.4 !important; display: block !important; text-align:left !important; padding: 0 2px !important; }
-.anki-example::before { content: '→ '; color: var(--ink4); font-style:normal; }
-.anki-img { text-align: center !important; margin: 4px 0 !important; display: block !important; }
-.anki-img img, .c-body img { max-width: 100% !important; max-height: 170px !important; border-radius: 10px !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
+.anki-word { font-size: 28px !important; font-weight: 800 !important; color: var(--ink1) !important; margin: 0 0 1px 0 !important; display: block !important; letter-spacing: -0.5px; }
+.anki-ipa  { font-size: 14px !important; color: var(--blue) !important; font-style: italic !important; font-weight: 400 !important; margin: 0 0 3px 0 !important; display: block !important; }
+.anki-translation { font-size: 22px !important; font-weight: 700 !important; color: var(--green) !important; margin: 2px 0 3px !important; display: block !important; }
+.anki-meaning { font-size: 12px !important; font-weight: 400 !important; color: var(--ink2) !important; line-height: 1.4 !important; margin: 3px 0 !important; background: rgba(0,122,255,.07) !important; border-left: 3px solid var(--blue) !important; padding: 4px 9px !important; border-radius: 0 8px 8px 0 !important; display: block !important; text-align:left !important; }
+.anki-example { font-size: 12px !important; font-weight: 400 !important; color: var(--ink2) !important; font-style: italic !important; margin: 3px 0 0 0 !important; line-height: 1.4 !important; display: block !important; text-align:left !important; padding: 0 !important; }
+.anki-img { text-align: center !important; margin: 3px 0 !important; display: block !important; }
+.anki-img img, .c-body img { max-width: 100% !important; max-height: 160px !important; border-radius: 10px !important; object-fit: contain !important; display: block !important; margin: 0 auto !important; }
 .c-int {
   font-family: var(--mono); font-size: 11px;
   color: var(--ink4); margin-top: 10px;
@@ -649,14 +650,6 @@ body {
 /* ═══════════════════════════════════
    AUDIO BUTTON
 ═══════════════════════════════════ */
-.anki-word { font-size: 32px; font-weight: 700; color: var(--ink1); margin-bottom: 4px; }
-.anki-ipa  { font-size: 18px; color: var(--blue); font-style: italic; margin-bottom: 8px; }
-.anki-translation { font-size: 24px; font-weight: 600; color: var(--green); margin: 8px 0; }
-.anki-meaning     { font-size: 15px; color: var(--ink2); line-height: 1.5; margin: 6px 0; background: rgba(0,0,0,.04); border-left: 3px solid var(--blue); padding: 6px 10px; border-radius: 0 8px 8px 0; }
-.anki-example     { font-size: 14px; color: var(--ink3); font-style: italic; margin: 4px 0; line-height: 1.5; }
-.anki-img         { text-align: center; margin: 8px 0; }
-.anki-img img     { max-width: 100%; max-height: 200px; border-radius: 10px; object-fit: contain; display: inline-block; }
-.c-body img       { max-width: 100%; max-height: 200px; border-radius: 10px; object-fit: contain; margin: 8px auto; display: block; }
   display: inline-flex; align-items: center; justify-content: center;
   gap: 6px; padding: 10px 22px;
   background: rgba(0,122,255,.08); color: var(--blue);
@@ -2652,13 +2645,22 @@ function toggleDeckPause(id) {
   const d = decks[id];
   if (!d) return;
   const nowPaused = !d.paused;
-  save('decks/'+id, {...d, paused: nowPaused});
+  // Update local state immediately so UI reflects change without waiting for Firebase
+  decks[id] = {...d, paused: nowPaused};
+  save('decks/'+id, decks[id]);
   toast(nowPaused ? `⏸ «${d.name}» на паузе` : `▶ «${d.name}» возобновлена`);
+  renderAll();
+  // Re-render detail overlay if it's open
+  if (eDetailDeck === id && document.getElementById('deckDetailOv').classList.contains('open')) {
+    openDeckDetail(id);
+  }
 }
 
 function getDeckDue(deckId) {
   const t = today();
-  const shownNew = newLog[t] || 0;
+  // Use per-deck newLog key so each deck tracks its own shown-new count
+  const deckNewKey = t + '_' + deckId;
+  const shownNew = (newLog[deckNewKey] !== undefined) ? newLog[deckNewKey] : (newLog[t] || 0);
   const opt = getDeckOpt(deckId);
   const hasDeckOpt = decks[deckId]?.opt;
   const maxNew = hasDeckOpt ? (opt.newPerDay ?? cfg.newPerDay) : cfg.newPerDay;
