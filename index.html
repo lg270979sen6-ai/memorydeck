@@ -2793,19 +2793,6 @@ function computeCards(deckId = null) {
     }
   });
 
-  // ── Debug: log what computeCards sees ──
-  console.log('[computeCards] nwCards='+nwCards.length+' rvCards='+rvCards.length+' lnCards='+lnCards.length);
-  Object.entries(deckInfo).forEach(([did,di])=>{
-    const opt2 = getDeckOpt(did);
-    const hasOpt2 = decks[did]?.opt;
-    const maxNew2 = hasOpt2 ? (opt2.newPerDay ?? cfg.newPerDay) : cfg.newPerDay;
-    const shown2 = Object.values(cards).filter(card=>card.deckId===did && card.sm2?.firstReview===t && card.sm2?.state!=='new').length;
-    const shownDirty = Object.values(cards).filter(card=>card.deckId===did && card.sm2?.firstReview===t).length;
-    console.log('  deck '+did+': remaining='+di.remaining+' maxNew='+maxNew2+' shown='+shown2+' shownWithDirty='+shownDirty+' maxRev='+di.maxRev+' hasOpt='+!!hasOpt2);
-  });
-  const today_shown = Object.entries(cards).filter(([id,card])=>card.sm2?.firstReview===t);
-  console.log('  firstReview===today count:', today_shown.length, today_shown.map(([id,card])=>id.slice(-6)+':'+card.sm2?.state).join(', '));
-
   // ── Totals (capped by per-deck maxRev) ──
   const nw = nwCards.length;
   const ln = lnCards.length;
@@ -3320,8 +3307,6 @@ function showRaw() {
 
 
 function renderCard(){
-  console.log('[renderCard] rIdx='+rIdx+' rQ.length='+rQ.length+(rQ[rIdx]?' state='+(rQ[rIdx].sm2?.state||'new'):''));
-
   // Safety net: queue exhausted but there are unfinished learning cards in Firebase
   // This can happen if the last card in queue goes to learning (splice puts it back)
   // but rIdx was already incremented elsewhere
@@ -3345,7 +3330,7 @@ function renderCard(){
 
     if(pendingLearning.length > 0){
       // Re-add them to queue and continue
-      console.log('[renderCard] safety net: re-queuing', pendingLearning.length, 'learning cards');
+      // re-queuing pending learning cards
       pendingLearning.forEach(card => {
         // Check not already in rQ
         if(!rQ.find(q=>q.id===card.id)){
@@ -3361,9 +3346,7 @@ function renderCard(){
   }
   rFlipped=false;
   const c=rQ[rIdx], total=rQ.length;
-  // DEBUG: log actual card content
-  console.log('CARD front:', JSON.stringify(c.front));
-  console.log('CARD back:', JSON.stringify(c.back));
+
   document.getElementById('revFill').style.width=(rIdx/total*100)+'%';
   document.getElementById('revCount').textContent=rIdx+'/'+total;
   const deck=decks[c.deckId]||{}, sm=c.sm2;
@@ -3606,7 +3589,7 @@ function doGrade(g){
   // ── Update local cache ALWAYS (even if key wasn't there before) ──
   cards[c.id] = {...(cards[c.id]||{}), ...c, sm2: ns};
   save('cards/'+c.id+'/sm2', ns);
-  console.log('[doGrade] saved sm2 for', c.id, '| state='+ns.state+' firstReview='+ns.firstReview+' due='+ns.due);
+
 
   // ── Grade log ──
   const gk=['again','hard','good','easy'][g];
@@ -3622,7 +3605,7 @@ function doGrade(g){
     const remaining = rQ.length - rIdx;              // сколько карточек впереди
     const skip = Math.min(5, remaining);             // через 5 или в конец
     rQ.splice(rIdx + skip, 0, {...c, sm2: ns});      // вставить позже
-    console.log('[doGrade] learning reinsert: rQ.length='+rQ.length+' rIdx='+rIdx+' skip='+skip);
+
     // rIdx не трогаем — рендерим следующую карточку на этой же позиции
     setTimeout(renderCard, 80);
     return;
@@ -3638,7 +3621,7 @@ function doGrade(g){
   if (graduatedFromNew) {
     const nc=(newLog[t]||0)+1; save('newLog/'+t,nc); newLog[t]=nc;
     const cnt=(studyLog[t]||0)+1; save('studyLog/'+t,cnt); studyLog[t]=cnt;
-    console.log('[doGrade] ✅ graduated new card → newLog='+newLog[t]+' studyLog='+studyLog[t]);
+
   } else if (prevState==='review' && ns.state==='review') {
     const cnt=(studyLog[t]||0)+1; save('studyLog/'+t,cnt); studyLog[t]=cnt;
   } else if (graduatedFromRelearn) {
