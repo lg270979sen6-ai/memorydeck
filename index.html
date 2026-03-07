@@ -2378,6 +2378,7 @@ function schedCalc(sm, g, deckOpt) {
 function nextLbl(c, g) {
   const deckOpt = c.deckId ? getEffectiveOpt(c.deckId) : null;
   const s = schedCalc(c.sm2, g, deckOpt);
+  if (g===1) console.log('[nextLbl] Hard: deckId='+c.deckId+' deckOpt='+!!deckOpt+' btnHardMult='+(deckOpt?.btnHardMult)+' interval='+s.interval);
   return fmtInterval(s.interval);
 }
 
