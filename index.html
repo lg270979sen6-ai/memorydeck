@@ -2472,8 +2472,11 @@ function initMainFirebase(accId, userId) {
     fbRef.on('value', s => {
       const d = s.val()||{};
       decks    = d.decks    ||{};
+
+      // Load cards from Firebase
+      const fbCards = d.cards || {};
+
       // Clean dirty data: state='new' cards should never have firstReview
-      // This happened with old buggy code that set firstReview on first keypress
       const dirtyFixes = {};
       Object.entries(fbCards).forEach(([id, card]) => {
         if (card.sm2?.state === 'new' && card.sm2?.firstReview) {
@@ -2488,28 +2491,19 @@ function initMainFirebase(accId, userId) {
         db.ref('memorydeck/'+accId+'/users/'+userId).update(dirtyFixes);
       }
 
-      // Merge cards from Firebase with local cache — local wins for sm2
-      // to prevent race condition where Firebase listener overwrites
-      // a just-saved sm2 with stale data before Firebase confirms the write
-      const fbCards = d.cards || {};
+      // Merge Firebase cards with local cache — local wins if it has fresher firstReview
       Object.entries(fbCards).forEach(([id, fbCard]) => {
         const local = cards[id];
         if (!local) {
           cards[id] = fbCard;
+        } else if (local.sm2?.firstReview && !fbCard.sm2?.firstReview) {
+          cards[id] = {...fbCard, sm2: local.sm2}; // local is newer
         } else {
-          // Keep local sm2 if it's newer (has firstReview that Firebase might not have yet)
-          const localHasFirstReview = local.sm2?.firstReview;
-          const fbHasFirstReview    = fbCard.sm2?.firstReview;
-          if (localHasFirstReview && !fbHasFirstReview) {
-            // Local is newer — keep local sm2
-            cards[id] = {...fbCard, sm2: local.sm2};
-          } else {
-            cards[id] = fbCard;
-          }
+          cards[id] = fbCard;
         }
       });
-      // Add any new cards from Firebase not in local
-      // (already done above via !local branch)
+      // Remove cards deleted from Firebase
+      Object.keys(cards).forEach(id => { if (!fbCards[id]) delete cards[id]; });
       cfg      = Object.assign({newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, d.cfg||{});
       studyLog = d.studyLog ||{};
       newLog   = d.newLog   ||{};
