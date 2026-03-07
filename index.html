@@ -2023,6 +2023,7 @@ function sm2Calc(sm, g, deckOpt) {
       const curr  = steps[idx];
       const next  = steps[idx + 1] !== undefined ? steps[idx + 1] : curr * 2;
       s.interval  = (curr + next) / 2;
+      s.state     = inRelearning ? 'relearning' : 'learning'; // ← обязательно! 'new' → 'learning'
       // stepIdx does NOT change — Hard never advances or resets the step
     }
     // ease never changes in learning/relearning
@@ -3272,10 +3273,44 @@ function showRaw() {
 
 
 function renderCard(){
-  console.log('[renderCard] rIdx='+rIdx+' rQ.length='+rQ.length+(rQ[rIdx]?' state='+( rQ[rIdx].sm2?.state||'new'):''));
+  console.log('[renderCard] rIdx='+rIdx+' rQ.length='+rQ.length+(rQ[rIdx]?' state='+(rQ[rIdx].sm2?.state||'new'):''));
+
+  // Safety net: queue exhausted but there are unfinished learning cards in Firebase
+  // This can happen if the last card in queue goes to learning (splice puts it back)
+  // but rIdx was already incremented elsewhere
   if(rIdx>=rQ.length){
-    console.log('[renderCard] → showDone');
-    showDone();return;
+    // Check if there are any learning cards that aren't done yet today
+    const t=today();
+    const pendingLearning = Object.values(cards).filter(card => {
+      const sm = card.sm2;
+      if (!sm) return false;
+      if (sm.state!=='learning' && sm.state!=='relearning') return false;
+      if (!sm.dueMs) return false;
+      // Due today (not interday)
+      const dueDay = new Date(sm.dueMs).toISOString().slice(0,10);
+      if (dueDay > t) return false;
+      // Not yet due (still waiting their timer)
+      return true; // include even if not yet due — they're in-session
+    }).filter(card => {
+      // Only cards from the current session deck
+      return !rDeckId || card.deckId === rDeckId;
+    });
+
+    if(pendingLearning.length > 0){
+      // Re-add them to queue and continue
+      console.log('[renderCard] safety net: re-queuing', pendingLearning.length, 'learning cards');
+      pendingLearning.forEach(card => {
+        // Check not already in rQ
+        if(!rQ.find(q=>q.id===card.id)){
+          rQ.push({...card});
+        }
+      });
+      if(rIdx>=rQ.length){showDone();return;} // still empty after re-queue
+      // continue to render
+    } else {
+      console.log('[renderCard] → showDone');
+      showDone();return;
+    }
   }
   rFlipped=false;
   const c=rQ[rIdx], total=rQ.length;
