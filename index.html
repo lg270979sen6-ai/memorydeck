@@ -2472,7 +2472,28 @@ function initMainFirebase(accId, userId) {
     fbRef.on('value', s => {
       const d = s.val()||{};
       decks    = d.decks    ||{};
-      cards    = d.cards    ||{};
+      // Merge cards from Firebase with local cache — local wins for sm2
+      // to prevent race condition where Firebase listener overwrites
+      // a just-saved sm2 with stale data before Firebase confirms the write
+      const fbCards = d.cards || {};
+      Object.entries(fbCards).forEach(([id, fbCard]) => {
+        const local = cards[id];
+        if (!local) {
+          cards[id] = fbCard;
+        } else {
+          // Keep local sm2 if it's newer (has firstReview that Firebase might not have yet)
+          const localHasFirstReview = local.sm2?.firstReview;
+          const fbHasFirstReview    = fbCard.sm2?.firstReview;
+          if (localHasFirstReview && !fbHasFirstReview) {
+            // Local is newer — keep local sm2
+            cards[id] = {...fbCard, sm2: local.sm2};
+          } else {
+            cards[id] = fbCard;
+          }
+        }
+      });
+      // Add any new cards from Firebase not in local
+      // (already done above via !local branch)
       cfg      = Object.assign({newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, d.cfg||{});
       studyLog = d.studyLog ||{};
       newLog   = d.newLog   ||{};
@@ -2762,8 +2783,8 @@ function computeCards(deckId = null) {
   // ── Debug: log what computeCards sees ──
   console.log('[computeCards] nwCards='+nwCards.length+' rvCards='+rvCards.length+' lnCards='+lnCards.length);
   Object.entries(deckInfo).forEach(([did,di])=>console.log('  deck '+did+': remaining='+di.remaining+' maxRev='+di.maxRev));
-  const today_shown = Object.values(cards).filter(card=>card.sm2?.firstReview===t);
-  console.log('  firstReview===today count:', today_shown.length, today_shown.map(card=>card.id+':'+card.sm2?.state).join(', '));
+  const today_shown = Object.entries(cards).filter(([id,card])=>card.sm2?.firstReview===t);
+  console.log('  firstReview===today count:', today_shown.length, today_shown.map(([id,card])=>id.slice(-6)+':'+card.sm2?.state).join(', '));
 
   // ── Totals (capped by per-deck maxRev) ──
   const nw = nwCards.length;
