@@ -1189,6 +1189,12 @@ body {
     <!-- STATS -->
     <div class="view" id="vStats">
       <div class="sec-head"><div class="sec-title">Прогресс</div></div>
+
+      <!-- Filter bar -->
+      <div class="fu" id="statsFilterBar" style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0 8px;">
+        <!-- Deck filter chips rendered by JS -->
+      </div>
+
       <!-- Today + Streak -->
       <div id="statsTodayEl" class="fu"></div>
       <div id="streakEl" class="fu1"></div>
@@ -1947,6 +1953,7 @@ let db=null, fbRef=null;
 let allAcc={}, sess={accId:null,userId:null,ud:null,ad:null};
 let pendAcc=null, pendUser=null;
 let decks={}, cards={}, cfg={newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, studyLog={}, newLog={}, gradeLog={};
+let statsFilter = { deckId: null, days: 30 }; // null = все колоды
 let rQ=[], rIdx=0, rFlipped=false, rStats={}, rDeckId=null;
 let eDeckId=null, eCardId=null, eDetailDeck=null;
 let dColor=COLORS[0], dEmoji='📚';
@@ -3027,10 +3034,62 @@ function renderDecks(){
   el.innerHTML = '<div style="padding:4px 0;">' + list.map(([id,d])=>buildDeckRow(id,d)).join('') + '</div>';
 }
 
+function renderStatsFilterBar() {
+  const bar = document.getElementById('statsFilterBar');
+  if (!bar) return;
+
+  const chipStyle = (active) =>
+    `display:inline-flex;align-items:center;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;border:none;transition:all .15s;` +
+    (active
+      ? `background:var(--blue);color:#fff;box-shadow:0 2px 8px rgba(37,99,235,.3);`
+      : `background:var(--card);color:var(--ink2);border:.5px solid var(--border);`);
+
+  // Day filter chips
+  const dayOpts = [7, 30, 90];
+  const dayChips = dayOpts.map(d =>
+    `<button style="${chipStyle(statsFilter.days===d)}" onclick="setStatsFilter(null,'days',${d})">
+      ${d} дней
+    </button>`
+  ).join('');
+
+  // Deck filter chips
+  const deckChips = [
+    `<button style="${chipStyle(statsFilter.deckId===null)}" onclick="setStatsFilter('deck',null)">
+      🌐 Все колоды
+    </button>`
+  ].concat(
+    Object.entries(decks).map(([id,d]) =>
+      `<button style="${chipStyle(statsFilter.deckId===id)}" onclick="setStatsFilter('deck','${id}')">
+        ${d.emoji||'📚'} ${d.name}
+      </button>`
+    )
+  ).join('');
+
+  bar.innerHTML = `
+    <div style="width:100%;">
+      <div style="font-size:10px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Колода</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;">${deckChips}</div>
+    </div>
+    <div style="width:100%;margin-top:8px;">
+      <div style="font-size:10px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Период активности</div>
+      <div style="display:flex;gap:6px;">${dayChips}</div>
+    </div>`;
+}
+
+function setStatsFilter(type, value, numVal) {
+  if (type === 'deck') statsFilter.deckId = value;
+  if (type === 'days') statsFilter.days = numVal;
+  renderStats();
+}
+
 function renderStats(){
-  const all   = Object.values(cards);
+  const deckId = statsFilter.deckId;
+  const filterDays = statsFilter.days || 30;
+  const all = Object.values(cards).filter(c => !deckId || c.deckId === deckId);
   const total = all.length;
-  const t     = today();
+  const t = today();
+
+  renderStatsFilterBar();
 
   // Card states
   const stNew      = all.filter(c => !c.sm2 || c.sm2.state==='new').length;
@@ -3039,25 +3098,40 @@ function renderStats(){
   const stMature   = all.filter(c => c.sm2 && c.sm2.state==='review' && c.sm2.interval>=21).length;
   const stYoung    = stReview - stMature;
 
-  // Due today
-  const dueReview  = all.filter(c => c.sm2?.state==='review' && c.sm2.due<=t).length;
-  const dueLearning= all.filter(c => (c.sm2?.state==='learning'||c.sm2?.state==='relearning') && isDue(c.sm2)).length;
-  // Source of truth: firstReview counts new cards shown; studyLog counts total graded
-  const shownNew     = Object.values(cards).filter(c=>c.sm2?.firstReview===t).length;
-  const {nw:leftNew2,rv:leftRev,ln:leftLn} = getDue();
-  const leftNew      = leftNew2;
-  const studiedToday = studyLog[t] || 0;
-  const studiedRev   = Math.max(0, studiedToday - shownNew);
+  // Due today (filtered by deck)
+  const dueReview   = all.filter(c => c.sm2?.state==='review' && c.sm2.due<=t).length;
+  const dueLearning = all.filter(c => (c.sm2?.state==='learning'||c.sm2?.state==='relearning') && isDue(c.sm2)).length;
 
-  // Streak
+  // Today stats (filtered)
+  const shownNew     = all.filter(c=>c.sm2?.firstReview===t && c.sm2?.state!=='new').length;
+  const {nw:fNw,rv:fRv,ln:fLn} = deckId ? getDeckDue(deckId) : getDue();
+  const leftNew      = fNw;
+
+  // studyLog is global — for deck filter approximate from cards
+  let studiedToday, studiedRev;
+  if (!deckId) {
+    studiedToday = studyLog[t] || 0;
+    studiedRev   = Math.max(0, studiedToday - (newLog[t]||0));
+  } else {
+    // Count from card firstReview + review-state cards reviewed today
+    studiedToday = all.filter(c => c.sm2?.last_review === t).length;
+    studiedRev   = Math.max(0, studiedToday - shownNew);
+  }
+
+  // Streak (global)
   let streak=0;
   { const dd=new Date();
-    while(true){const s=dd.toISOString().slice(0,10);if(studyLog[s]){streak++;dd.setDate(dd.getDate()-1);}else break;} }
+    while(true){
+      const s = (() => { const y=dd.getFullYear(),m=String(dd.getMonth()+1).padStart(2,'0'),dy=String(dd.getDate()).padStart(2,'0'); return y+'-'+m+'-'+dy; })();
+      if(studyLog[s]){streak++;dd.setDate(dd.getDate()-1);}else break;
+    }
+  }
 
   // ── TODAY ────────────────────────────────────────────
+  const deckLabel = deckId ? `— ${decks[deckId]?.emoji||'📚'} ${decks[deckId]?.name}` : '— все колоды';
   document.getElementById('statsTodayEl').innerHTML=`
     <div style="background:var(--card);border-radius:16px;padding:14px 16px;border:.5px solid var(--border);">
-      <div style="font-size:11px;font-weight:700;color:var(--ink4);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;">📅 Сегодня</div>
+      <div style="font-size:11px;font-weight:700;color:var(--ink4);margin-bottom:10px;text-transform:uppercase;letter-spacing:.06em;">📅 Сегодня ${deckLabel}</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center;">
         <div><div style="font-size:24px;font-weight:800;color:var(--blue);">${studiedToday}</div><div style="font-size:10px;color:var(--ink4);margin-top:2px;">Пройдено</div></div>
         <div><div style="font-size:24px;font-weight:800;color:var(--orange);">${shownNew}</div><div style="font-size:10px;color:var(--ink4);margin-top:2px;">Новых изучено</div></div>
@@ -3079,27 +3153,39 @@ function renderStats(){
     </div>`;
 
   // ── HEATMAP ──────────────────────────────────────────
+  const heatDays = filterDays <= 30 ? 30 : filterDays;
   let hm='';
-  for(let i=89;i>=0;i--){
+  for(let i=heatDays-1;i>=0;i--){
     const d=new Date(); d.setDate(d.getDate()-i);
-    const s=d.toISOString().slice(0,10), cnt=studyLog[s]||0;
+    const dy=d.getDate(),mo=d.getMonth()+1,yr=d.getFullYear();
+    const s=yr+'-'+String(mo).padStart(2,'0')+'-'+String(dy).padStart(2,'0');
+    let cnt;
+    if (!deckId) {
+      cnt = studyLog[s]||0;
+    } else {
+      cnt = Object.values(cards).filter(c=>c.deckId===deckId && c.sm2?.last_review===s).length;
+    }
     const lv=cnt===0?'':cnt<10?'l1':cnt<30?'l2':cnt<60?'l3':'l4';
     hm+=`<div class="hm ${lv}" title="${s}: ${cnt} карт"></div>`;
   }
   document.getElementById('heatmap').innerHTML=hm;
+  document.querySelector('#heatmap').closest('.chart-card').querySelector('.chart-title').textContent =
+    `Активность — ${heatDays} дней`;
 
-  // ── DECK TABLE (Anki style) ───────────────────────────
-  const deckRows = Object.entries(decks).map(([id,d])=>{
-    const {nw,ln,rv} = getDeckDue(id);
-    const dc = Object.values(cards).filter(c=>c.deckId===id);
-    const tot = dc.length;
-    const fmtN=(n,col)=>n>0?`<td style="color:${col};font-weight:700;text-align:right;padding:5px 10px;">${n}</td>`:`<td style="color:var(--ink4);text-align:right;padding:5px 10px;">0</td>`;
-    return `<tr style="border-bottom:.5px solid var(--border);">
-      <td style="padding:7px 10px;font-size:13px;font-weight:600;">${d.emoji||'📚'} ${d.name}</td>
-      <td style="padding:5px 10px;font-size:11px;color:var(--ink4);text-align:right;">${tot}</td>
-      ${fmtN(nw,'var(--blue)')}${fmtN(ln,'var(--orange)')}${fmtN(rv,'var(--green)')}
-    </tr>`;
-  }).join('');
+  // ── DECK TABLE ───────────────────────────────────────
+  const deckRows = Object.entries(decks)
+    .filter(([id]) => !deckId || id === deckId)
+    .map(([id,d])=>{
+      const {nw,ln,rv} = getDeckDue(id);
+      const dc = Object.values(cards).filter(c=>c.deckId===id);
+      const tot = dc.length;
+      const fmtN=(n,col)=>n>0?`<td style="color:${col};font-weight:700;text-align:right;padding:5px 10px;">${n}</td>`:`<td style="color:var(--ink4);text-align:right;padding:5px 10px;">0</td>`;
+      return `<tr style="border-bottom:.5px solid var(--border);">
+        <td style="padding:7px 10px;font-size:13px;font-weight:600;">${d.emoji||'📚'} ${d.name}</td>
+        <td style="padding:5px 10px;font-size:11px;color:var(--ink4);text-align:right;">${tot}</td>
+        ${fmtN(nw,'var(--blue)')}${fmtN(ln,'var(--orange)')}${fmtN(rv,'var(--green)')}
+      </tr>`;
+    }).join('');
   document.getElementById('statsDeckTable').innerHTML=`
     <div class="chart-title">По колодам — план на сегодня</div>
     <div style="overflow-x:auto;">
@@ -3135,20 +3221,13 @@ function renderStats(){
     donut(stYoung, total,'var(--blue)',  '🌱 Молодых','< 21 дня')+
     donut(stMature,total,'var(--green)', '🌿 Зрелых', '≥ 21 дня');
 
-  // ── FORECAST (Anki style) ────────────────────────────
-  // Day 0 = today remaining, day 1 = tomorrow, etc.
+  // ── FORECAST ─────────────────────────────────────────
   const forecastDays = 30;
   const forecast = new Array(forecastDays).fill(0);
-
-  // Day 0: today's remaining (new + review + learning not yet done)
-  const {nw:fNw, rv:fRv, ln:fLn} = getDue();
   forecast[0] = fNw + fRv + fLn;
-
-  // Days 1..29: scheduled review cards
   all.forEach(c => {
     if (!c.sm2 || !c.sm2.due) return;
     if (c.suspended) return;
-    // Only review-state cards (learning/relearning are short-term, skip)
     if (c.sm2.state !== 'review') return;
     const daysFromNow = Math.ceil((new Date(c.sm2.due) - new Date(t)) / 86400000);
     if (daysFromNow >= 1 && daysFromNow < forecastDays) forecast[daysFromNow]++;
@@ -3164,26 +3243,34 @@ function renderStats(){
     const h = Math.round(n/fMax*72);
     const isToday = i===0;
     const col = isToday ? 'var(--orange)' : 'var(--green)';
-    const label = isToday ? 'Сегодня' : i===1 ? 'Завтра' : '+'+i+'д';
-    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;">
-      <div style="width:100%;background:${col};border-radius:3px 3px 0 0;height:${h}px;min-height:${n>0?2:0}px;opacity:${isToday?.9:.75};" title="${label}: ${n} карт"></div>
+    const lbl = isToday ? 'Сегодня' : i===1 ? '+1д' : '+'+i+'д';
+    return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;" title="${lbl}: ${n} карт">
+      <div style="width:100%;background:${col};border-radius:3px 3px 0 0;height:${h}px;min-height:${n>0?2:0}px;opacity:${isToday?.9:.75};"></div>
     </div>`;
   }).join('');
 
-  // X-axis labels
-  const xLabels = `<div style="display:flex;justify-content:space-between;font-size:10px;color:var(--ink4);margin-top:4px;">
-    <span>Сегодня</span><span>+${Math.round(forecastDays/3)}д</span><span>+${Math.round(forecastDays*2/3)}д</span><span>+${forecastDays-1}д</span>
+  // X-axis: Сегодня, +1, +2, +3, +4, +5, then 10, 20, 29
+  const xLabels = `<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--ink4);margin-top:4px;position:relative;">
+    <span>Сег</span>
+    <span style="position:absolute;left:${1/30*100}%">+1</span>
+    <span style="position:absolute;left:${2/30*100}%">+2</span>
+    <span style="position:absolute;left:${3/30*100}%">+3</span>
+    <span style="position:absolute;left:${4/30*100}%">+4</span>
+    <span style="position:absolute;left:${5/30*100}%">+5</span>
+    <span style="position:absolute;left:${10/30*100}%">+10</span>
+    <span style="position:absolute;left:${20/30*100}%">+20</span>
+    <span>+29д</span>
   </div>`;
 
   document.getElementById('statsForecast').innerHTML=`
     <div class="chart-title">📅 Прогноз повторений — 30 дней</div>
-    <div style="font-size:11px;color:var(--ink4);margin-bottom:8px;text-align:center;">
-      <span style="display:inline-block;width:10px;height:10px;background:var(--orange);border-radius:2px;margin-right:4px;"></span>Сегодня
-      <span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;margin:0 4px 0 12px;"></span>Будущие повторения
+    <div style="font-size:11px;color:var(--ink4);margin-bottom:8px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;">
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--orange);border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Сегодня</span>
+      <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Будущие повторения</span>
     </div>
     <div style="display:flex;align-items:flex-end;height:72px;gap:1px;">${fBars}</div>
-    ${xLabels}
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:12px;font-size:12px;">
+    <div style="position:relative;height:16px;">${xLabels}</div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;font-size:12px;">
       <div style="background:var(--bg2);border-radius:10px;padding:8px 10px;text-align:center;">
         <div style="font-size:20px;font-weight:800;color:var(--orange);">${todayLeft}</div>
         <div style="color:var(--ink3);font-size:11px;">Осталось сегодня</div>
@@ -3200,7 +3287,7 @@ function renderStats(){
     <div style="text-align:center;margin-top:8px;font-size:11px;color:var(--ink4);">Всего за 30 дней: <b>${total30}</b> повторений</div>`;
 
   // ── INTERVALS histogram ───────────────────────────────
-  const intBuckets = new Array(21).fill(0); // 0..20+ days
+  const intBuckets = new Array(21).fill(0);
   const reviewCards = all.filter(c=>c.sm2&&c.sm2.state==='review'&&c.sm2.interval>0);
   reviewCards.forEach(c=>{
     const idx = Math.min(Math.round(c.sm2.interval), 20);
@@ -3223,9 +3310,7 @@ function renderStats(){
     <div style="display:flex;align-items:flex-end;height:50px;gap:1px;margin:8px 0 2px;">${iBars}</div>
     <div style="font-size:11px;color:var(--ink3);text-align:center;">Средний интервал: <b>${avgInt} дней</b></div>`;
 
-  // ── RETENTION (Настоящее усвоение) ───────────────────
-  // We track grades in gradeLog: {date: {again,hard,good,easy}}
-  const gl = Object.values(gradeLog||{});
+  // ── RETENTION ─────────────────────────────────────────
   const getRetention = (fromDate) => {
     let correct=0, total2=0;
     Object.entries(gradeLog||{}).forEach(([d2,g])=>{
@@ -3236,7 +3321,6 @@ function renderStats(){
     return total2>0 ? Math.round(correct/total2*100) : null;
   };
   const retToday  = getRetention(t);
-  const retYest   = getRetention(new Date(new Date(t)-86400000).toISOString().slice(0,10));
   const retWeek   = getRetention(new Date(new Date(t)-7*86400000).toISOString().slice(0,10));
   const retMonth  = getRetention(new Date(new Date(t)-30*86400000).toISOString().slice(0,10));
   const retFmt = r => r===null ? '<span style="color:var(--ink4);">—</span>' : `<b style="color:${r>=85?'var(--green)':r>=70?'var(--orange)':'var(--red)'}">${r}%</b>`;
@@ -3259,7 +3343,11 @@ function renderStats(){
 
   // ── GRADE BREAKDOWN ───────────────────────────────────
   const allGrades = {again:0,hard:0,good:0,easy:0};
-  Object.values(gradeLog||{}).forEach(g=>{
+  // Filter grades by period
+  const fromDateGrades = new Date(t); fromDateGrades.setDate(fromDateGrades.getDate() - filterDays);
+  const fromStrGrades = fromDateGrades.getFullYear()+'-'+String(fromDateGrades.getMonth()+1).padStart(2,'0')+'-'+String(fromDateGrades.getDate()).padStart(2,'0');
+  Object.entries(gradeLog||{}).forEach(([d2,g])=>{
+    if (d2 < fromStrGrades) return;
     allGrades.again+=(g.again||0); allGrades.hard+=(g.hard||0);
     allGrades.good+=(g.good||0);   allGrades.easy+=(g.easy||0);
   });
@@ -3274,7 +3362,7 @@ function renderStats(){
     </div>`;
   };
   document.getElementById('statsGrades').innerHTML=`
-    <div class="chart-title">🔘 Кнопки ответа (всего)</div>
+    <div class="chart-title">🔘 Кнопки ответа — ${filterDays} дней</div>
     <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-top:8px;">
       ${gBar(allGrades.again,'#ff3b30','Снова')}
       ${gBar(allGrades.hard,'#ff9500','Трудно')}
