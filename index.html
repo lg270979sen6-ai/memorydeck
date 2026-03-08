@@ -3156,7 +3156,7 @@ function renderStats(){
     </div>`;
 
   // ── HEATMAP ──────────────────────────────────────────
-  const heatDays = filterDays <= 30 ? 30 : filterDays;
+  const heatDays = filterDays;
   let hm='';
   for(let i=heatDays-1;i>=0;i--){
     const d=new Date(); d.setDate(d.getDate()-i);
