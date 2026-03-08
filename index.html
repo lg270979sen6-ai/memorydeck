@@ -1191,7 +1191,7 @@ body {
       <div class="sec-head"><div class="sec-title">Прогресс</div></div>
 
       <!-- Filter bar -->
-      <div class="fu" id="statsFilterBar" style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 0 8px;">
+      <div class="fu" id="statsFilterBar" style="display:flex;flex-wrap:wrap;gap:8px;padding:4px 16px 8px;">
         <!-- Deck filter chips rendered by JS -->
       </div>
 
@@ -3103,19 +3103,24 @@ function renderStats(){
   const dueLearning = all.filter(c => (c.sm2?.state==='learning'||c.sm2?.state==='relearning') && isDue(c.sm2)).length;
 
   // Today stats (filtered)
-  const shownNew     = all.filter(c=>c.sm2?.firstReview===t && c.sm2?.state!=='new').length;
+  const shownNew     = !deckId
+    ? Object.values(cards).filter(c=>c.sm2?.firstReview===t && c.sm2?.state!=='new').length
+    : all.filter(c=>c.sm2?.firstReview===t && c.sm2?.state!=='new').length;
   const {nw:fNw,rv:fRv,ln:fLn} = deckId ? getDeckDue(deckId) : getDue();
   const leftNew      = fNw;
 
-  // studyLog is global — for deck filter approximate from cards
+  // studyLog is global — for deck filter count from card last_review
   let studiedToday, studiedRev;
   if (!deckId) {
     studiedToday = studyLog[t] || 0;
     studiedRev   = Math.max(0, studiedToday - (newLog[t]||0));
   } else {
-    // Count from card firstReview + review-state cards reviewed today
-    studiedToday = all.filter(c => c.sm2?.last_review === t).length;
-    studiedRev   = Math.max(0, studiedToday - shownNew);
+    // Count cards in this deck that were reviewed today (any state change today)
+    const reviewedToday = all.filter(c => c.sm2?.last_review === t);
+    studiedToday = reviewedToday.length;
+    // New = cards that got firstReview today (graduated from new→learning or new→review)
+    const newToday = all.filter(c => c.sm2?.firstReview === t && c.sm2?.state !== 'new').length;
+    studiedRev = Math.max(0, studiedToday - newToday);
   }
 
   // Streak (global)
@@ -3249,18 +3254,13 @@ function renderStats(){
     </div>`;
   }).join('');
 
-  // X-axis: Сегодня, +1, +2, +3, +4, +5, then 10, 20, 29
-  const xLabels = `<div style="display:flex;justify-content:space-between;font-size:9px;color:var(--ink4);margin-top:4px;position:relative;">
-    <span>Сег</span>
-    <span style="position:absolute;left:${1/30*100}%">+1</span>
-    <span style="position:absolute;left:${2/30*100}%">+2</span>
-    <span style="position:absolute;left:${3/30*100}%">+3</span>
-    <span style="position:absolute;left:${4/30*100}%">+4</span>
-    <span style="position:absolute;left:${5/30*100}%">+5</span>
-    <span style="position:absolute;left:${10/30*100}%">+10</span>
-    <span style="position:absolute;left:${20/30*100}%">+20</span>
-    <span>+29д</span>
-  </div>`;
+  // X-axis: same flex structure as bars, label shown for key days
+  const xAxisLabels = forecast.map((n,i) => {
+    const show = i===0||i===1||i===2||i===3||i===4||i===5||i===10||i===20||i===29;
+    const lbl = i===0?'Сег':'+'+i;
+    return `<div style="flex:1;min-width:0;text-align:center;font-size:8px;color:var(--ink4);overflow:hidden;white-space:nowrap;">${show?lbl:''}</div>`;
+  }).join('');
+  const xLabels = `<div style="display:flex;gap:1px;margin-top:3px;">${xAxisLabels}</div>`;
 
   document.getElementById('statsForecast').innerHTML=`
     <div class="chart-title">📅 Прогноз повторений — 30 дней</div>
@@ -3269,7 +3269,7 @@ function renderStats(){
       <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Будущие повторения</span>
     </div>
     <div style="display:flex;align-items:flex-end;height:72px;gap:1px;">${fBars}</div>
-    <div style="position:relative;height:16px;">${xLabels}</div>
+    ${xLabels}
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;font-size:12px;">
       <div style="background:var(--bg2);border-radius:10px;padding:8px 10px;text-align:center;">
         <div style="font-size:20px;font-weight:800;color:var(--orange);">${todayLeft}</div>
@@ -3343,13 +3343,20 @@ function renderStats(){
 
   // ── GRADE BREAKDOWN ───────────────────────────────────
   const allGrades = {again:0,hard:0,good:0,easy:0};
-  // Filter grades by period
+  // Filter grades by period and deck
   const fromDateGrades = new Date(t); fromDateGrades.setDate(fromDateGrades.getDate() - filterDays);
   const fromStrGrades = fromDateGrades.getFullYear()+'-'+String(fromDateGrades.getMonth()+1).padStart(2,'0')+'-'+String(fromDateGrades.getDate()).padStart(2,'0');
   Object.entries(gradeLog||{}).forEach(([d2,g])=>{
     if (d2 < fromStrGrades) return;
-    allGrades.again+=(g.again||0); allGrades.hard+=(g.hard||0);
-    allGrades.good+=(g.good||0);   allGrades.easy+=(g.easy||0);
+    if (deckId && g.byDeck) {
+      // Use per-deck data if available
+      const dk = g.byDeck[deckId] || {again:0,hard:0,good:0,easy:0};
+      allGrades.again+=(dk.again||0); allGrades.hard+=(dk.hard||0);
+      allGrades.good+=(dk.good||0);   allGrades.easy+=(dk.easy||0);
+    } else if (!deckId) {
+      allGrades.again+=(g.again||0); allGrades.hard+=(g.hard||0);
+      allGrades.good+=(g.good||0);   allGrades.easy+=(g.easy||0);
+    }
   });
   const totalG = allGrades.again+allGrades.hard+allGrades.good+allGrades.easy;
   const gBar = (n,col,lbl) => {
@@ -3744,7 +3751,14 @@ function doGrade(g){
   // ── Grade log ──
   const gk=['again','hard','good','easy'][g];
   const dayGrades=gradeLog[t]||{again:0,hard:0,good:0,easy:0};
-  dayGrades[gk]=(dayGrades[gk]||0)+1; gradeLog[t]=dayGrades;
+  dayGrades[gk]=(dayGrades[gk]||0)+1;
+  // Also track per-deck grades
+  if (c.deckId) {
+    if (!dayGrades.byDeck) dayGrades.byDeck = {};
+    if (!dayGrades.byDeck[c.deckId]) dayGrades.byDeck[c.deckId] = {again:0,hard:0,good:0,easy:0};
+    dayGrades.byDeck[c.deckId][gk] = (dayGrades.byDeck[c.deckId][gk]||0)+1;
+  }
+  gradeLog[t]=dayGrades;
   save('gradeLog/'+t, dayGrades);
 
   // ── Re-insert learning cards into queue (как в симуляторе) ──
