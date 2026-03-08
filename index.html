@@ -1350,7 +1350,7 @@ body {
         <div class="dopt-lbl">Интервал после «Хорошо» (дни)</div>
         <input class="dopt-input" type="number" id="doptFirstInt" min="1" max="30" value="1">
       </div>
-      <div class="dopt-row">
+      <div class="dopt-row" id="doptEasyIntRow">
         <div class="dopt-lbl">Интервал «Легко» (дни)</div>
         <input class="dopt-input" type="number" id="doptEasyInt" min="1" max="365" value="4">
       </div>
@@ -1479,25 +1479,57 @@ body {
     <!-- FSRS секция -->
     <div class="dopt-section" id="doptFSRSSection" style="display:none;">
       <div class="dopt-section-title">FSRS-4.5</div>
+
+      <!-- Желаемое усвоение -->
       <div class="dopt-row" style="flex-direction:column;align-items:stretch;gap:6px;">
-        <div class="dopt-lbl">Желаемое усвоение</div>
-        <div class="dopt-retention-wrap">
-          <input type="range" id="doptRetSlider" min="70" max="99" value="90"
+        <div class="dopt-lbl">Желаемое усвоение<div class="dopt-hint">Чем выше — тем чаще карточки показываются</div></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <input type="range" id="doptRetSlider" min="70" max="99" value="90" style="flex:1;"
             oninput="document.getElementById('doptRetVal').textContent=this.value+'%'">
-          <span class="dopt-badge" id="doptRetVal">90%</span>
+          <span class="dopt-badge" id="doptRetVal" style="min-width:40px;text-align:center;">90%</span>
         </div>
       </div>
+
+      <!-- Параметры w[] -->
       <div class="dopt-row" style="flex-direction:column;align-items:stretch;gap:6px;">
-        <div class="dopt-lbl">Параметры FSRS w[0..16]<div class="dopt-hint">17 чисел через запятую — изменяйте осторожно</div></div>
-        <textarea class="dopt-params-area" id="doptFSRSParams" rows="3">0.4072,1.1829,3.1262,15.4722,7.2102,0.5316,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898</textarea>
+        <div class="dopt-lbl">Параметры FSRS w[0..20]
+          <div class="dopt-hint">21 число через запятую — используй свои параметры из Anki Optimizer</div>
+        </div>
+        <textarea class="dopt-params-area" id="doptFSRSParams" rows="3" oninput="fsrsValidateParams()"
+          placeholder="0.2120,1.2931,2.3065,8.2956,6.4133,0.8334,3.0194,0.0010,1.8722,0.1666,0.7960,1.4835,0.0614,0.2629,1.6483,0.6014,1.8729,0.5425,0.0912,0.0658,0.1542"></textarea>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;" id="doptFSRSParamStatus"></div>
       </div>
+
+      <!-- Переплановка при изменении параметров -->
       <div class="dopt-row">
-        <div class="dopt-lbl">Исторический уровень усвоения</div>
+        <div class="dopt-lbl">Переплановать карточки при изменении параметров
+          <div class="dopt-hint">Пересчитать интервалы для всех карточек колоды</div>
+        </div>
+        <label class="dopt-toggle">
+          <input type="checkbox" id="doptFSRSReschedule">
+          <div class="dopt-toggle-track"></div>
+          <div class="dopt-toggle-thumb"></div>
+        </label>
+      </div>
+
+      <!-- Исторический уровень усвоения -->
+      <div class="dopt-row">
+        <div class="dopt-lbl">Историческое усвоение (%)<div class="dopt-hint">Для оптимизации параметров — ожидаемый % правильных ответов</div></div>
         <input class="dopt-input" type="number" id="doptHistRet" min="50" max="100" value="90">
       </div>
+
+      <!-- Максимальный интервал -->
       <div class="dopt-row">
         <div class="dopt-lbl">Максимальный интервал (дни)</div>
         <input class="dopt-input" type="number" id="doptMaxInterval" min="1" max="36500" value="36500">
+      </div>
+
+      <!-- Игнорировать повторения до даты -->
+      <div class="dopt-row">
+        <div class="dopt-lbl">Игнорировать карточки, повторённые до
+          <div class="dopt-hint">Повторения до этой даты не учитываются при оптимизации</div>
+        </div>
+        <input class="dopt-input" type="date" id="doptFSRSIgnoreBefore" value="1970-01-01" style="width:130px;">
       </div>
     </div>
 
@@ -2248,11 +2280,15 @@ function fsrsCalc(sm, g, deckOpt) {
   let w = FSRS_W;
   if (deckOpt?.fsrsParams) {
     const parsed = deckOpt.fsrsParams.split(',').map(Number).filter(n => !isNaN(n));
-    if (parsed.length >= 17) w = parsed;
+    if (parsed.length >= 17) w = parsed; // accept 17 (FSRS-4.5) or 21 (FSRS-5)
   }
 
   const t  = today();
   const fg = FSRS_G[g]; // FSRS grade 1..4
+  // fsrsIgnoreBefore: reviews before this date don't count toward stability history
+  // In practice this means: if card's lastReview < ignoreBefore, treat as fresh
+  const ignoreBefore = deckOpt?.fsrsIgnoreBefore || '1970-01-01';
+  const isIgnored = sm?.last_review && sm.last_review < ignoreBefore;
 
   const inReview     = sm?.state === 'review';
   const inRelearning = sm?.state === 'relearning';
@@ -2260,8 +2296,8 @@ function fsrsCalc(sm, g, deckOpt) {
 
   let stability, difficulty, reps, lapses, state, stepIdx;
 
-  if (!sm || sm.state === 'new') {
-    // ── First time seeing card ──
+  if (!sm || sm.state === 'new' || isIgnored) {
+    // ── First time seeing card (or history ignored before ignoreBefore date) ──
     stability  = fsrsS0(fg, w);
     difficulty = fsrsD0(fg, w);
     lapses = 0;
@@ -3982,11 +4018,13 @@ const DECK_OPT_DEFAULTS = {
   autoAudio:    true,
   skipQ:        false,
   // FSRS
-  fsrsEnabled:  true,
-  fsrsRetention:90,
-  fsrsParams:   '0.4072,1.1829,3.1262,15.4722,7.2102,0.5316,1.0651,0.06069,2.9898,0.14,1.0,1.9395,0.11,0.29605,2.2700,0.2500,2.9898',
-  fsrsHistRet:  90,
-  maxInterval:  36500,
+  fsrsEnabled:       true,
+  fsrsRetention:     90,
+  fsrsParams:        '0.2120,1.2931,2.3065,8.2956,6.4133,0.8334,3.0194,0.0010,1.8722,0.1666,0.7960,1.4835,0.0614,0.2629,1.6483,0.6014,1.8729,0.5425,0.0912,0.0658,0.1542',
+  fsrsHistRet:       90,
+  fsrsReschedule:    false,
+  fsrsIgnoreBefore:  '1970-01-01',
+  maxInterval:       36500,
   // Коэффициенты кнопок (множитель к рассчитанному интервалу, -1 = стандарт)
   btnAgainMult: -1,
   btnHardMult:  -1,
@@ -4030,9 +4068,12 @@ function openDeckOpt(deckId) {
   const retSlider = document.getElementById('doptRetSlider');
   retSlider.value = opt.fsrsRetention;
   document.getElementById('doptRetVal').textContent = opt.fsrsRetention + '%';
-  document.getElementById('doptFSRSParams').value  = opt.fsrsParams;
-  document.getElementById('doptHistRet').value     = opt.fsrsHistRet;
-  document.getElementById('doptMaxInterval').value = opt.maxInterval;
+  document.getElementById('doptFSRSParams').value        = opt.fsrsParams;
+  document.getElementById('doptHistRet').value           = opt.fsrsHistRet;
+  document.getElementById('doptMaxInterval').value       = opt.maxInterval;
+  document.getElementById('doptFSRSReschedule').checked  = opt.fsrsReschedule || false;
+  document.getElementById('doptFSRSIgnoreBefore').value  = opt.fsrsIgnoreBefore || '1970-01-01';
+  fsrsValidateParams();
 
   document.getElementById('doptBtnAgain').value = (opt.btnAgainMult >= 0) ? opt.btnAgainMult : '';
   document.getElementById('doptBtnHard').value  = (opt.btnHardMult  >= 0) ? opt.btnHardMult  : '';
@@ -4076,10 +4117,12 @@ function saveDeckOpt() {
     buryRev:      document.getElementById('doptBuryRev').checked,
     autoAudio:    document.getElementById('doptAutoAudio').checked,
     skipQ:        document.getElementById('doptSkipQ').checked,
-    fsrsRetention:parseInt(document.getElementById('doptRetSlider').value)   || 90,
-    fsrsParams:   document.getElementById('doptFSRSParams').value.trim(),
-    fsrsHistRet:  parseInt(document.getElementById('doptHistRet').value)     || 90,
-    maxInterval:  parseInt(document.getElementById('doptMaxInterval').value) || 36500,
+    fsrsRetention:    parseInt(document.getElementById('doptRetSlider').value)       || 90,
+    fsrsParams:       document.getElementById('doptFSRSParams').value.trim(),
+    fsrsHistRet:      parseInt(document.getElementById('doptHistRet').value)         || 90,
+    fsrsReschedule:   document.getElementById('doptFSRSReschedule').checked,
+    fsrsIgnoreBefore: document.getElementById('doptFSRSIgnoreBefore').value          || '1970-01-01',
+    maxInterval:      parseInt(document.getElementById('doptMaxInterval').value)     || 36500,
     btnAgainMult: document.getElementById('doptBtnAgain').value !== '' ? parseFloat(document.getElementById('doptBtnAgain').value) : -1,
     btnHardMult:  document.getElementById('doptBtnHard').value  !== '' ? parseFloat(document.getElementById('doptBtnHard').value)  : -1,
     btnGoodMult:  document.getElementById('doptBtnGood').value  !== '' ? parseFloat(document.getElementById('doptBtnGood').value)  : -1,
@@ -4088,8 +4131,61 @@ function saveDeckOpt() {
   // Merge with existing deck, preserving name/emoji/color/createdAt
   const existing = decks[doptDeckId] || {};
   save('decks/' + doptDeckId, { ...existing, opt });
+
+  // FSRS reschedule: recalculate due dates for all review cards in this deck
+  if (opt.algo === 'fsrs' && opt.fsrsReschedule) {
+    fsrsRescheduleAll(doptDeckId, opt);
+  }
+
   toast('✅ Параметры сохранены');
   closeDeckOpt();
+}
+
+function fsrsValidateParams() {
+  const ta = document.getElementById('doptFSRSParams');
+  const status = document.getElementById('doptFSRSParamStatus');
+  if (!ta || !status) return;
+  const vals = ta.value.trim().split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+  const count = vals.length;
+  if (count === 21) {
+    status.innerHTML = '<span style="color:#16a34a;font-size:11px;font-weight:600;">✅ FSRS-5 · 21 параметр</span>';
+    ta.style.borderColor = '#16a34a';
+  } else if (count === 17) {
+    status.innerHTML = '<span style="color:#2563eb;font-size:11px;font-weight:600;">✅ FSRS-4.5 · 17 параметров</span>';
+    ta.style.borderColor = '#2563eb';
+  } else if (count === 0) {
+    status.innerHTML = '<span style="color:#9ca3af;font-size:11px;">Пусто — будут использованы параметры по умолчанию</span>';
+    ta.style.borderColor = '';
+  } else {
+    status.innerHTML = '<span style="color:#dc2626;font-size:11px;font-weight:600;">⚠️ ' + count + ' параметров — ожидается 17 или 21</span>';
+    ta.style.borderColor = '#dc2626';
+  }
+}
+
+function fsrsRescheduleAll(deckId, opt) {
+  // Recalculate due dates for all review-state cards in deck based on current FSRS params
+  const retTarget = (opt.fsrsRetention || 90) / 100;
+  const maxInt    = opt.maxInterval || 36500;
+  let w = FSRS_W;
+  if (opt.fsrsParams) {
+    const parsed = opt.fsrsParams.split(',').map(Number).filter(n => !isNaN(n));
+    if (parsed.length >= 17) w = parsed;
+  }
+  let count = 0;
+  Object.entries(cards).forEach(([id, card]) => {
+    if (card.deckId !== deckId) return;
+    const sm = card.sm2;
+    if (!sm || sm.state !== 'review' || !sm.stability) return;
+    // Recalculate due date from last_review + new interval
+    const newInterval = fsrsInterval(sm.stability, retTarget, maxInt);
+    const lastRev = sm.last_review || today();
+    const newDue  = addDFrac(lastRev, newInterval).due;
+    const updated = { ...sm, interval: newInterval, due: newDue };
+    cards[id] = { ...card, sm2: updated };
+    save('cards/' + id + '/sm2', updated);
+    count++;
+  });
+  if (count > 0) toast('🔄 Переплановано ' + count + ' карточек');
 }
 
 function doptPickAlgo(algo, updateField = true) {
@@ -4105,10 +4201,16 @@ function doptPickAlgo(algo, updateField = true) {
   btnFS.className  = 'dopt-algo-btn' + (!isSM2 ? ' active-fsrs' : '');
   if (desc) desc.textContent = isSM2
     ? 'Классический алгоритм SuperMemo. Надёжен и прост.'
-    : 'FSRS-4.5 — современный алгоритм на основе нейросетей. Точнее прогнозирует забывание.';
+    : 'FSRS-4.5 — современный алгоритм. Точнее предсказывает забывание, учитывает стабильность памяти.';
   if (fsrsSec) fsrsSec.style.display = isSM2 ? 'none' : '';
+  // SM2-only rows
   if (firstRow) firstRow.style.display = isSM2 ? '' : 'none';
   if (lapseRow) lapseRow.style.display = isSM2 ? '' : 'none';
+  // Easy interval row — SM2 only (FSRS calculates from w[3])
+  const easyIntRow = document.getElementById('doptEasyIntRow');
+  if (easyIntRow) easyIntRow.style.display = isSM2 ? '' : 'none';
+  // Коэффициент кнопок — hide for FSRS (FSRS doesn't use ease factor the same way)
+  // but keep multipliers section visible since we support them for FSRS too'''
 }
 
 // ── Wire deck options into review engine ───────────────────
