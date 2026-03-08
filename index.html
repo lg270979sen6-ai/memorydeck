@@ -4039,6 +4039,20 @@ function openDeckSettings(id) {
         </button>
       </div>
 
+        <button onclick="document.getElementById('deckSettingsSheet').remove();openLearnMode('${id}')"
+          style="display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:16px;background:transparent;border:none;cursor:pointer;text-align:left;transition:background .12s;"
+          onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background='transparent'">
+          <div style="width:38px;height:38px;border-radius:11px;background:rgba(52,199,89,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+            <svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="#1a8f3a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="8" stroke-dasharray="3 2"/><path d="M10 6v4l2.5 2.5"/></svg>
+          </div>
+          <div>
+            <div style="font-size:15px;font-weight:700;color:var(--ink);">Заучивание</div>
+            <div style="font-size:12px;color:var(--ink4);">Режим активного запоминания</div>
+          </div>
+          <svg style="margin-left:auto;flex-shrink:0;" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#c7c7cc" stroke-width="2" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>
+        </button>
+      </div>
+
       <!-- Cancel -->
       <div style="padding:0 12px 4px;">
         <button onclick="document.getElementById('deckSettingsSheet').remove()"
@@ -5665,7 +5679,423 @@ function renderCardWithTemplate(text, side) {
   t = t.replace(/\n/g, '<br>');
   return t;
 }
+
+// ═══════════════════════════════════════════════════
+//  LEARN MODE — Quizlet-style active recall
+//  Полностью автономный, не влияет на SM2/FSRS
+// ═══════════════════════════════════════════════════
+
+let learnState = null;
+
+function openLearnMode(deckId) {
+  const deckCards = Object.values(cards).filter(c => c.deckId === deckId && !c.suspended);
+  const MAX = 30;
+  if (deckCards.length === 0) { toast('В этой колоде нет карточек'); return; }
+  if (deckCards.length <= MAX) {
+    startLearnSession(deckId, deckCards.map(c => c.id));
+  } else {
+    openLearnCardPicker(deckId, deckCards);
+  }
+}
+
+function openLearnCardPicker(deckId, deckCards) {
+  const existing = document.getElementById('learnPickerSheet');
+  if (existing) existing.remove();
+  const deck = decks[deckId] || {};
+  const t = today();
+  const MAX = 30;
+  const sorted = [...deckCards].sort((a, b) => {
+    const aNew = (!a.sm2 || a.sm2.state==='new' || a.sm2.firstReview===t) ? -1 : 1;
+    const bNew = (!b.sm2 || b.sm2.state==='new' || b.sm2.firstReview===t) ? -1 : 1;
+    return aNew - bNew;
+  });
+  const sheet = document.createElement('div');
+  sheet.id = 'learnPickerSheet';
+  sheet.style.cssText = 'position:fixed;inset:0;z-index:9000;display:flex;flex-direction:column;';
+  const rows = sorted.map(card => {
+    const isNew = !card.sm2 || card.sm2.state === 'new';
+    const isDueToday = card.sm2?.firstReview === t;
+    const badge = isDueToday
+      ? `<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(0,122,255,.12);color:var(--blue);font-weight:700;flex-shrink:0;">сегодня</span>`
+      : isNew
+      ? `<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:var(--bg2);color:var(--ink4);flex-shrink:0;">новая</span>`
+      : `<span style="font-size:10px;padding:2px 7px;border-radius:8px;background:rgba(52,199,89,.12);color:var(--green);font-weight:700;flex-shrink:0;">повтор</span>`;
+    const front = (card.front||'').replace(/<[^>]+>/g,'');
+    const display = front.length > 38 ? front.slice(0,38)+'…' : front;
+    return `<label style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-bottom:.5px solid var(--border);cursor:pointer;">
+      <input type="checkbox" class="learn-pick" data-id="${card.id}" style="width:18px;height:18px;cursor:pointer;accent-color:var(--blue);flex-shrink:0;">
+      <span style="flex:1;font-size:14px;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${display}</span>
+      ${badge}
+    </label>`;
+  }).join('');
+  sheet.innerHTML = `
+    <div onclick="document.getElementById('learnPickerSheet').remove()" style="flex:1;background:rgba(0,0,0,.45);backdrop-filter:blur(2px);"></div>
+    <div style="background:var(--card);border-radius:28px 28px 0 0;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;">
+      <div style="padding:14px 20px 12px;border-bottom:.5px solid var(--border);flex-shrink:0;">
+        <div style="width:36px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 14px;"></div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;">
+          <div>
+            <div style="font-size:16px;font-weight:800;">🧠 Заучивание</div>
+            <div style="font-size:12px;color:var(--ink4);margin-top:2px;">${deck.emoji||'📚'} ${deck.name} · макс. ${MAX} карточек</div>
+          </div>
+          <button onclick="learnPickerSelectToday()" style="padding:7px 12px;border-radius:10px;background:rgba(0,122,255,.1);border:none;font-size:12px;font-weight:700;color:var(--blue);cursor:pointer;white-space:nowrap;">Новые сегодня</button>
+        </div>
+      </div>
+      <div id="learnPickerList" style="overflow-y:auto;flex:1;">${rows}</div>
+      <div style="padding:12px 16px calc(var(--safe-b,0px)+12px);border-top:.5px solid var(--border);flex-shrink:0;display:flex;align-items:center;gap:10px;">
+        <div style="flex:1;font-size:13px;color:var(--ink4);">Выбрано: <b id="learnPickerN" style="color:var(--blue);">0</b>/${MAX}</div>
+        <button onclick="startLearnFromPicker('${deckId}')" style="padding:13px 24px;border-radius:14px;background:var(--blue);border:none;font-size:15px;font-weight:700;color:#fff;cursor:pointer;">Начать</button>
+      </div>
+    </div>`;
+  document.body.appendChild(sheet);
+  sheet.querySelectorAll('.learn-pick').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const checked = sheet.querySelectorAll('.learn-pick:checked').length;
+      if (checked > MAX) { cb.checked = false; toast('Максимум ' + MAX + ' карточек'); return; }
+      document.getElementById('learnPickerN').textContent = sheet.querySelectorAll('.learn-pick:checked').length;
+    });
+  });
+  learnPickerSelectToday();
+}
+
+function learnPickerSelectToday() {
+  const sheet = document.getElementById('learnPickerSheet');
+  if (!sheet) return;
+  const t = today();
+  const MAX = 30;
+  let count = 0;
+  sheet.querySelectorAll('.learn-pick').forEach(cb => {
+    const card = cards[cb.dataset.id];
+    const pick = (!card?.sm2 || card.sm2.state==='new' || card.sm2.firstReview===t) && count < MAX;
+    cb.checked = pick;
+    if (pick) count++;
+  });
+  document.getElementById('learnPickerN').textContent = count;
+}
+
+function startLearnFromPicker(deckId) {
+  const sheet = document.getElementById('learnPickerSheet');
+  const checked = [...sheet.querySelectorAll('.learn-pick:checked')].map(cb => cb.dataset.id);
+  if (checked.length === 0) { toast('Выберите хотя бы одну карточку'); return; }
+  sheet.remove();
+  startLearnSession(deckId, checked);
+}
+
+function learnGetWordTranslation(card) {
+  // Extract only word and translation fields, strip all HTML/sounds
+  const fields = parseCardFields(card.front || '', card.back || '');
+  const strip = s => (s||'').replace(/<[^>]+>/g,'').replace(/\[sound:[^\]]+\]/g,'').trim();
+  const word = strip(fields.word) || strip(card.front);
+  const translation = strip(fields.translation) || strip(card.back);
+  return { word, translation };
+}
+
+function startLearnSession(deckId, cardIds) {
+  const sessionCards = cardIds.map(id => cards[id]).filter(Boolean);
+  if (!sessionCards.length) return;
+
+  // Build learn items: each item has { id, prompt, answer, cardId }
+  // Round 1: both directions — word→translation AND translation→word
+  const items = [];
+  sessionCards.forEach(card => {
+    const { word, translation } = learnGetWordTranslation(card);
+    if (!word || !translation) return;
+    // Direct: show word, answer = translation
+    items.push({ id: card.id + '_fwd', cardId: card.id, prompt: word, answer: translation });
+    // Reverse: show translation, answer = word
+    items.push({ id: card.id + '_rev', cardId: card.id, prompt: translation, answer: word });
+  });
+
+  // Shuffle
+  items.sort(() => Math.random() - .5);
+
+  // All answer options pool (for MC) — unique answers
+  const answerPool = [...new Set(items.map(i => i.answer))];
+
+  learnState = {
+    deckId,
+    items,          // all learn items (both directions)
+    answerPool,     // for MC distractors
+    mastered: {},   // item.id → true
+    wrongInRound: {},
+    round: 1,
+    roundItems: [...items],
+    roundIdx: 0,
+    totalQ: items.length,
+    mode: 'mc',
+    currentItem: null,
+    awaitingContinue: false,
+  };
+  document.getElementById('learnScreen').style.display = 'flex';
+  updateLearnProgress();
+  nextLearnCard();
+}
+
+function updateLearnProgress() {
+  if (!learnState) return;
+  const correct = Object.keys(learnState.mastered).length;
+  const total = learnState.totalQ;
+  const pct = total > 0 ? correct / total * 100 : 0;
+  document.getElementById('learnProgBubble').textContent = correct;
+  document.getElementById('learnProgBar').style.width = pct + '%';
+  document.getElementById('learnProgTotal').textContent = total;
+  document.getElementById('learnRoundTitle').textContent = 'Раунд ' + learnState.round;
+  const bubble = document.getElementById('learnProgBubble');
+  bubble.style.background = Object.keys(learnState.wrongInRound).length > 0 ? '#e05a00'
+    : correct > 0 ? 'var(--green)' : 'var(--ink3)';
+}
+
+function nextLearnCard() {
+  const ls = learnState;
+  if (!ls) return;
+  while (ls.roundIdx < ls.roundItems.length && ls.mastered[ls.roundItems[ls.roundIdx].id]) ls.roundIdx++;
+  if (ls.roundIdx >= ls.roundItems.length) { showLearnRoundEnd(); return; }
+  ls.currentItem = ls.roundItems[ls.roundIdx];
+  ls.awaitingContinue = false;
+  if (ls.mode === 'mc') renderLearnMC(ls.currentItem);
+  else renderLearnType(ls.currentItem);
+}
+
+function renderLearnMC(item) {
+  const correct = item.answer;
+  // Pick 3 distractors from answerPool (different from correct)
+  let pool = learnState.answerPool.filter(a => a !== correct)
+    .sort(() => Math.random() - .5).slice(0, 3);
+  const options = [correct, ...pool].sort(() => Math.random() - .5);
+  document.getElementById('learnContent').innerHTML = `
+    <div style="font-size:22px;font-weight:300;color:var(--ink);line-height:1.4;min-height:70px;margin-bottom:28px;">${item.prompt}</div>
+    <div style="font-size:12px;font-weight:700;color:var(--ink4);margin-bottom:12px;letter-spacing:.05em;text-transform:uppercase;">Выберите ответ</div>
+    <div id="learnMCOptions" style="display:flex;flex-direction:column;gap:10px;">
+      ${options.map(opt => `<button onclick="checkLearnMC(this,${JSON.stringify(opt)},${JSON.stringify(correct)})"
+        style="padding:16px 18px;border-radius:16px;background:var(--card);border:1.5px solid var(--border);font-size:15px;font-weight:500;color:var(--ink);text-align:left;cursor:pointer;width:100%;">
+        ${opt}</button>`).join('')}
+    </div>`;
+  document.getElementById('learnInputBar').style.display = 'none';
+}
+
+function checkLearnMC(btn, chosen, correct) {
+  if (learnState.awaitingContinue) return;
+  learnState.awaitingContinue = true;
+  const card = learnState.currentItem;
+  const isCorrect = chosen === correct;
+  document.querySelectorAll('#learnMCOptions button').forEach(b => {
+    b.style.pointerEvents = 'none';
+    const txt = b.textContent.trim();
+    if (txt === correct) {
+      b.style.cssText += ';background:rgba(52,199,89,.15);border-color:var(--green);color:var(--green);font-weight:700;';
+      b.textContent = '✓ ' + txt;
+    }
+  });
+  if (!isCorrect) {
+    btn.style.cssText += ';background:rgba(255,59,48,.1);border-color:var(--red);color:var(--red);';
+    btn.textContent = '✕ ' + btn.textContent.trim();
+    learnState.wrongInRound[card.id] = true;
+    const msg = document.createElement('div');
+    msg.style.cssText = 'margin-top:14px;font-size:14px;font-weight:700;color:#e05a00;';
+    msg.textContent = 'Не волнуйтесь, со временем вы все освоите!';
+    const cont = document.createElement('button');
+    cont.textContent = 'Продолжить';
+    cont.style.cssText = 'margin-top:16px;width:100%;padding:15px;border-radius:16px;background:var(--blue);border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer;';
+    cont.onclick = () => { learnState.roundIdx++; nextLearnCard(); };
+    const content = document.getElementById('learnContent');
+    content.insertBefore(msg, document.getElementById('learnMCOptions'));
+    content.appendChild(cont);
+  } else {
+    if (!learnState.wrongInRound[card.id]) { learnState.mastered[card.id] = true; }
+    updateLearnProgress();
+    setTimeout(() => { learnState.roundIdx++; nextLearnCard(); }, 800);
+  }
+  updateLearnProgress();
+}
+
+function renderLearnType(item) {
+  const isRetry = learnState.wrongInRound[item.id];
+  document.getElementById('learnContent').innerHTML = `
+    ${isRetry ? '<div style="display:inline-block;padding:4px 10px;border-radius:8px;background:rgba(255,149,0,.15);color:#c85000;font-size:12px;font-weight:700;margin-bottom:10px;">Попробуйте еще раз</div>' : ''}
+    <div style="font-size:24px;font-weight:300;color:var(--ink);line-height:1.4;min-height:90px;">${item.prompt}</div>`;
+  const bar = document.getElementById('learnInputBar');
+  bar.style.display = 'block';
+  const input = document.getElementById('learnInput');
+  input.value = '';
+  input.style.borderColor = 'var(--border)';
+  input.style.color = 'var(--ink)';
+  setTimeout(() => input.focus(), 80);
+}
+
+function learnDontKnow() {
+  if (!learnState?.currentItem || learnState.awaitingContinue) return;
+  const item = learnState.currentItem;
+  learnState.wrongInRound[item.id] = true;
+  delete learnState.mastered[item.id];
+  showLearnTypeResult(false, '', item.answer);
+}
+
+function submitLearnAnswer() {
+  if (!learnState?.currentItem || learnState.awaitingContinue) return;
+  const input = document.getElementById('learnInput');
+  const answer = input.value.trim();
+  if (!answer) return;
+  const item = learnState.currentItem;
+  const correct = item.answer;
+  const norm = s => s.toLowerCase().replace(/[.,!?;:'"()]/g,'').replace(/\s+/g,' ').trim();
+  showLearnTypeResult(norm(answer) === norm(correct), answer, correct);
+}
+
+function showLearnTypeResult(isCorrect, answer, correct) {
+  const card = learnState.currentItem;
+  learnState.awaitingContinue = true;
+  document.getElementById('learnInputBar').style.display = 'none';
+  const content = document.getElementById('learnContent');
+  if (isCorrect) {
+    if (!learnState.wrongInRound[card.id]) learnState.mastered[card.id] = true;
+    updateLearnProgress();
+    content.innerHTML += `<div style="margin-top:16px;padding:14px 16px;border-radius:14px;border:2px dashed var(--green);color:var(--green);font-size:16px;font-weight:600;">✓ ${answer}</div>`;
+    setTimeout(() => { learnState.roundIdx++; nextLearnCard(); }, 800);
+  } else {
+    learnState.wrongInRound[card.id] = true;
+    delete learnState.mastered[card.id];
+    updateLearnProgress();
+    content.innerHTML += `
+      <div style="margin-top:16px;">
+        <div style="font-size:14px;font-weight:700;color:#e05a00;margin-bottom:10px;">${answer ? 'Не волнуйтесь, со временем вы все освоите!' : 'Запомните этот ответ!'}</div>
+        ${answer ? `<div style="padding:14px;border-radius:14px;background:rgba(255,59,48,.08);border:1.5px solid var(--red);color:var(--red);font-size:15px;margin-bottom:8px;">✕ ${answer}</div>` : ''}
+        <div style="font-size:11px;font-weight:700;color:var(--green);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Правильный ответ</div>
+        <div style="padding:14px;border-radius:14px;border:2px dashed var(--green);color:var(--green);font-size:15px;font-weight:600;margin-bottom:14px;">✓ ${correct}</div>
+        <button onclick="learnState.roundIdx++;nextLearnCard();"
+          style="width:100%;padding:15px;border-radius:16px;background:var(--blue);border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer;margin-bottom:8px;">Продолжить</button>
+        <button onclick="overrideLearnCorrect()"
+          style="width:100%;padding:11px;border-radius:16px;background:transparent;border:none;font-size:14px;font-weight:600;color:var(--blue);cursor:pointer;">Изменить: я ответил правильно</button>
+      </div>`;
+  }
+}
+
+function overrideLearnCorrect() {
+  const card = learnState?.currentItem;
+  if (!card) return;
+  delete learnState.wrongInRound[card.id];
+  learnState.mastered[card.id] = true;
+  updateLearnProgress();
+  learnState.roundIdx++;
+  nextLearnCard();
+}
+
+function showLearnRoundEnd() {
+  const ls = learnState;
+  const correct = Object.keys(ls.mastered).length;
+  const total = ls.totalQ;
+  const pct = Math.round(correct / total * 100);
+  const wrongItems = ls.items.filter(i => ls.wrongInRound[i.id]);
+  const allDone = wrongItems.length === 0;
+  document.getElementById('learnInputBar').style.display = 'none';
+  // Show unique cards (deduplicate fwd/rev) for the round list
+  const shownCardIds = new Set();
+  const roundCardsList = ls.roundItems.map(item => {
+    const cardId = item.cardId;
+    if (shownCardIds.has(cardId)) return '';
+    shownCardIds.add(cardId);
+    const { word, translation } = learnGetWordTranslation(cards[cardId] || {});
+    return `<div style="padding:12px 14px;background:var(--card);border-radius:12px;border:.5px solid var(--border);">
+      <div style="font-size:14px;font-weight:600;color:var(--ink);">${word}</div>
+      <div style="font-size:13px;color:var(--ink4);margin-top:3px;">${translation}</div>
+    </div>`;
+  }).filter(Boolean).join('');
+  document.getElementById('learnContent').innerHTML = `
+    <div style="padding:4px 0 24px;">
+      <div style="font-size:24px;font-weight:800;color:var(--ink);line-height:1.3;margin-bottom:6px;">
+        ${allDone ? '🎉 Все карточки изучены!' : `Раунд ${ls.round} — пройден!<br><span style="font-size:18px;font-weight:600;color:var(--ink2);">Переходим к следующему раунду. У вас отлично получается!</span>`}
+      </div>
+      <div style="margin:16px 0 8px;font-size:14px;font-weight:700;color:var(--ink2);">Общий прогресс по модулю: <span style="color:var(--green);">${pct}%</span></div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--green);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;">${correct}</div>
+        <div style="flex:1;height:7px;background:var(--bg2);border-radius:4px;overflow:hidden;">
+          <div style="height:100%;width:${pct}%;background:var(--green);border-radius:4px;"></div>
+        </div>
+        <div style="font-size:13px;font-weight:700;color:var(--ink4);">${total}</div>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:20px;">
+        <span style="color:var(--green);font-weight:700;">Правильно</span><span style="color:var(--ink4);">Всего вопросов</span>
+      </div>
+      <div style="font-size:13px;font-weight:700;color:var(--blue);margin-bottom:10px;">Термины из этого раунда</div>
+      <div style="display:flex;flex-direction:column;gap:8px;margin-bottom:20px;">${roundCardsList}</div>
+      ${allDone
+        ? `<button onclick="closeLearnMode()" style="width:100%;padding:16px;border-radius:16px;background:var(--green);border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer;">Завершить 🎉</button>`
+        : `<button onclick="startNextLearnRound()" style="width:100%;padding:16px;border-radius:16px;background:var(--blue);border:none;font-size:16px;font-weight:700;color:#fff;cursor:pointer;">Перейти к раунду ${ls.round + 1}</button>`
+      }
+    </div>`;
+}
+
+function startNextLearnRound() {
+  const ls = learnState;
+  const wrongItems = ls.items.filter(i => ls.wrongInRound[i.id]);
+  if (!wrongItems.length) { closeLearnMode(); return; }
+  ls.round++;
+  ls.mode = 'type';
+  ls.wrongInRound = {};
+  ls.roundItems = [...wrongItems].sort(() => Math.random() - .5);
+  ls.roundIdx = 0;
+  ls.awaitingContinue = false;
+  updateLearnProgress();
+  nextLearnCard();
+}
+
+function confirmCloseLearn() {
+  if (!learnState) { closeLearnMode(); return; }
+  if (Object.keys(learnState.mastered).length === 0 || confirm('Прервать заучивание? Прогресс будет потерян.')) {
+    closeLearnMode();
+  }
+}
+
+function closeLearnMode() {
+  learnState = null;
+  document.getElementById('learnScreen').style.display = 'none';
+  document.getElementById('learnInputBar').style.display = 'none';
+  document.getElementById('learnInput').value = '';
+}
 </script>
+
+  <!-- ═══════════════════════════════════════════════════
+       LEARN MODE SCREEN
+  ═══════════════════════════════════════════════════ -->
+  <div id="learnScreen" style="display:none;position:fixed;inset:0;z-index:8000;background:var(--bg);flex-direction:column;">
+
+    <!-- Header -->
+    <div id="learnHeader" style="display:flex;align-items:center;justify-content:space-between;padding:calc(var(--safe-t,0px)+14px) 16px 12px;border-bottom:.5px solid var(--border);background:var(--card);">
+      <button onclick="confirmCloseLearn()" style="width:36px;height:36px;border-radius:50%;background:var(--bg2);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;">
+        <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="var(--ink2)" stroke-width="2.2" stroke-linecap="round"><line x1="4" y1="4" x2="16" y2="16"/><line x1="16" y1="4" x2="4" y2="16"/></svg>
+      </button>
+      <div id="learnRoundTitle" style="font-size:16px;font-weight:700;color:var(--ink);">Раунд 1</div>
+      <div style="width:36px;"></div>
+    </div>
+
+    <!-- Progress bar -->
+    <div style="padding:10px 16px 0;background:var(--card);">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div id="learnProgBubble" style="width:32px;height:32px;border-radius:50%;background:var(--ink3);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#fff;flex-shrink:0;transition:background .3s;">0</div>
+        <div style="flex:1;height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;">
+          <div id="learnProgBar" style="height:100%;width:0%;background:var(--green);border-radius:3px;transition:width .4s ease;"></div>
+        </div>
+        <div id="learnProgTotal" style="font-size:13px;font-weight:700;color:var(--ink4);flex-shrink:0;">0</div>
+      </div>
+    </div>
+
+    <!-- Content area -->
+    <div id="learnContent" style="flex:1;overflow-y:auto;padding:24px 16px 120px;display:flex;flex-direction:column;">
+    </div>
+
+    <!-- Bottom input bar (for type mode) -->
+    <div id="learnInputBar" style="display:none;position:fixed;bottom:0;left:0;right:0;background:var(--card);border-top:.5px solid var(--border);padding:10px 16px calc(var(--safe-b,0px)+10px);z-index:1;">
+      <div style="display:flex;align-items:center;gap:10px;">
+        <input id="learnInput" type="text" placeholder="Введите ответ"
+          style="flex:1;padding:12px 14px;border-radius:14px;border:1.5px solid var(--border);background:var(--bg);font-size:16px;font-family:inherit;color:var(--ink);outline:none;"
+          onkeydown="if(event.key==='Enter')submitLearnAnswer()">
+        <button onclick="learnDontKnow()" style="padding:10px 14px;border-radius:14px;background:transparent;border:none;font-size:13px;font-weight:700;color:var(--blue);cursor:pointer;white-space:nowrap;">Не знаю</button>
+        <button onclick="submitLearnAnswer()" style="width:38px;height:38px;border-radius:50%;background:var(--blue);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;flex-shrink:0;">
+          <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="10" x2="16" y2="10"/><polyline points="11,5 16,10 11,15"/></svg>
+        </button>
+      </div>
+    </div>
+
+  </div>
 </body>
 </html>
 
