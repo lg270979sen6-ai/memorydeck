@@ -3104,23 +3104,32 @@ function renderStats(){
   const dueLearning = all.filter(c => (c.sm2?.state==='learning'||c.sm2?.state==='relearning') && isDue(c.sm2)).length;
 
   // Today stats (filtered)
-  // shownNew = cards first seen today (firstReview=today, any state that's been touched)
-  const shownNew     = !deckId
-    ? Object.values(cards).filter(c=>c.sm2?.firstReview===t).length
-    : all.filter(c=>c.sm2?.firstReview===t).length;
+  // shownNew: global uses newLog (authoritative), per-deck uses cards
+  const shownNew = !deckId
+    ? (newLog[t] || 0)
+    : all.filter(c => c.sm2?.firstReview === t && c.sm2?.state === 'review').length;
   const {nw:fNw,rv:fRv,ln:fLn} = deckId ? getDeckDue(deckId) : getDue();
   const leftNew      = fNw;
 
-  // studyLog is global — for deck filter count from card last_review
   let studiedToday, studiedRev;
   if (!deckId) {
+    // Global: studyLog/newLog are authoritative counters incremented in doGrade
     studiedToday = studyLog[t] || 0;
     studiedRev   = Math.max(0, studiedToday - (newLog[t]||0));
   } else {
-    // Same source of truth as global — per-deck studyLog/newLog
-    studiedToday = studyLog._deck?.[deckId]?.[t] || 0;
-    const newToday = newLog._deck?.[deckId]?.[t] || 0;
-    studiedRev = Math.max(0, studiedToday - newToday);
+    // Per-deck: derive from cards directly — same logic as global studyLog
+    // "Пройдено" = cards that graduated today (state=review, last_review=today)
+    //            + cards that were review→review today (last_review=today, had reps>0 before)
+    // Simplest reliable proxy: cards with last_review=today in this deck
+    // that are NOT still in new state (i.e. have been graded at least once and graduated)
+    const gradedCards = all.filter(c => c.sm2?.last_review === t);
+    // graduated from new/learning = firstReview===today AND state===review
+    const graduatedNew = all.filter(c => c.sm2?.firstReview === t && c.sm2?.state === 'review').length;
+    // reviewed review cards = last_review===today AND state===review AND firstReview!==today
+    const reviewedRev  = all.filter(c => c.sm2?.last_review === t && c.sm2?.state === 'review' && c.sm2?.firstReview !== t).length;
+    // graduated from relearning = last_review===today AND state===review AND reps>1 AND firstReview!==today (already counted above)
+    studiedToday = graduatedNew + reviewedRev;
+    studiedRev   = reviewedRev;
   }
 
   // Streak (global)
