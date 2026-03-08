@@ -2166,6 +2166,7 @@ function sm2Calc(sm, g, deckOpt) {
   s.due = dueParts.due;
   if (dueParts.dueMs) s.dueMs = dueParts.dueMs;
   else delete s.dueMs;
+  s.last_review = today();
   return s;
 }
 
@@ -3103,9 +3104,10 @@ function renderStats(){
   const dueLearning = all.filter(c => (c.sm2?.state==='learning'||c.sm2?.state==='relearning') && isDue(c.sm2)).length;
 
   // Today stats (filtered)
+  // shownNew = cards first seen today (firstReview=today, any state that's been touched)
   const shownNew     = !deckId
-    ? Object.values(cards).filter(c=>c.sm2?.firstReview===t && c.sm2?.state!=='new').length
-    : all.filter(c=>c.sm2?.firstReview===t && c.sm2?.state!=='new').length;
+    ? Object.values(cards).filter(c=>c.sm2?.firstReview===t).length
+    : all.filter(c=>c.sm2?.firstReview===t).length;
   const {nw:fNw,rv:fRv,ln:fLn} = deckId ? getDeckDue(deckId) : getDue();
   const leftNew      = fNw;
 
@@ -3115,11 +3117,9 @@ function renderStats(){
     studiedToday = studyLog[t] || 0;
     studiedRev   = Math.max(0, studiedToday - (newLog[t]||0));
   } else {
-    // Count cards in this deck that were reviewed today (any state change today)
-    const reviewedToday = all.filter(c => c.sm2?.last_review === t);
-    studiedToday = reviewedToday.length;
-    // New = cards that got firstReview today (graduated from new→learning or new→review)
-    const newToday = all.filter(c => c.sm2?.firstReview === t && c.sm2?.state !== 'new').length;
+    // Same source of truth as global — per-deck studyLog/newLog
+    studiedToday = studyLog._deck?.[deckId]?.[t] || 0;
+    const newToday = newLog._deck?.[deckId]?.[t] || 0;
     studiedRev = Math.max(0, studiedToday - newToday);
   }
 
@@ -3785,11 +3785,33 @@ function doGrade(g){
   if (graduatedFromNew) {
     const nc=(newLog[t]||0)+1; save('newLog/'+t,nc); newLog[t]=nc;
     const cnt=(studyLog[t]||0)+1; save('studyLog/'+t,cnt); studyLog[t]=cnt;
-
+    // Per-deck
+    if (c.deckId) {
+      if (!studyLog._deck) studyLog._deck={};
+      if (!studyLog._deck[c.deckId]) studyLog._deck[c.deckId]={};
+      studyLog._deck[c.deckId][t] = (studyLog._deck[c.deckId][t]||0)+1;
+      save('studyLog/_deck/'+c.deckId+'/'+t, studyLog._deck[c.deckId][t]);
+      if (!newLog._deck) newLog._deck={};
+      if (!newLog._deck[c.deckId]) newLog._deck[c.deckId]={};
+      newLog._deck[c.deckId][t] = (newLog._deck[c.deckId][t]||0)+1;
+      save('newLog/_deck/'+c.deckId+'/'+t, newLog._deck[c.deckId][t]);
+    }
   } else if (prevState==='review' && ns.state==='review') {
     const cnt=(studyLog[t]||0)+1; save('studyLog/'+t,cnt); studyLog[t]=cnt;
+    if (c.deckId) {
+      if (!studyLog._deck) studyLog._deck={};
+      if (!studyLog._deck[c.deckId]) studyLog._deck[c.deckId]={};
+      studyLog._deck[c.deckId][t] = (studyLog._deck[c.deckId][t]||0)+1;
+      save('studyLog/_deck/'+c.deckId+'/'+t, studyLog._deck[c.deckId][t]);
+    }
   } else if (graduatedFromRelearn) {
     const cnt=(studyLog[t]||0)+1; save('studyLog/'+t,cnt); studyLog[t]=cnt;
+    if (c.deckId) {
+      if (!studyLog._deck) studyLog._deck={};
+      if (!studyLog._deck[c.deckId]) studyLog._deck[c.deckId]={};
+      studyLog._deck[c.deckId][t] = (studyLog._deck[c.deckId][t]||0)+1;
+      save('studyLog/_deck/'+c.deckId+'/'+t, studyLog._deck[c.deckId][t]);
+    }
   }
 
   rIdx++;
