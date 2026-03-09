@@ -1667,7 +1667,7 @@ body {
 <div class="overlay" id="templateEdOv" style="display:none;flex-direction:column;background:var(--bg);">
   <div class="overlay-header" style="padding-top:calc(var(--safe-t) + 12px);">
     <div class="rev-close" onclick="closeTemplateEd()">✕</div>
-    <div class="overlay-title">Поля и шаблон</div>
+    <div class="overlay-title" id="templateEdTitle">Поля и шаблон</div>
     <button onclick="saveTemplate()" style="padding:7px 16px;border-radius:10px;background:var(--blue);color:#fff;border:none;font-weight:700;font-size:13px;cursor:pointer;">Сохранить</button>
   </div>
 
@@ -3597,14 +3597,14 @@ function renderCard(){
         <div class="c-badge" style="background:${sCol};"></div>
         ${editBtn}
         ${mkAudioBtn(frontAudio,'front')}
-        <div class="c-q" style="margin-top:10px;width:100%;">${renderCardWithTemplate(frontClean,'front')}</div>
+        <div class="c-q" style="margin-top:10px;width:100%;">${renderCardWithTemplate(frontClean,'front',c.deckId)}</div>
         <div class="c-hint" id="tapHint">Нажмите чтобы показать ответ</div>
       </div>
       <div class="c-face c-back">
         <div class="c-badge" style="background:${sCol};"></div>
         ${editBtn}
         ${mkAudioBtn(backAudio,'back')}
-        <div class="c-a" style="margin-top:10px;width:100%;">${renderCardWithTemplate(backClean,'back')}</div>
+        <div class="c-a" style="margin-top:10px;width:100%;">${renderCardWithTemplate(backClean,'back',c.deckId)}</div>
         ${intStr?`<div class="c-int">${intStr}</div>`:''}
       </div>
     </div>
@@ -4081,7 +4081,7 @@ function openDeckSettings(id) {
           <svg style="margin-left:auto;flex-shrink:0;" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#c7c7cc" stroke-width="2" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>
         </button>
 
-        <button onclick="document.getElementById('deckSettingsSheet').remove();openTemplateEd()"
+        <button onclick="document.getElementById('deckSettingsSheet').remove();openTemplateEd('${id}')"
           style="display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:16px;background:transparent;border:none;cursor:pointer;text-align:left;transition:background .12s;"
           onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background='transparent'">
           <div style="width:38px;height:38px;border-radius:11px;background:rgba(255,149,0,.1);display:flex;align-items:center;justify-content:center;flex-shrink:0;">
@@ -4480,7 +4480,7 @@ function buildCardFromFields(vals) {
     pt(vals.word)   ? `<div class="anki-word">${pt(vals.word)}</div>` : '',
     pt(vals.ipa)    ? `<div class="anki-ipa">[${pt(vals.ipa).replace(/^\[|\]$/g,'')}]</div>` : '',
     pt(vals.sound)  ? `[sound:${pt(vals.sound)}]` : '',
-    ex              ? `<div class="anki-example">→ ${ex}</div>` : '',
+    ex              ? `<div class="anki-example">${ex}</div>` : '',
   ].filter(Boolean).join('\n');
 
   const back = [
@@ -4488,7 +4488,7 @@ function buildCardFromFields(vals) {
     pt(vals.image)          ? `<div class="anki-img">[img:${pt(vals.image)}]</div>` : '',
     pt(vals.translation)    ? `<div class="anki-translation">${pt(vals.translation)}</div>` : '',
     rt(vals.meaning)        ? `<div class="anki-meaning">📖 ${rt(vals.meaning)}</div>` : '',
-    ex                      ? `<div class="anki-example">→ ${ex}</div>` : '',
+    ex                      ? `<div class="anki-example">${ex}</div>` : '',
     pt(vals.sound_example)  ? `[sound:${pt(vals.sound_example)}]` : '',
     // Custom fields — preserve rich HTML
     ...Object.entries(vals)
@@ -4534,7 +4534,7 @@ function renderCePreview(side, panelId) {
 
   let html2 = `<div style="font-size:11px;font-weight:700;color:var(--ink4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px;">${side==='front'?'Лицевая':'Тыльная'} сторона</div>
   <div style="${bg}border:1px solid var(--border);border-radius:20px;padding:28px 20px;min-height:180px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;box-shadow:0 4px 20px rgba(0,0,0,.06);text-align:center;width:100%;box-sizing:border-box;">
-    ${renderCardWithTemplate(text, side)}
+    ${renderCardWithTemplate(text, side, null)}
   </div>`;
   panel.innerHTML = html2;
   // Load images in preview
@@ -5292,7 +5292,7 @@ async function doApkgImport() {
         if (word)    frontParts.push(`<div class="anki-word">${word}</div>`);
         if (ipa)     frontParts.push(`<div class="anki-ipa">[${ipa}]</div>`);
         if (sound)   frontParts.push(sound);  // keeps [sound:file.mp3] for audio engine
-        if (example) frontParts.push(`<div class="anki-example">→ ${example}</div>`);
+        if (example) frontParts.push(`<div class="anki-example">${example}</div>`);
         front = frontParts.join('\n');
 
         // BACK: Word + Image + Translation + Meaning + Example + Sound_Example
@@ -5301,7 +5301,7 @@ async function doApkgImport() {
         if (image)       backParts.push(`<div class="anki-img">${image}</div>`);
         if (translation) backParts.push(`<div class="anki-translation">${translation}</div>`);
         if (meaning)     backParts.push(`<div class="anki-meaning">📖 ${meaning}</div>`);
-        if (example)     backParts.push(`<div class="anki-example">→ ${example}</div>`);
+        if (example)     backParts.push(`<div class="anki-example">${example}</div>`);
         if (soundEx)     backParts.push(soundEx);  // [sound:x.mp3]
         back = backParts.join('\n');
         if (pi === 1) {
@@ -5448,8 +5448,18 @@ function _persistTemplate(fields) {
   } catch(e){}
 }
 
-function openTemplateEd() {
+let tmplEdDeckId = null; // which deck this template editor was opened for
+
+function openTemplateEd(deckId) {
+  tmplEdDeckId = deckId || null;
   tmplFields = loadTemplate();
+  // Update header to show deck context
+  const titleEl = document.getElementById('templateEdTitle');
+  if (titleEl) {
+    titleEl.textContent = deckId && decks[deckId]
+      ? 'Шаблон: ' + decks[deckId].name
+      : 'Поля и шаблон';
+  }
   switchTmplTab(0);
   document.getElementById('templateEdOv').style.display = 'flex';
 }
@@ -5565,14 +5575,27 @@ function toggleTmplDevMode() {
     btn.style.background = 'rgba(0,122,255,.15)';
     btn.style.color = 'var(--blue)';
     btn.style.borderColor = 'var(--blue)';
+    // Show which deck's template is being edited
+    const deckName = tmplEdDeckId && decks[tmplEdDeckId] ? decks[tmplEdDeckId].name : null;
+    if (deckName) {
+      const modeBar = btn.closest('div');
+      if (modeBar && !document.getElementById('tmplDevDeckLabel')) {
+        const lbl = document.createElement('span');
+        lbl.id = 'tmplDevDeckLabel';
+        lbl.style.cssText = 'font-size:11px;color:var(--ink4);margin-left:8px;';
+        lbl.textContent = 'Колода: ' + deckName;
+        btn.parentNode.appendChild(lbl);
+      }
+    }
     normal.style.display = 'none';
     dev.style.display = 'flex';
     dev.style.flexDirection = 'column';
     resetBtn.style.display = 'block';
-    // Populate code editors with generated HTML
+    // Populate code editors: use existing deck override or generate from fields
+    const existingOpt = tmplEdDeckId ? getDeckOpt(tmplEdDeckId) : {};
     const {front, back} = tmplBuildPreviewCode();
-    document.getElementById('tmplDevCodeFront').value = formatHtml(front);
-    document.getElementById('tmplDevCodeBack').value = formatHtml(back);
+    document.getElementById('tmplDevCodeFront').value = existingOpt._devFront || formatHtml(front);
+    document.getElementById('tmplDevCodeBack').value  = existingOpt._devBack  || formatHtml(back);
     tmplDevLiveUpdate('front');
     tmplDevLiveUpdate('back');
   } else {
@@ -5586,15 +5609,19 @@ function toggleTmplDevMode() {
   }
 }
 
+// Map field id → {{Placeholder}} name
+const FIELD_PLACEHOLDER = {
+  word: 'Word', translation: 'Translation', ipa: 'IPA',
+  example: 'Example', meaning: 'Meaning', image: 'Image'
+};
+
 function tmplBuildPreviewCode() {
-  // Build actual HTML that renderCard uses, substituting SAMPLE values
-  const strip = s => (s||'').replace(/<[^>]+>/g,'').trim();
   const frontFields = tmplFields.filter(f => f.showFront);
   const backFields  = tmplFields.filter(f => f.showBack);
 
   const buildSide = (fields) => fields.map(f => {
     const s = f.style;
-    const val = SAMPLE[f.id] || f.defaultValue || '[' + f.label + ']';
+    const ph = FIELD_PLACEHOLDER[f.id] || f.label;
     const styleStr = [
       'display:block',
       'font-size:' + s.size + 'px',
@@ -5602,15 +5629,17 @@ function tmplBuildPreviewCode() {
       'color:' + s.color,
       s.italic ? 'font-style:italic' : '',
       'text-align:' + (s.align||'left'),
-      'margin:3px 0',
+      'margin:4px 0',
     ].filter(Boolean).join('; ');
 
-    if (f.id === 'image') return '<div style="text-align:center; margin:3px 0;">\n  <!-- image -->' + '\n</div>';
-    if (f.id.startsWith('sound')) return '<button style="padding:5px 14px; border-radius:8px; border:1px solid #ddd; background:#f5f5f7; font-size:13px; margin:2px 0;">\n  🔊 Слушать\n</button>';
-    if (f.id === 'meaning') return '<div class="anki-meaning" style="' + styleStr + '; background:rgba(0,122,255,.07); border-left:3px solid #007aff; padding:7px 10px; border-radius:0 8px 8px 0;">\n  ' + strip(val) + '\n</div>';
-    const cls = 'anki-' + f.id.replace(/_/g,'-');
-    return '<div class="' + cls + '" style="' + styleStr + '">\n  ' + strip(val) + '\n</div>';
-  }).join('\n');
+    if (f.id === 'image')
+      return '<div style="text-align:center; margin:8px 0;">\n  {{Image}}\n</div>';
+    if (f.id.startsWith('sound'))
+      return '<!-- звук автоматически -->';
+    if (f.id === 'meaning')
+      return '<div style="' + styleStr + '; background:rgba(0,122,255,.07); border-left:3px solid #007aff; padding:8px 12px; border-radius:0 8px 8px 0;">\n  {{Meaning}}\n</div>';
+    return '<div style="' + styleStr + '">\n  {{' + ph + '}}\n</div>';
+  }).filter(s => s && !s.startsWith('<!-- звук')).join('\n');
 
   return {
     front: buildSide(frontFields) || '<!-- Нет полей на лицевой стороне -->',
@@ -5627,32 +5656,52 @@ function tmplDevLiveUpdate(side) {
   const code = document.getElementById('tmplDevCode' + (side==='front'?'Front':'Back')).value;
   const preview = document.getElementById('tmplDevPreview' + (side==='front'?'Front':'Back'));
   try {
-    preview.innerHTML = code;
+    // Substitute SAMPLE values for preview
+    let html = code
+      .replace(/\{\{Word\}\}/gi,        SAMPLE.word)
+      .replace(/\{\{Translation\}\}/gi, SAMPLE.translation)
+      .replace(/\{\{IPA\}\}/gi,         SAMPLE.ipa)
+      .replace(/\{\{Example\}\}/gi,     SAMPLE.example)
+      .replace(/\{\{Meaning\}\}/gi,     SAMPLE.meaning)
+      .replace(/\{\{Image\}\}/gi,       '<em style="color:#aaa;font-size:12px;">🖼 image.jpg</em>');
+    // markdown
+    html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+               .replace(/_([^_\s][^_]*)_/g, '<em>$1</em>');
+    preview.innerHTML = html;
   } catch(e) {
     preview.innerHTML = '<div style="color:var(--red);font-size:12px;">Ошибка в HTML</div>';
   }
 }
 
 function applyTmplDevCode() {
-  // Parse the edited HTML back into field styles and save
-  // For now: store custom front/back HTML overrides in tmplFields meta
   const frontCode = document.getElementById('tmplDevCodeFront').value;
   const backCode  = document.getElementById('tmplDevCodeBack').value;
-  // Save as raw overrides in template
-  if (!tmplFields._devOverride) tmplFields._devOverride = {};
-  tmplFields._devFront = frontCode;
-  tmplFields._devBack  = backCode;
-  _persistTemplate(tmplFields);
-  toast('✅ Код применён');
+  if (!tmplEdDeckId) {
+    toast('⚠️ Откройте шаблон из настроек конкретной колоды');
+    return;
+  }
+  // Save per-deck in decks[deckId].opt
+  const deck = decks[tmplEdDeckId] || {};
+  const opt = Object.assign({}, deck.opt || {}, {
+    _devFront: frontCode || null,
+    _devBack:  backCode  || null,
+  });
+  decks[tmplEdDeckId] = {...deck, opt};
+  save('decks/' + tmplEdDeckId, decks[tmplEdDeckId]);
+  toast('✅ Шаблон колоды «' + (deck.name||'') + '» сохранён');
   toggleTmplDevMode();
 }
 
 function resetTmplDevCode() {
   if (!confirm('Сбросить к заводским настройкам? Все изменения в коде будут потеряны.')) return;
-  // Clear dev overrides
-  delete tmplFields._devFront;
-  delete tmplFields._devBack;
-  _persistTemplate(tmplFields);
+  if (tmplEdDeckId && decks[tmplEdDeckId]) {
+    const deck = decks[tmplEdDeckId];
+    const opt = Object.assign({}, deck.opt || {});
+    delete opt._devFront;
+    delete opt._devBack;
+    decks[tmplEdDeckId] = {...deck, opt};
+    save('decks/' + tmplEdDeckId, decks[tmplEdDeckId]);
+  }
   // Regenerate from current fields
   const {front, back} = tmplBuildPreviewCode();
   document.getElementById('tmplDevCodeFront').value = formatHtml(front);
@@ -5803,9 +5852,38 @@ function handleFieldImage(input) {
 }
 
 // ── renderCardWithTemplate ───────────────────────────
-function renderCardWithTemplate(text, side) {
+function renderCardWithTemplate(text, side, deckId) {
   if (!text) return '';
   const tmpl = loadTemplate();
+
+  // ── Dev override: per-deck, stored in decks[deckId].opt._devFront/Back ──
+  const deckOpt = deckId ? getDeckOpt(deckId) : {};
+  const devCode = side === 'front' ? deckOpt._devFront : deckOpt._devBack;
+  if (devCode) {
+    // Extract field values from the card HTML
+    const vals = parseCardFields(text, text);
+    const strip = s => (s||'').replace(/<[^>]+>/g,'').replace(/\[sound:[^\]]+\]/g,'').trim();
+    // Replace {{FieldName}} placeholders with actual values
+    let result = devCode
+      .replace(/\{\{Word\}\}/gi,        strip(vals.word))
+      .replace(/\{\{Translation\}\}/gi, strip(vals.translation))
+      .replace(/\{\{IPA\}\}/gi,         strip(vals.ipa))
+      .replace(/\{\{Example\}\}/gi,     strip(vals.example).replace(/^→\s*/,''))
+      .replace(/\{\{Meaning\}\}/gi,     strip(vals.meaning).replace(/^📖\s*/,''));
+    // Handle images
+    result = result
+      .replace(/\[img:([^\]]+)\]/gi, '<img src="$1" data-anki-img="1">')
+      .replace(/\{\{Image\}\}/gi, vals.image ? `<img src="${strip(vals.image)}" data-anki-img="1">` : '');
+    // Apply markdown
+    result = result.split(/(<[^>]+>)/g).map((part, i) => {
+      if (part.startsWith('<')) return part;
+      part = part.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;">$1</strong>');
+      part = part.replace(/_([^_\s][^_]*)_/g, '<em style="font-style:italic;opacity:.85;">$1</em>');
+      return part;
+    }).join('');
+    result = result.replace(/\n/g, '<br>');
+    return result;
+  }
 
   let t = text.replace(/\[sound:[^\]]+\]/g, '').trim();
 
