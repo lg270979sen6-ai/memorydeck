@@ -1837,6 +1837,10 @@ body {
           <span style="font-size:14px;color:var(--ink2);">Включить</span>
         </label>
       </label>
+      <label style="font-size:12px;color:var(--ink3);">Отступ (px)
+        <input type="number" id="fieldEdMargin" value="4" min="0" max="40"
+          style="display:block;width:100%;margin-top:4px;padding:8px;border-radius:8px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
+      </label>
     </div>
 
     <div class="sheet-btns">
@@ -5651,7 +5655,7 @@ function tmplBuildPreviewCode() {
       'color:' + s.color,
       s.italic ? 'font-style:italic' : '',
       'text-align:' + (s.align||'left'),
-      'margin:4px 0',
+      'margin:' + (s.margin ?? 4) + 'px 0',
     ].filter(Boolean).join('; ');
 
     if (f.id === 'image')
@@ -5774,6 +5778,8 @@ function openFieldEd(idx) {
   document.getElementById('fieldEdItalic').checked = f.style?.italic || false;
   const alignEl = document.getElementById('fieldEdAlign');
   if (alignEl) alignEl.value = f.style?.align || 'left';
+  const marginEl = document.getElementById('fieldEdMargin');
+  if (marginEl) marginEl.value = f.style?.margin ?? 4;
   document.getElementById('fieldEdDeleteBtn').style.display = idx >= DEFAULT_FIELDS.length ? 'block' : 'none';
   openSh('fieldEdSh');
 }
@@ -5788,6 +5794,7 @@ function saveFieldEd() {
   f.style.weight = +document.getElementById('fieldEdWeight').value;
   f.style.italic = document.getElementById('fieldEdItalic').checked;
   f.style.align  = document.getElementById('fieldEdAlign')?.value || 'left';
+  f.style.margin = +(document.getElementById('fieldEdMargin')?.value ?? 4);
 
   // Save to Firebase + localStorage
   _persistTemplate(tmplFields);
@@ -5923,7 +5930,8 @@ function renderCardWithTemplate(text, side, deckId) {
   for (const f of tmpl) {
     const s = f.style;
     const shown = side==='front' ? f.showFront : f.showBack;
-    const inlineStyle = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}text-align:${s.align||'left'};margin:4px 0;`;
+    const margin = s.margin ?? 4;
+    const inlineStyle = `display:block;font-size:${s.size}px;font-weight:${s.weight};color:${s.color};${s.italic?'font-style:italic;':''}text-align:${s.align||'left'};margin:${margin}px 0;`;
     if (!shown) {
       if (f.id==='image') t = t.replace(/<div[^>]*class="anki-img"[^>]*>[\s\S]*?<\/div>/gi, '');
       else t = t.replace(new RegExp(`<div[^>]*class="anki-${f.id}"[^>]*>.*?<\\/div>`,'gi'), '');
@@ -5936,6 +5944,9 @@ function renderCardWithTemplate(text, side, deckId) {
     if (f.id==='example')     t = t.replace(/class="anki-example"/g,     `style="${inlineStyle}"`);
     if (f.id==='image')       t = t.replace(/class="anki-img"/g,         `style="display:block;text-align:center;margin:8px 0;"`);
   }
+
+  // Hide empty field divs (e.g. field 11 with no value)
+  t = t.replace(/<div([^>]*)>\s*<\/div>/gi, '');
 
   // Apply markdown ONLY to text nodes (between tags), never inside tag attributes
   // Split on HTML tags, process only text parts
