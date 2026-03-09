@@ -5507,6 +5507,7 @@ function tfDrop(e, el) {
   const [moved] = tmplFields.splice(tfDragIdx, 1);
   tmplFields.splice(dstIdx, 0, moved);
   _persistTemplate(tmplFields);
+  syncFieldsToDevCode();
   renderAllFieldsList();
   tfDragIdx = null;
 }
@@ -5546,9 +5547,29 @@ function renderSideFieldsList(side, containerId) {
   `).join('');
 }
 
+// Sync: whenever fields change → rebuild dev code for the current deck
+function syncFieldsToDevCode() {
+  if (!tmplEdDeckId || !decks[tmplEdDeckId]) return;
+  const {front, back} = tmplBuildPreviewCode();
+  const opt = Object.assign({}, decks[tmplEdDeckId].opt || {}, {
+    _devFront: front,
+    _devBack:  back,
+  });
+  decks[tmplEdDeckId] = {...decks[tmplEdDeckId], opt};
+  save('decks/' + tmplEdDeckId, decks[tmplEdDeckId]);
+  // If dev editor is open, update textareas live
+  if (tmplDevMode) {
+    document.getElementById('tmplDevCodeFront').value = formatHtml(front);
+    document.getElementById('tmplDevCodeBack').value  = formatHtml(back);
+    tmplDevLiveUpdate('front');
+    tmplDevLiveUpdate('back');
+  }
+}
+
 function tmplToggleSide(idx, side, val) {
   tmplFields[idx][side==='front'?'showFront':'showBack'] = val;
   _persistTemplate(tmplFields);
+  syncFieldsToDevCode();
 }
 
 function tfDropSide(e, el, side) {
@@ -5558,6 +5579,7 @@ function tfDropSide(e, el, side) {
   const [moved] = tmplFields.splice(tfDragIdx, 1);
   tmplFields.splice(dstIdx, 0, moved);
   _persistTemplate(tmplFields);
+  syncFieldsToDevCode();
   renderSideFieldsList(side, side==='front'?'tmplFrontList':'tmplBackList');
   tfDragIdx = null;
 }
@@ -5770,6 +5792,9 @@ function saveFieldEd() {
   // Save to Firebase + localStorage
   _persistTemplate(tmplFields);
 
+  // Auto-sync: regenerate dev code for current deck so it stays in sync
+  syncFieldsToDevCode();
+
   closeSh('fieldEdSh');
   renderAllFieldsList();
   toast('✅ Поле сохранено');
@@ -5907,8 +5932,8 @@ function renderCardWithTemplate(text, side, deckId) {
     if (f.id==='word')        t = t.replace(/class="anki-word"/g,        `style="${inlineStyle}"`);
     if (f.id==='ipa')         t = t.replace(/class="anki-ipa"/g,         `style="${inlineStyle}"`);
     if (f.id==='translation') t = t.replace(/class="anki-translation"/g, `style="${inlineStyle}"`);
-    if (f.id==='meaning')     t = t.replace(/class="anki-meaning"/g,     `style="${inlineStyle}background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:8px 12px;border-radius:0 8px 8px 0;text-align:left;"`);
-    if (f.id==='example')     t = t.replace(/class="anki-example"/g,     `style="${inlineStyle}text-align:left;"`);
+    if (f.id==='meaning')     t = t.replace(/class="anki-meaning"/g,     `style="${inlineStyle}background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:8px 12px;border-radius:0 8px 8px 0;"`);
+    if (f.id==='example')     t = t.replace(/class="anki-example"/g,     `style="${inlineStyle}"`);
     if (f.id==='image')       t = t.replace(/class="anki-img"/g,         `style="display:block;text-align:center;margin:8px 0;"`);
   }
 
