@@ -3936,7 +3936,7 @@ function openDeckDetail(id){
           <svg viewBox="0 0 20 20" width="16" height="16" fill="none" stroke="#48484a" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="10" cy="10" r="2.5"/><path d="M10 1v2M10 17v2M1 10h2M17 10h2M3.05 3.05l1.42 1.42M15.54 15.54l1.41 1.41M15.54 4.46l1.41-1.41M3.05 16.95l1.42-1.41"/></svg>
           Настройки
         </button>
-        <button onclick="if(${totalDue>0&&!paused?'true':'false'}){startReview('${id}')}" style="flex:2;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:12px;background:${totalDue===0||paused?'var(--bg2)':'#0070f3'};color:${totalDue===0||paused?'var(--ink3)':'white'};border:none;font-family:var(--font);font-size:14px;font-weight:800;cursor:${totalDue===0||paused?'default':'pointer'};">
+        <button onclick="if(${totalDue>0&&!paused?'true':'false'}){closeDeckDetail();startReview('${id}')}" style="flex:2;display:flex;align-items:center;justify-content:center;gap:8px;padding:11px;border-radius:12px;background:${totalDue===0||paused?'var(--bg2)':'#0070f3'};color:${totalDue===0||paused?'var(--ink3)':'white'};border:none;font-family:var(--font);font-size:14px;font-weight:800;cursor:${totalDue===0||paused?'default':'pointer'};">
           <svg viewBox="0 0 20 20" width="14" height="14"><polygon points="3,2 17,10 3,18" fill="${totalDue===0||paused?'var(--ink3)':'white'}"/></svg>
           ${paused?'На паузе':totalDue>0?`Учить · ${totalDue}`:'Готово на сегодня'}
         </button>
@@ -4049,7 +4049,6 @@ function openDeckSettings(id) {
           </div>
           <svg style="margin-left:auto;flex-shrink:0;" viewBox="0 0 20 20" width="14" height="14" fill="none" stroke="#c7c7cc" stroke-width="2" stroke-linecap="round"><polyline points="7,4 13,10 7,16"/></svg>
         </button>
-      </div>
 
         <button onclick="document.getElementById('deckSettingsSheet').remove();openLearnMode('${id}')"
           style="display:flex;align-items:center;gap:14px;width:100%;padding:14px 16px;border-radius:16px;background:transparent;border:none;cursor:pointer;text-align:left;transition:background .12s;"
