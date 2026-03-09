@@ -2907,6 +2907,18 @@ function getDeckDue(deckId) {
 
 function renderAll(){renderHome();renderDecks();updateBadge();}
 
+// Re-render when app returns from background (PWA / iOS freeze)
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && sess && sess.accId) {
+    setTimeout(() => renderAll(), 300);
+  }
+});
+window.addEventListener('pageshow', (e) => {
+  if (e.persisted && sess && sess.accId) {
+    setTimeout(() => renderAll(), 300);
+  }
+});
+
 function renderHome(){
   const h=new Date().getHours();
   const g=h<12?'Доброе утро':h<18?'Добрый день':'Добрый вечер';
@@ -4847,7 +4859,10 @@ function switchView(name){
     document.getElementById('v'+v[0].toUpperCase()+v.slice(1)).className='view'+(v===name?' active':'');
     document.getElementById('nt-'+v).className='nav-item'+(v===name?' active':'');
   });
-  if(name==='stats')renderStats();
+  if(name==='stats')  renderStats();
+  if(name==='home')   renderHome();
+  if(name==='decks')  renderDecks();
+  updateBadge();
   document.getElementById('fab').style.display=(name==='home'||name==='decks')?'':'none';
 }
 function fabClick(){
@@ -5776,23 +5791,36 @@ function learnPickerSelectToday() {
 function startLearnFromPicker(deckId) {
   const sheet = document.getElementById('learnPickerSheet');
   const checked = [...sheet.querySelectorAll('.learn-pick:checked')].map(cb => cb.dataset.id);
+  console.log('learnPicker: checked=', checked.length, 'ids=', checked.slice(0,3));
   if (checked.length === 0) { toast('Выберите хотя бы одну карточку'); return; }
   sheet.remove();
   startLearnSession(deckId, checked);
 }
 
 function learnGetWordTranslation(card) {
-  // Extract only word and translation fields, strip all HTML/sounds
+  const strip = s => (s||'').replace(/<[^>]+>/g,'').replace(/\[sound:[^\]]+\]/g,'').replace(/\s+/g,' ').trim();
+  // Try structured fields first
   const fields = parseCardFields(card.front || '', card.back || '');
-  const strip = s => (s||'').replace(/<[^>]+>/g,'').replace(/\[sound:[^\]]+\]/g,'').trim();
-  const word = strip(fields.word) || strip(card.front);
+  const word        = strip(fields.word)        || strip(card.front);
   const translation = strip(fields.translation) || strip(card.back);
   return { word, translation };
 }
 
+function startLearnSession_debug(cardIds) {
+  // Quick debug — remove after
+  const sample = cardIds.slice(0,3).map(id => {
+    const c = cards[id];
+    if (!c) return 'no card';
+    const {word,translation} = learnGetWordTranslation(c);
+    return `w="${word.slice(0,20)}" t="${translation.slice(0,20)}"`;
+  });
+  console.log('learn debug:', sample.join(' | '));
+}
+
 function startLearnSession(deckId, cardIds) {
   const sessionCards = cardIds.map(id => cards[id]).filter(Boolean);
-  if (!sessionCards.length) return;
+  console.log('startLearnSession: cardIds=',cardIds.length,'sessionCards=',sessionCards.length);
+  if (!sessionCards.length) { toast('Карточки не найдены'); return; }
 
   // Build learn items: each item has { id, prompt, answer, cardId }
   // Round 1: both directions — word→translation AND translation→word
@@ -5805,6 +5833,11 @@ function startLearnSession(deckId, cardIds) {
     // Reverse: show translation, answer = word
     items.push({ id: card.id + '_rev', cardId: card.id, prompt: translation, answer: word });
   });
+
+  if (items.length === 0) {
+    toast('Нет карточек с заполненными полями Word и Translate');
+    return;
+  }
 
   // Shuffle
   items.sort(() => Math.random() - .5);
