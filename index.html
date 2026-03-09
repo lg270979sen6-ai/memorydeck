@@ -5703,7 +5703,7 @@ function renderCardWithTemplate(text, side) {
 let learnState = null;
 
 function openLearnMode(deckId) {
-  const deckCards = Object.values(cards).filter(c => c.deckId === deckId && !c.suspended);
+  const deckCards = Object.entries(cards).map(([id,c])=>({...c,id})).filter(c => c.deckId === deckId && !c.suspended);
   const MAX = 30;
   if (deckCards.length === 0) { toast('В этой колоде нет карточек'); return; }
   if (deckCards.length <= MAX) {
@@ -5818,7 +5818,7 @@ function startLearnSession_debug(cardIds) {
 }
 
 function startLearnSession(deckId, cardIds) {
-  const sessionCards = cardIds.map(id => cards[id]).filter(Boolean);
+  const sessionCards = cardIds.map(id => cards[id] ? {...cards[id], id} : null).filter(Boolean);
   console.log('startLearnSession: cardIds=',cardIds.length,'sessionCards=',sessionCards.length);
   if (!sessionCards.length) { toast('Карточки не найдены'); return; }
 
