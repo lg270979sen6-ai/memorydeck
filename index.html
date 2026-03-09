@@ -5949,7 +5949,7 @@ function checkLearnMC(btn, chosenIdx) {
   } else {
     if (!learnState.wrongInRound[card.id]) { learnState.mastered[card.id] = true; }
     updateLearnProgress();
-    setTimeout(() => { learnState.roundIdx++; nextLearnCard(); }, 800);
+    setTimeout(() => { learnState.roundIdx++; nextLearnCard(); }, 400);
   }
   updateLearnProgress();
 }
@@ -5965,7 +5965,7 @@ function renderLearnType(item) {
   input.value = '';
   input.style.borderColor = 'var(--border)';
   input.style.color = 'var(--ink)';
-  setTimeout(() => input.focus(), 80);
+  setTimeout(() => input.focus(), 30);
 }
 
 function learnDontKnow() {
@@ -5984,7 +5984,11 @@ function submitLearnAnswer() {
   const item = learnState.currentItem;
   const correct = item.answer;
   const norm = s => s.toLowerCase().replace(/[.,!?;:'"()]/g,'').replace(/\s+/g,' ').trim();
-  showLearnTypeResult(norm(answer) === norm(correct), answer, correct);
+  const normAns = norm(answer);
+  // Support multiple correct answers separated by / or ,
+  const variants = correct.split(/[\/,]/).map(v => norm(v)).filter(Boolean);
+  const isCorrect = variants.some(v => v === normAns);
+  showLearnTypeResult(isCorrect, answer, correct);
 }
 
 function showLearnTypeResult(isCorrect, answer, correct) {
@@ -5995,8 +5999,15 @@ function showLearnTypeResult(isCorrect, answer, correct) {
   if (isCorrect) {
     if (!learnState.wrongInRound[card.id]) learnState.mastered[card.id] = true;
     updateLearnProgress();
-    content.innerHTML += `<div style="margin-top:16px;padding:14px 16px;border-radius:14px;border:2px dashed var(--green);color:var(--green);font-size:16px;font-weight:600;">✓ ${answer}</div>`;
-    setTimeout(() => { learnState.roundIdx++; nextLearnCard(); }, 800);
+    // Show user's answer in green, and full correct answer on blue bg if it has variants
+    const hasVariants = correct.includes('/') || correct.includes(',');
+    const fullAnswerHtml = hasVariants
+      ? `<div style="margin-top:8px;padding:12px 14px;border-radius:12px;background:var(--blue);color:#fff;font-size:14px;font-weight:600;">💡 Полный ответ: ${correct}</div>`
+      : '';
+    content.innerHTML += `
+      <div style="margin-top:16px;padding:14px 16px;border-radius:14px;border:2px dashed var(--green);color:var(--green);font-size:16px;font-weight:600;">✓ ${answer}</div>
+      ${fullAnswerHtml}`;
+    setTimeout(() => { learnState.roundIdx++; nextLearnCard(); }, hasVariants ? 1200 : 400);
   } else {
     learnState.wrongInRound[card.id] = true;
     delete learnState.mastered[card.id];
