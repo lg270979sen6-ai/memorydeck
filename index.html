@@ -5891,25 +5891,38 @@ function nextLearnCard() {
 
 function renderLearnMC(item) {
   const correct = item.answer;
-  // Pick 3 distractors from answerPool (different from correct)
-  let pool = learnState.answerPool.filter(a => a !== correct)
-    .sort(() => Math.random() - .5).slice(0, 3);
-  const options = [correct, ...pool].sort(() => Math.random() - .5);
+  // Distractors must be same "type" as correct answer:
+  // if item is fwd (prompt=word, answer=translation) → distractors from other translations
+  // if item is rev (prompt=translation, answer=word) → distractors from other words
+  const isFwd = item.id.endsWith('_fwd');
+  const distractorPool = learnState.items
+    .filter(i => i.id !== item.id && i.answer !== correct && i.id.endsWith(isFwd ? '_fwd' : '_rev'))
+    .map(i => i.answer);
+  // deduplicate
+  const uniquePool = [...new Set(distractorPool)].sort(() => Math.random() - .5).slice(0, 3);
+  const options = [correct, ...uniquePool].sort(() => Math.random() - .5);
+
+  // Store options in learnState to avoid passing through onclick attr (avoids quote escaping bugs)
+  learnState.mcOptions = options;
+  learnState.mcCorrect = correct;
+
   document.getElementById('learnContent').innerHTML = `
     <div style="font-size:22px;font-weight:300;color:var(--ink);line-height:1.4;min-height:70px;margin-bottom:28px;">${item.prompt}</div>
     <div style="font-size:12px;font-weight:700;color:var(--ink4);margin-bottom:12px;letter-spacing:.05em;text-transform:uppercase;">Выберите ответ</div>
     <div id="learnMCOptions" style="display:flex;flex-direction:column;gap:10px;">
-      ${options.map(opt => `<button onclick="checkLearnMC(this,${JSON.stringify(opt)},${JSON.stringify(correct)})"
+      ${options.map((opt, idx) => `<button onclick="checkLearnMC(this,${idx})"
         style="padding:16px 18px;border-radius:16px;background:var(--card);border:1.5px solid var(--border);font-size:15px;font-weight:500;color:var(--ink);text-align:left;cursor:pointer;width:100%;">
         ${opt}</button>`).join('')}
     </div>`;
   document.getElementById('learnInputBar').style.display = 'none';
 }
 
-function checkLearnMC(btn, chosen, correct) {
+function checkLearnMC(btn, chosenIdx) {
   if (learnState.awaitingContinue) return;
   learnState.awaitingContinue = true;
   const card = learnState.currentItem;
+  const chosen  = learnState.mcOptions[chosenIdx];
+  const correct = learnState.mcCorrect;
   const isCorrect = chosen === correct;
   document.querySelectorAll('#learnMCOptions button').forEach(b => {
     b.style.pointerEvents = 'none';
