@@ -5888,35 +5888,6 @@ function renderCardWithTemplate(text, side, deckId) {
   if (!text) return '';
   const tmpl = loadTemplate();
 
-  // ── Dev override: per-deck, stored in decks[deckId].opt._devFront/Back ──
-  const deckOpt = deckId ? getDeckOpt(deckId) : {};
-  const devCode = side === 'front' ? deckOpt._devFront : deckOpt._devBack;
-  if (devCode) {
-    // Extract field values from the card HTML
-    const vals = parseCardFields(text, text);
-    const strip = s => (s||'').replace(/<[^>]+>/g,'').replace(/\[sound:[^\]]+\]/g,'').trim();
-    // Replace {{FieldName}} placeholders with actual values
-    let result = devCode
-      .replace(/\{\{Word\}\}/gi,        strip(vals.word))
-      .replace(/\{\{Translation\}\}/gi, strip(vals.translation))
-      .replace(/\{\{IPA\}\}/gi,         strip(vals.ipa))
-      .replace(/\{\{Example\}\}/gi,     strip(vals.example).replace(/^→\s*/,''))
-      .replace(/\{\{Meaning\}\}/gi,     strip(vals.meaning).replace(/^📖\s*/,''));
-    // Handle images
-    result = result
-      .replace(/\[img:([^\]]+)\]/gi, '<img src="$1" data-anki-img="1">')
-      .replace(/\{\{Image\}\}/gi, vals.image ? `<img src="${strip(vals.image)}" data-anki-img="1">` : '');
-    // Apply markdown
-    result = result.split(/(<[^>]+>)/g).map((part, i) => {
-      if (part.startsWith('<')) return part;
-      part = part.replace(/\*\*(.+?)\*\*/g, '<strong style="font-weight:800;">$1</strong>');
-      part = part.replace(/_([^_\s][^_]*)_/g, '<em style="font-style:italic;opacity:.85;">$1</em>');
-      return part;
-    }).join('');
-    result = result.replace(/\n/g, '<br>');
-    return result;
-  }
-
   let t = text.replace(/\[sound:[^\]]+\]/g, '').trim();
 
   // Fix old broken format FIRST (before [img:] conversion):
@@ -5943,10 +5914,15 @@ function renderCardWithTemplate(text, side, deckId) {
     if (f.id==='meaning')     t = t.replace(/class="anki-meaning"/g,     `style="${inlineStyle}background:rgba(0,122,255,.07);border-left:3px solid #007aff;padding:8px 12px;border-radius:0 8px 8px 0;"`);
     if (f.id==='example')     t = t.replace(/class="anki-example"/g,     `style="${inlineStyle}"`);
     if (f.id==='image')       t = t.replace(/class="anki-img"/g,         `style="display:block;text-align:center;margin:${margin}px 0;"`);
+    // Custom/unknown fields
+    if (!['word','ipa','translation','meaning','example','image'].includes(f.id)) {
+      t = t.replace(new RegExp(`class="anki-${f.id.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')}"`, 'g'), `style="${inlineStyle}"`);
+    }
   }
 
-  // Hide empty field divs (e.g. field 11 with no value)
+  // Hide empty field divs and unresolved {{placeholders}}
   t = t.replace(/<div([^>]*)>\s*<\/div>/gi, '');
+  t = t.replace(/<div([^>]*)>\s*\{\{[^}]+\}\}\s*<\/div>/gi, '');
 
   // Apply markdown ONLY to text nodes (between tags), never inside tag attributes
   // Split on HTML tags, process only text parts
