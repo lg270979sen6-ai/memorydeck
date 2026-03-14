@@ -317,14 +317,12 @@ const FB_CONFIG = {
   appId:             "1:1015461302295:web:835d7a14a852c224534c52"
 };
 
-let app, auth, db;
-try {
-  app  = firebase.app();
-} catch(e) {
-  app  = firebase.initializeApp(FB_CONFIG);
-}
-auth = app.auth();
-db   = app.database();
+firebase.initializeApp(FB_CONFIG);
+const auth = firebase.auth();
+const db   = firebase.database();
+
+// Persist session so index.html can read it after redirect
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
 
 // ── State ──
 let _pendingUser  = null;
@@ -397,23 +395,13 @@ function firebaseErr(code) {
 // ══════════════════════════════════════════════
 //  CHECK EXISTING SESSION
 // ══════════════════════════════════════════════
+// Auto-redirect if already fully set up
 auth.onAuthStateChanged(async user => {
-  if (!user) return;
-  // Already logged in — check if setup complete
+  if (!user || !user.emailVerified) return;
   try {
-    const snap = await db.ref('memorydeck_users/' + user.uid).once('value');
-    const udata = snap.val();
-    if (udata && udata.name) {
-      // Setup done — go to app
-      goToApp(user.uid);
-    } else if (user.emailVerified) {
-      _pendingUser = user;
-      showScreen('screenSetup');
-      const nameVal = user.displayName || '';
-      if (nameVal) document.getElementById('setupName').value = nameVal;
-    }
-    // else: unverified — stay on auth screen
-  } catch(e) { /* stay */ }
+    const snap = await db.ref('memorydeck_meta').orderByChild('owner').equalTo(user.uid).once('value');
+    if (snap.val()) goToApp();
+  } catch(e) {}
 });
 
 // ══════════════════════════════════════════════
@@ -438,11 +426,9 @@ async function doLogin() {
       setLoading('btnLogin', false, 'Войти');
       return;
     }
-    // Check if user already set up
-    const snap = await db.ref('memorydeck_users/' + user.uid).once('value');
-    const udata = snap.val();
-    if (udata && udata.name) {
-      goToApp(user.uid);
+    const snap = await db.ref('memorydeck_meta').orderByChild('owner').equalTo(user.uid).once('value');
+    if (snap.val()) {
+      goToApp();
     } else {
       _pendingUser = user;
       const name = user.displayName || '';
@@ -505,10 +491,9 @@ async function checkVerified() {
     if (user.emailVerified) {
       _pendingUser = user;
       // Check if already set up
-      const snap = await db.ref('memorydeck_users/' + user.uid).once('value');
-      const udata = snap.val();
-      if (udata && udata.name) {
-        goToApp(user.uid);
+      const snap = await db.ref('memorydeck_meta').orderByChild('owner').equalTo(user.uid).once('value');
+      if (snap.val()) {
+        goToApp();
       } else {
         const name = user.displayName || '';
         if (name) document.getElementById('setupName').value = name;
@@ -543,19 +528,25 @@ async function doSetup() {
   setLoading('btnSetup', true);
   try {
     const user = auth.currentUser;
-    // Update display name
+    // Save name to Firebase Auth profile
     await user.updateProfile({ displayName: name });
-    // Save to DB
-    await db.ref('memorydeck_users/' + user.uid).set({
-      name:      name,
-      email:     user.email,
-      uid:       user.uid,
-      role:      'editor',
-      createdAt: Date.now(),
-      pin:       null,
-      faceId:    false,
+
+    // Create account in memorydeck_meta (same structure as index.html)
+    const accId  = 'acc_' + user.uid.slice(0,8);
+    const userId = 'u_'   + user.uid.slice(0,8);
+    await db.ref('memorydeck_meta/' + accId).set({
+      name:  name + "'s Decks",
+      owner: user.uid,
+      users: {
+        [userId]: {
+          name:  name,
+          email: user.email,
+          role:  'admin',
+          uid:   user.uid,
+        }
+      }
     });
-    // Go to PIN setup
+
     showScreen('screenPinSetup');
     setLoading('btnSetup', false, 'Продолжить →');
   } catch(e) {
@@ -600,7 +591,7 @@ function pinConfirmKey(d) {
         // Save PIN hash to DB
         try {
           const uid = auth.currentUser.uid;
-          await db.ref('memorydeck_users/' + uid + '/pin').set(_pinFirst); // in prod: hash it
+          await db.ref('memorydeck_meta/acc_' + auth.currentUser.uid.slice(0,8) + '/users/u_' + auth.currentUser.uid.slice(0,8) + '/pin').set(_pinFirst);
           showInfo('✅ PIN сохранён');
           setTimeout(() => offerFaceId(), 600);
         } catch(e) { skipPinSetup(); }
@@ -649,7 +640,7 @@ function offerFaceId() {
     showScreen('screenFaceId');
   } else {
     // Not available — go straight to app
-    goToApp(auth.currentUser?.uid);
+    goToApp();
   }
 }
 
@@ -684,8 +675,8 @@ async function setupFaceId() {
       circle.textContent = '✅';
       sub.textContent = 'Face ID включён!';
       // Save flag
-      await db.ref('memorydeck_users/' + userId + '/faceId').set(true);
-      setTimeout(() => goToApp(userId), 800);
+      await db.ref('memorydeck_meta/acc_' + userId.slice(0,8) + '/users/u_' + userId.slice(0,8) + '/faceId').set(true);
+      setTimeout(() => goToApp(), 800);
     }
   } catch(e) {
     circle.classList.remove('scanning');
@@ -698,7 +689,7 @@ async function setupFaceId() {
 }
 
 function skipFaceId() {
-  goToApp(auth.currentUser?.uid);
+  goToApp();
 }
 
 // ══════════════════════════════════════════════
@@ -719,9 +710,8 @@ async function forgotPassword() {
 // ══════════════════════════════════════════════
 //  GO TO APP
 // ══════════════════════════════════════════════
-function goToApp(uid) {
-  // Store session and redirect to main app
-  try { localStorage.setItem('md_uid', uid); } catch(e) {}
+function goToApp() {
+  // Firebase Auth session is persisted — index.html will read it
   window.location.href = 'index.html';
 }
 </script>
