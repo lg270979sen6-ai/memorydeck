@@ -1085,39 +1085,19 @@ body {
 <!-- ═══════════════════════════════════
      LOCK SCREEN
 ═══════════════════════════════════ -->
-<div class="lock" id="lockScreen">
+<div class="lock" id="lockScreen" style="flex-direction:column;align-items:center;justify-content:center;">
   <div class="lock-logo">
     <div class="lock-logo-icon">🧠</div>
     <div class="lock-logo-name">MemoryDeck</div>
   </div>
   <div class="lock-tagline">Интервальное повторение · SM-2</div>
-
-  <div class="step-bar">
-    <div class="step-seg active" id="seg0"></div>
-    <div class="step-seg" id="seg1"></div>
-    <div class="step-seg" id="seg2"></div>
+  <div id="authCheckMsg" style="color:var(--ink3);font-size:14px;margin-top:24px;text-align:center;">
+    <div style="font-size:32px;margin-bottom:12px;">⏳</div>
+    Проверка авторизации...
   </div>
-
-  <div class="panel show" id="lp1">
-    <div class="panel-label">Выберите аккаунт</div>
-    <div class="pick-list" id="accList">
-      <div style="color:var(--ink4);padding:20px;text-align:center;font-size:13px;">Загрузка...</div>
-    </div>
-  </div>
-
-  <div class="panel" id="lp2">
-    <button class="back-btn" onclick="goPan(1)">← Назад</button>
-    <div class="panel-label">Выберите пользователя</div>
-    <div class="pick-list" id="userList"></div>
-  </div>
-
-  <div class="panel" id="lp3">
-    <button class="back-btn" onclick="goPan(2)">← Назад</button>
-    <div class="pass-who" id="passWho"></div>
-    <input class="lock-field" id="passInp" type="password" placeholder="Введите пароль">
-    <button class="lock-submit" onclick="doLogin()">Войти →</button>
-    <div class="lock-err" id="lockErr"></div>
-  </div>
+  <a href="memorydeck-landing.html" id="goToLandingBtn" style="display:none;margin-top:20px;padding:14px 32px;border-radius:14px;background:var(--blue);color:#fff;border:none;font-family:var(--font);font-size:15px;font-weight:600;cursor:pointer;text-decoration:none;text-align:center;">
+    Войти в MemoryDeck →
+  </a>
 </div>
 
 <!-- ═══════════════════════════════════
@@ -2782,47 +2762,68 @@ function doLogin(){
 
 function doLogout(){
   if(!confirm('Выйти?')) return;
+  try{ firebase.app().auth().signOut(); } catch(e){}
   try{sessionStorage.setItem('md3_a','');sessionStorage.setItem('md3_u','');}catch(e){}
   try{localStorage.setItem(PFX+sess.accId+'_'+sess.userId+'_ts','0');}catch(e){}
   if(fbRef){try{fbRef.off();}catch(e){}fbRef=null;}
-  sess={accId:null,userId:null,ud:null,ad:null};
-  decks={};cards={};cfg={newPerDay:20,maxReviews:200,firstInterval:1};studyLog={};
-  document.getElementById('app').style.display='none';
-  const ls=document.getElementById('lockScreen');
-  ls.style.display='flex'; ls.style.opacity='0';
-  requestAnimationFrame(()=>{ls.style.transition='opacity .3s';ls.style.opacity='1';});
-  setTimeout(()=>{ls.style.transition='';},350);
-  goPan(1);
-  loadAcc(renderLockAcc);
+  window.location.href = 'memorydeck-landing.html';
+}
+
+function showGoToLanding() {
+  const msg = document.getElementById('authCheckMsg');
+  const btn = document.getElementById('goToLandingBtn');
+  if(msg) msg.style.display = 'none';
+  if(btn) btn.style.display = 'block';
 }
 
 function checkSession(){
-  // Показываем экран входа сразу
   document.getElementById('lockScreen').style.display='flex';
-  const el=document.getElementById('accList');
-  if(el) el.innerHTML='<div style="text-align:center;padding:32px 0;color:var(--ink3);font-size:13px;"><div style="font-size:28px;margin-bottom:10px;">⏳</div>Загрузка...</div>';
 
-  const savedAcc  =(()=>{try{return sessionStorage.getItem('md3_a');}catch(e){return null;}})();
-  const savedUser =(()=>{try{return sessionStorage.getItem('md3_u');}catch(e){return null;}})();
+  if(!window.firebase){ showGoToLanding(); return; }
 
-  loadAcc(()=>{
-    // Проверяем сохранённую сессию
-    if(savedAcc && savedUser){
-      const pfx = PFX+savedAcc+'_'+savedUser+'_';
-      const ts  =(()=>{try{return localStorage.getItem(pfx+'ts');}catch(e){return null;}})();
-      const ver =(()=>{try{return localStorage.getItem(pfx+'v');}catch(e){return null;}})();
-      if(ver===VER && ts && ts!=='0' && Date.now()-parseInt(ts)<24*3600*1000){
-        const ad=allAcc[savedAcc];
-        if(ad && ad.users && ad.users[savedUser]){
-          startApp(savedAcc, savedUser, ad, ad.users[savedUser]);
-          return;
-        }
-      }
+  // Use DEFAULT Firebase app — same as memorydeck-landing.html
+  let authApp;
+  try { authApp = firebase.app(); }
+  catch(e) {
+    try { authApp = firebase.initializeApp(FB_CONFIG); }
+    catch(e2) { showGoToLanding(); return; }
+  }
+
+  const auth = authApp.auth();
+  let _done = false;
+
+  const unsub = auth.onAuthStateChanged(async user => {
+    if(_done) return; _done = true;
+    try{ unsub(); } catch(e){}
+
+    if(!user){ showGoToLanding(); return; }
+
+    try {
+      const db2 = authApp.database();
+      // User's accId is based on their Firebase uid
+      const accId  = 'acc_' + user.uid.slice(0,8);
+      const userId = 'u_'   + user.uid.slice(0,8);
+
+      const snap = await db2.ref('memorydeck_meta/' + accId).once('value');
+      const ad   = snap.val();
+      if(!ad){ await auth.signOut(); showGoToLanding(); return; }
+
+      const ud = ad.users && ad.users[userId];
+      if(!ud){ await auth.signOut(); showGoToLanding(); return; }
+
+      // Success — hide lock and start app
+      const ls = document.getElementById('lockScreen');
+      if(ls){ ls.style.transition='opacity .4s'; ls.style.opacity='0';
+        setTimeout(()=>{ ls.style.display='none'; ls.style.opacity=''; ls.style.transition=''; }, 400); }
+      startApp(accId, userId, ad, ud);
+
+    } catch(e) {
+      console.error('checkSession error:', e.message);
+      showGoToLanding();
     }
-    // Нет сессии — показываем список аккаунтов
-    renderLockAcc();
-    goPan(1);
   });
+
+  setTimeout(()=>{ if(!_done){ _done=true; try{unsub();}catch(e){} showGoToLanding(); } }, 8000);
 }
 
 // ═══════════════════════════════════════════════════

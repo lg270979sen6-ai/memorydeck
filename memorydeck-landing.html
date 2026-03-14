@@ -5,307 +5,220 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>MemoryDeck — Вход</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:ital,wght@0,300;0,400;0,500;0,600&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <style>
-:root {
-  --bg: #07090f;
-  --s1: #0d1018;
-  --s2: #131720;
-  --s3: #1a2030;
-  --border: rgba(255,255,255,0.07);
-  --border2: rgba(255,255,255,0.13);
-  --text: #eef2ff;
-  --text2: #8899cc;
-  --text3: #445066;
-  --accent: #5b7ef8;
-  --accent2: #42d9a8;
-  --red: #ff5f5f;
-  --grad: linear-gradient(135deg, #5b7ef8 0%, #42d9a8 100%);
-  --grad2: linear-gradient(135deg, #7c6df8 0%, #5b7ef8 100%);
+:root{
+  --bg:#07090f; --s1:#0d1018; --s2:#131720; --s3:#1a2030;
+  --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.13);
+  --text:#eef2ff; --text2:#8899cc; --text3:#445066;
+  --blue:#5b7ef8; --green:#42d9a8; --red:#ff5f5f;
+  --grad:linear-gradient(135deg,#5b7ef8,#42d9a8);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
-html,body{height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);}
-body{display:flex;align-items:center;justify-content:center;min-height:100vh;overflow-y:auto;padding:16px;}
+html,body{min-height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);}
+body{display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;}
 
-/* ── BG ── */
-.bg-canvas{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
-.bg-orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:.12;}
-.bg-orb-1{width:600px;height:600px;background:#5b7ef8;top:-150px;left:-150px;animation:orbf 9s ease-in-out infinite;}
-.bg-orb-2{width:450px;height:450px;background:#42d9a8;bottom:-100px;right:-100px;animation:orbf 7s ease-in-out infinite reverse;}
-.bg-orb-3{width:350px;height:350px;background:#7c6df8;top:50%;left:50%;transform:translate(-50%,-50%);animation:orbf 11s ease-in-out infinite 2s;}
-.bg-grid{position:absolute;inset:0;background-image:linear-gradient(rgba(91,126,248,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(91,126,248,.03) 1px,transparent 1px);background-size:52px 52px;}
-@keyframes orbf{0%,100%{transform:translate(0,0) scale(1);}40%{transform:translate(25px,-18px) scale(1.06);}70%{transform:translate(-18px,25px) scale(.95);}}
+/* BG */
+.bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
+.orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:.1;}
+.orb1{width:600px;height:600px;background:#5b7ef8;top:-150px;left:-150px;animation:of 9s ease-in-out infinite;}
+.orb2{width:450px;height:450px;background:#42d9a8;bottom:-100px;right:-100px;animation:of 7s ease-in-out infinite reverse;}
+.grid{position:absolute;inset:0;background-image:linear-gradient(rgba(91,126,248,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(91,126,248,.03) 1px,transparent 1px);background-size:52px 52px;}
+@keyframes of{0%,100%{transform:translate(0,0);}50%{transform:translate(20px,-15px);}}
 
-/* ── CARD ── */
-.page{position:relative;z-index:1;width:100%;max-width:420px;}
-.card{background:rgba(13,16,24,.9);border:1px solid var(--border2);border-radius:24px;padding:36px 32px 32px;backdrop-filter:blur(24px);box-shadow:0 40px 90px rgba(0,0,0,.6),0 0 0 1px rgba(91,126,248,.07);animation:cardIn .5s cubic-bezier(.34,1.56,.64,1) both;}
-@keyframes cardIn{from{opacity:0;transform:translateY(20px) scale(.97);}to{opacity:1;transform:none;}}
+/* CARD */
+.wrap{position:relative;z-index:1;width:100%;max-width:400px;}
+.card{background:rgba(13,16,24,.92);border:1px solid var(--border2);border-radius:22px;padding:32px 28px 28px;backdrop-filter:blur(20px);box-shadow:0 40px 80px rgba(0,0,0,.6);}
+.logo{display:flex;align-items:center;gap:10px;margin-bottom:26px;}
+.logo-icon{width:34px;height:34px;border-radius:10px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:17px;}
+.logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
+.logo-badge{margin-left:auto;font-size:9px;font-weight:600;color:var(--text3);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;letter-spacing:.06em;text-transform:uppercase;-webkit-text-fill-color:var(--text3);}
 
-/* ── LOGO ── */
-.logo{display:flex;align-items:center;gap:10px;margin-bottom:28px;}
-.logo-icon{width:36px;height:36px;border-radius:11px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 4px 16px rgba(91,126,248,.4);animation:lglow 3s ease-in-out infinite;}
-@keyframes lglow{0%,100%{box-shadow:0 4px 16px rgba(91,126,248,.4);}50%{box-shadow:0 4px 28px rgba(91,126,248,.7),0 0 0 4px rgba(91,126,248,.1);}}
-.logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:20px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
-.logo-badge{margin-left:auto;font-size:9px;font-weight:700;color:var(--text3);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;letter-spacing:.07em;text-transform:uppercase;-webkit-text-fill-color:var(--text3);}
+/* SCREENS */
+.screen{display:none;}
+.screen.on{display:block;animation:fi .3s ease both;}
+@keyframes fi{from{opacity:0;transform:translateX(6px);}to{opacity:1;transform:none;}}
 
-/* ── TABS ── */
-.tabs{display:flex;gap:3px;background:var(--s2);border-radius:13px;padding:4px;margin-bottom:24px;}
-.tab{flex:1;padding:9px;border-radius:10px;border:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--text2);background:none;transition:all .2s;}
-.tab.active{background:var(--s3);color:var(--text);box-shadow:0 2px 8px rgba(0,0,0,.35);}
+/* TABS */
+.tabs{display:flex;gap:3px;background:var(--s2);border-radius:12px;padding:4px;margin-bottom:22px;}
+.tab{flex:1;padding:8px;border-radius:9px;border:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--text2);background:none;transition:all .2s;}
+.tab.on{background:var(--s3);color:var(--text);}
 
-/* ── FORM ── */
-.screen{display:none;} .screen.active{display:block;animation:fadeIn .3s ease both;}
-@keyframes fadeIn{from{opacity:0;transform:translateX(6px);}to{opacity:1;transform:none;}}
-.screen-title{font-family:'Syne',sans-serif;font-weight:700;font-size:20px;margin-bottom:5px;line-height:1.25;}
-.screen-sub{font-size:13px;color:var(--text2);margin-bottom:24px;line-height:1.5;}
-.form-group{margin-bottom:14px;}
-.form-label{display:block;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px;}
-.form-input{width:100%;padding:12px 14px;background:var(--s2);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:all .2s;}
-.form-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,126,248,.1);}
-.form-input::placeholder{color:var(--text3);}
-.form-input.err{border-color:var(--red);}
-.pass-wrap{position:relative;}
-.pass-eye{position:absolute;right:13px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);font-size:16px;padding:4px;transition:color .2s;}
-.pass-eye:hover{color:var(--text2);}
-
-/* ── BUTTONS ── */
-.btn-primary{width:100%;padding:13px;border-radius:12px;border:none;background:var(--grad);color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 20px rgba(91,126,248,.35);transition:all .2s;position:relative;overflow:hidden;}
-.btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 28px rgba(91,126,248,.45);}
-.btn-primary:active{transform:none;}
-.btn-primary:disabled{opacity:.55;cursor:not-allowed;transform:none;}
-.btn-secondary{width:100%;padding:11px;border-radius:12px;background:none;border:1.5px solid var(--border2);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:14px;font-weight:500;cursor:pointer;transition:all .2s;margin-top:8px;}
-.btn-secondary:hover{border-color:var(--accent);color:var(--text);}
-.btn-ghost{background:none;border:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text3);cursor:pointer;transition:color .2s;padding:4px;}
-.btn-ghost:hover{color:var(--accent);}
-.spinner{display:inline-block;width:15px;height:15px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:7px;}
+/* FORM */
+.title{font-family:'Syne',sans-serif;font-weight:700;font-size:19px;margin-bottom:4px;}
+.sub{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.5;}
+.label{display:block;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px;}
+.inp{width:100%;padding:12px 14px;background:var(--s2);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:all .2s;margin-bottom:14px;}
+.inp:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(91,126,248,.1);}
+.inp::placeholder{color:var(--text3);}
+.pw{position:relative;}
+.pw .inp{margin-bottom:0;}
+.eye{position:absolute;right:13px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;padding:4px;}
+.fg{display:block;text-align:right;font-size:12px;color:var(--text3);cursor:pointer;margin:6px 0 14px;transition:color .2s;}
+.fg:hover{color:var(--blue);}
+.btn{width:100%;padding:13px;border-radius:12px;border:none;background:var(--grad);color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 20px rgba(91,126,248,.3);transition:all .2s;}
+.btn:hover{transform:translateY(-1px);opacity:.95;}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
+.btn2{width:100%;padding:11px;border-radius:12px;background:none;border:1.5px solid var(--border2);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;margin-top:8px;}
+.btn2:hover{border-color:var(--blue);color:var(--text);}
+.ghost{background:none;border:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text3);cursor:pointer;transition:color .2s;padding:4px;}
+.ghost:hover{color:var(--blue);}
+.sp{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
 @keyframes spin{to{transform:rotate(360deg);}}
-
-/* ── ALERTS ── */
-.err-box{background:rgba(255,95,95,.08);border:1px solid rgba(255,95,95,.2);border-radius:10px;padding:10px 14px;font-size:13px;color:var(--red);margin-bottom:14px;display:none;line-height:1.4;}
-.info-box{background:rgba(66,217,168,.08);border:1px solid rgba(66,217,168,.2);border-radius:10px;padding:11px 14px;font-size:13px;color:var(--accent2);margin-bottom:14px;display:none;line-height:1.5;}
-.divider{display:flex;align-items:center;gap:12px;margin:18px 0;color:var(--text3);font-size:12px;}
+.err{background:rgba(255,95,95,.08);border:1px solid rgba(255,95,95,.2);border-radius:10px;padding:10px 13px;font-size:13px;color:var(--red);margin-bottom:13px;display:none;line-height:1.4;}
+.info{background:rgba(66,217,168,.08);border:1px solid rgba(66,217,168,.2);border-radius:10px;padding:10px 13px;font-size:13px;color:var(--green);margin-bottom:13px;display:none;line-height:1.5;}
+.divider{display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--text3);font-size:12px;}
 .divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
-.forgot{display:block;text-align:right;font-size:12px;color:var(--text3);cursor:pointer;margin-top:-6px;margin-bottom:14px;transition:color .2s;}
-.forgot:hover{color:var(--accent);}
 
-/* ── VERIFY SCREEN ── */
-.big-emoji{font-size:52px;text-align:center;margin-bottom:14px;animation:bonce .7s ease infinite alternate;}
-@keyframes bonce{from{transform:translateY(0);}to{transform:translateY(-7px);}}
+/* VERIFY */
+.big{font-size:50px;text-align:center;margin-bottom:14px;animation:bn .7s ease infinite alternate;}
+@keyframes bn{from{transform:translateY(0);}to{transform:translateY(-6px);}}
 
-/* ── PIN SCREEN ── */
-.pin-dots{display:flex;justify-content:center;gap:14px;margin:24px 0 20px;}
-.pin-dot{width:16px;height:16px;border-radius:50%;background:var(--s3);border:2px solid var(--border2);transition:all .2s;}
-.pin-dot.filled{background:var(--accent);border-color:var(--accent);box-shadow:0 0 10px rgba(91,126,248,.5);}
-.pin-dot.err-anim{background:var(--red);border-color:var(--red);}
+/* PIN */
+.pin-dots{display:flex;justify-content:center;gap:14px;margin:22px 0 18px;}
+.dot{width:16px;height:16px;border-radius:50%;background:var(--s3);border:2px solid var(--border2);transition:all .2s;}
+.dot.on{background:var(--blue);border-color:var(--blue);box-shadow:0 0 10px rgba(91,126,248,.5);}
+.dot.err{background:var(--red);border-color:var(--red);}
 .pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:260px;margin:0 auto;}
-.pin-key{padding:18px;border-radius:16px;background:var(--s2);border:1.5px solid var(--border);font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--text);cursor:pointer;text-align:center;transition:all .15s;user-select:none;}
-.pin-key:active,.pin-key:hover{background:var(--s3);border-color:var(--border2);transform:scale(.95);}
-.pin-key.wide{grid-column:span 1;}
-.pin-sub{text-align:center;font-size:12px;color:var(--text3);margin-bottom:18px;}
+.key{padding:17px;border-radius:14px;background:var(--s2);border:1.5px solid var(--border);font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--text);cursor:pointer;text-align:center;transition:all .15s;user-select:none;border:none;}
+.key:active{background:var(--s3);transform:scale(.94);}
+.pin-hint{text-align:center;font-size:12px;color:var(--text3);margin-bottom:16px;}
 
-/* ── FACE ID SCREEN ── */
-.faceid-circle{width:100px;height:100px;border-radius:50%;background:var(--s2);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:44px;margin:0 auto 16px;box-shadow:0 0 30px rgba(91,126,248,.15);transition:all .4s;}
-.faceid-circle.scanning{border-color:var(--accent);box-shadow:0 0 0 8px rgba(91,126,248,.1),0 0 30px rgba(91,126,248,.3);animation:scanpulse 1.5s ease-in-out infinite;}
-.faceid-circle.success{border-color:var(--accent2);box-shadow:0 0 0 8px rgba(66,217,168,.1);}
-.faceid-circle.fail{border-color:var(--red);}
-@keyframes scanpulse{0%,100%{box-shadow:0 0 0 4px rgba(91,126,248,.15),0 0 20px rgba(91,126,248,.2);}50%{box-shadow:0 0 0 12px rgba(91,126,248,.08),0 0 40px rgba(91,126,248,.3);}}
-
-/* ── FOOTER ── */
-.footer{text-align:center;font-size:11px;color:var(--text3);margin-top:20px;}
-.footer a{color:var(--text3);text-decoration:none;}
-.footer a:hover{color:var(--text2);}
+/* FACE ID */
+.fid-circle{width:90px;height:90px;border-radius:50%;background:var(--s2);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:40px;margin:0 auto 16px;transition:all .4s;}
+.fid-circle.scan{border-color:var(--blue);animation:fp 1.5s ease-in-out infinite;}
+.fid-circle.ok{border-color:var(--green);}
+.fid-circle.fail{border-color:var(--red);}
+@keyframes fp{0%,100%{box-shadow:0 0 0 4px rgba(91,126,248,.15);}50%{box-shadow:0 0 0 12px rgba(91,126,248,.08);}}
 </style>
 </head>
 <body>
+<div class="bg"><div class="orb orb1"></div><div class="orb orb2"></div><div class="grid"></div></div>
 
-<div class="bg-canvas">
-  <div class="bg-orb bg-orb-1"></div>
-  <div class="bg-orb bg-orb-2"></div>
-  <div class="bg-orb bg-orb-3"></div>
-  <div class="bg-grid"></div>
-</div>
-
-<div class="page">
-  <div class="card">
-
-    <div class="logo">
-      <div class="logo-icon">🧠</div>
-      <div class="logo-text">MemoryDeck</div>
-      <div class="logo-badge">Beta</div>
-    </div>
-
-    <!-- ═══ ERR / INFO ═══ -->
-    <div class="err-box" id="errBox"></div>
-    <div class="info-box" id="infoBox"></div>
-
-    <!-- ═══════════════════════════════
-         SCREEN: LOGIN / REGISTER TABS
-    ═══════════════════════════════ -->
-    <div id="screenAuth" class="screen active">
-      <div class="tabs">
-        <button class="tab active" id="tabLogin" onclick="switchTab('login')">Войти</button>
-        <button class="tab" id="tabReg" onclick="switchTab('register')">Регистрация</button>
-      </div>
-
-      <!-- LOGIN -->
-      <div id="panelLogin">
-        <div class="screen-title">С возвращением 👋</div>
-        <div class="screen-sub">Войдите в свой аккаунт</div>
-        <div class="form-group">
-          <label class="form-label">Email</label>
-          <input id="loginEmail" class="form-input" type="email" placeholder="you@example.com" autocomplete="email">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Пароль</label>
-          <div class="pass-wrap">
-            <input id="loginPass" class="form-input" type="password" placeholder="••••••••" autocomplete="current-password">
-            <button class="pass-eye" onclick="togglePass('loginPass',this)">👁</button>
-          </div>
-        </div>
-        <span class="forgot" onclick="forgotPassword()">Забыли пароль?</span>
-        <button class="btn-primary" id="btnLogin" onclick="doLogin()">Войти</button>
-      </div>
-
-      <!-- REGISTER -->
-      <div id="panelReg" style="display:none;">
-        <div class="screen-title">Создать аккаунт</div>
-        <div class="screen-sub">Бесплатно, без подписок</div>
-        <div class="form-group">
-          <label class="form-label">Имя</label>
-          <input id="regName" class="form-input" type="text" placeholder="Ваше имя" autocomplete="name">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Email</label>
-          <input id="regEmail" class="form-input" type="email" placeholder="you@example.com" autocomplete="email">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Пароль</label>
-          <div class="pass-wrap">
-            <input id="regPass" class="form-input" type="password" placeholder="Минимум 6 символов" autocomplete="new-password">
-            <button class="pass-eye" onclick="togglePass('regPass',this)">👁</button>
-          </div>
-        </div>
-        <div class="form-group">
-          <label class="form-label">Повторите пароль</label>
-          <div class="pass-wrap">
-            <input id="regPass2" class="form-input" type="password" placeholder="Повторите пароль" autocomplete="new-password">
-            <button class="pass-eye" onclick="togglePass('regPass2',this)">👁</button>
-          </div>
-        </div>
-        <button class="btn-primary" id="btnReg" onclick="doRegister()">Создать аккаунт →</button>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════
-         SCREEN: EMAIL VERIFICATION
-    ═══════════════════════════════ -->
-    <div id="screenVerify" class="screen">
-      <div class="big-emoji">📬</div>
-      <div class="screen-title" style="text-align:center;">Проверьте почту</div>
-      <div class="screen-sub" style="text-align:center;" id="verifySubtext">
-        Мы отправили письмо для подтверждения. Перейдите по ссылке в письме, затем нажмите кнопку ниже.
-      </div>
-      <button class="btn-primary" id="btnVerified" onclick="checkVerified()">Я подтвердил ✓</button>
-      <button class="btn-secondary" onclick="resendVerify()">Отправить повторно</button>
-      <div style="text-align:center;margin-top:14px;">
-        <button class="btn-ghost" onclick="backToAuth()">← Назад</button>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════
-         SCREEN: SETUP (first login)
-    ═══════════════════════════════ -->
-    <div id="screenSetup" class="screen">
-      <div class="screen-title">Почти готово! 🎉</div>
-      <div class="screen-sub">Email подтверждён. Как вас называть?</div>
-      <div class="form-group">
-        <label class="form-label">Ваше имя</label>
-        <input id="setupName" class="form-input" type="text" placeholder="Введите имя" autocomplete="name">
-      </div>
-      <button class="btn-primary" id="btnSetup" onclick="doSetup()">Продолжить →</button>
-    </div>
-
-    <!-- ═══════════════════════════════
-         SCREEN: PIN SETUP
-    ═══════════════════════════════ -->
-    <div id="screenPinSetup" class="screen">
-      <div class="screen-title" style="text-align:center;">Придумайте PIN</div>
-      <div class="screen-sub" style="text-align:center;" id="pinSetupSub">Создайте 4-значный PIN для быстрого входа</div>
-      <div class="pin-dots" id="pinSetupDots">
-        <div class="pin-dot"></div><div class="pin-dot"></div>
-        <div class="pin-dot"></div><div class="pin-dot"></div>
-      </div>
-      <div class="pin-pad">
-        <button class="pin-key" onclick="pinSetupKey('1')">1</button>
-        <button class="pin-key" onclick="pinSetupKey('2')">2</button>
-        <button class="pin-key" onclick="pinSetupKey('3')">3</button>
-        <button class="pin-key" onclick="pinSetupKey('4')">4</button>
-        <button class="pin-key" onclick="pinSetupKey('5')">5</button>
-        <button class="pin-key" onclick="pinSetupKey('6')">6</button>
-        <button class="pin-key" onclick="pinSetupKey('7')">7</button>
-        <button class="pin-key" onclick="pinSetupKey('8')">8</button>
-        <button class="pin-key" onclick="pinSetupKey('9')">9</button>
-        <button class="pin-key" onclick="offerFaceId()" style="font-size:14px;">Face ID</button>
-        <button class="pin-key" onclick="pinSetupKey('0')">0</button>
-        <button class="pin-key" onclick="pinSetupDel()">⌫</button>
-      </div>
-      <div style="text-align:center;margin-top:14px;">
-        <button class="btn-ghost" onclick="skipPinSetup()">Пропустить →</button>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════
-         SCREEN: PIN CONFIRM (reenter)
-    ═══════════════════════════════ -->
-    <div id="screenPinConfirm" class="screen">
-      <div class="screen-title" style="text-align:center;">Повторите PIN</div>
-      <div class="screen-sub" style="text-align:center;">Введите PIN ещё раз для подтверждения</div>
-      <div class="pin-dots" id="pinConfirmDots">
-        <div class="pin-dot"></div><div class="pin-dot"></div>
-        <div class="pin-dot"></div><div class="pin-dot"></div>
-      </div>
-      <div class="pin-pad">
-        <button class="pin-key" onclick="pinConfirmKey('1')">1</button>
-        <button class="pin-key" onclick="pinConfirmKey('2')">2</button>
-        <button class="pin-key" onclick="pinConfirmKey('3')">3</button>
-        <button class="pin-key" onclick="pinConfirmKey('4')">4</button>
-        <button class="pin-key" onclick="pinConfirmKey('5')">5</button>
-        <button class="pin-key" onclick="pinConfirmKey('6')">6</button>
-        <button class="pin-key" onclick="pinConfirmKey('7')">7</button>
-        <button class="pin-key" onclick="pinConfirmKey('8')">8</button>
-        <button class="pin-key" onclick="pinConfirmKey('9')">9</button>
-        <button class="pin-key" style="visibility:hidden;"></button>
-        <button class="pin-key" onclick="pinConfirmKey('0')">0</button>
-        <button class="pin-key" onclick="pinConfirmDel()">⌫</button>
-      </div>
-    </div>
-
-    <!-- ═══════════════════════════════
-         SCREEN: FACE ID OFFER
-    ═══════════════════════════════ -->
-    <div id="screenFaceId" class="screen">
-      <div class="faceid-circle" id="faceIdCircle">🫥</div>
-      <div class="screen-title" style="text-align:center;">Face ID</div>
-      <div class="screen-sub" style="text-align:center;" id="faceIdSub">
-        Включите биометрический вход для максимального удобства
-      </div>
-      <button class="btn-primary" id="btnFaceId" onclick="setupFaceId()">Включить Face ID</button>
-      <button class="btn-secondary" onclick="skipFaceId()">Пропустить</button>
-    </div>
-
-  </div><!-- /card -->
-
-  <div class="footer">
-    <a href="#">Условия использования</a> · <a href="#">Конфиденциальность</a>
+<div class="wrap">
+<div class="card">
+  <div class="logo">
+    <div class="logo-icon">🧠</div>
+    <div class="logo-text">MemoryDeck</div>
+    <div class="logo-badge">Beta</div>
   </div>
-</div>
+
+  <div class="err" id="errBox"></div>
+  <div class="info" id="infoBox"></div>
+
+  <!-- ══ AUTH ══ -->
+  <div id="sAuth" class="screen on">
+    <div class="tabs">
+      <button class="tab on" id="tLogin" onclick="tab('login')">Войти</button>
+      <button class="tab" id="tReg" onclick="tab('reg')">Регистрация</button>
+    </div>
+
+    <div id="pLogin">
+      <div class="title">С возвращением 👋</div>
+      <div class="sub">Войдите в свой аккаунт</div>
+      <label class="label">Email</label>
+      <input id="lEmail" class="inp" type="email" placeholder="you@example.com" autocomplete="email">
+      <label class="label">Пароль</label>
+      <div class="pw"><input id="lPass" class="inp" type="password" placeholder="••••••••" autocomplete="current-password">
+        <button class="eye" onclick="toggleEye('lPass',this)">👁</button></div>
+      <span class="fg" onclick="forgotPass()">Забыли пароль?</span>
+      <button class="btn" id="bLogin" onclick="doLogin()">Войти</button>
+    </div>
+
+    <div id="pReg" style="display:none">
+      <div class="title">Создать аккаунт</div>
+      <div class="sub">Бесплатно, без подписок</div>
+      <label class="label">Ваше имя</label>
+      <input id="rName" class="inp" type="text" placeholder="Имя" autocomplete="name">
+      <label class="label">Email</label>
+      <input id="rEmail" class="inp" type="email" placeholder="you@example.com" autocomplete="email">
+      <label class="label">Пароль</label>
+      <div class="pw"><input id="rPass" class="inp" type="password" placeholder="Минимум 6 символов" autocomplete="new-password">
+        <button class="eye" onclick="toggleEye('rPass',this)">👁</button></div>
+      <div style="margin-bottom:14px"></div>
+      <label class="label">Повторите пароль</label>
+      <div class="pw"><input id="rPass2" class="inp" type="password" placeholder="Повторите пароль" autocomplete="new-password">
+        <button class="eye" onclick="toggleEye('rPass2',this)">👁</button></div>
+      <div style="margin-bottom:14px"></div>
+      <button class="btn" id="bReg" onclick="doReg()">Создать аккаунт →</button>
+    </div>
+  </div>
+
+  <!-- ══ VERIFY ══ -->
+  <div id="sVerify" class="screen">
+    <div class="big">📬</div>
+    <div class="title" style="text-align:center">Проверьте почту</div>
+    <div class="sub" style="text-align:center" id="verifyText">Перейдите по ссылке в письме, затем нажмите кнопку ниже.</div>
+    <button class="btn" id="bVerified" onclick="checkVerified()">Я подтвердил ✓</button>
+    <button class="btn2" onclick="resendVerify()">Отправить повторно</button>
+    <div style="text-align:center;margin-top:12px"><button class="ghost" onclick="backToAuth()">← Назад</button></div>
+  </div>
+
+  <!-- ══ PIN SETUP ══ -->
+  <div id="sPin" class="screen">
+    <div class="title" style="text-align:center">Придумайте PIN</div>
+    <div class="sub" style="text-align:center" id="pinHint">Создайте 4-значный PIN для быстрого входа</div>
+    <div class="pin-dots" id="pinDots">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+    <div class="pin-pad">
+      <button class="key" onclick="pk('1')">1</button>
+      <button class="key" onclick="pk('2')">2</button>
+      <button class="key" onclick="pk('3')">3</button>
+      <button class="key" onclick="pk('4')">4</button>
+      <button class="key" onclick="pk('5')">5</button>
+      <button class="key" onclick="pk('6')">6</button>
+      <button class="key" onclick="pk('7')">7</button>
+      <button class="key" onclick="pk('8')">8</button>
+      <button class="key" onclick="pk('9')">9</button>
+      <button class="key" style="font-size:13px" onclick="offerFaceId()">Face ID</button>
+      <button class="key" onclick="pk('0')">0</button>
+      <button class="key" onclick="pdel()">⌫</button>
+    </div>
+    <div style="text-align:center;margin-top:14px"><button class="ghost" onclick="skipPin()">Пропустить →</button></div>
+  </div>
+
+  <!-- ══ PIN CONFIRM ══ -->
+  <div id="sPinConfirm" class="screen">
+    <div class="title" style="text-align:center">Повторите PIN</div>
+    <div class="sub" style="text-align:center">Введите PIN ещё раз</div>
+    <div class="pin-dots" id="pinDots2">
+      <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
+    </div>
+    <div class="pin-pad">
+      <button class="key" onclick="pc('1')">1</button>
+      <button class="key" onclick="pc('2')">2</button>
+      <button class="key" onclick="pc('3')">3</button>
+      <button class="key" onclick="pc('4')">4</button>
+      <button class="key" onclick="pc('5')">5</button>
+      <button class="key" onclick="pc('6')">6</button>
+      <button class="key" onclick="pc('7')">7</button>
+      <button class="key" onclick="pc('8')">8</button>
+      <button class="key" onclick="pc('9')">9</button>
+      <button class="key" style="visibility:hidden"></button>
+      <button class="key" onclick="pc('0')">0</button>
+      <button class="key" onclick="pcdel()">⌫</button>
+    </div>
+  </div>
+
+  <!-- ══ FACE ID ══ -->
+  <div id="sFaceId" class="screen">
+    <div class="fid-circle" id="fidCircle">🫥</div>
+    <div class="title" style="text-align:center">Face ID</div>
+    <div class="sub" style="text-align:center" id="fidSub">Включите биометрический вход</div>
+    <button class="btn" id="bFaceId" onclick="setupFaceId()">Включить Face ID</button>
+    <button class="btn2" onclick="skipFaceId()">Пропустить</button>
+  </div>
+
+</div><!-- /card -->
+</div><!-- /wrap -->
 
 <script>
 // ══════════════════════════════════════════════
-//  FIREBASE CONFIG — замените на свой
+//  FIREBASE — exact same init as index.html
 // ══════════════════════════════════════════════
 const FB_CONFIG = {
   apiKey:            "AIzaSyBZ1b6yf1WQbhZ7lhIbeYw_fKc4k88mmFc",
@@ -321,81 +234,10 @@ firebase.initializeApp(FB_CONFIG);
 const auth = firebase.auth();
 const db   = firebase.database();
 
-// Persist session so index.html can read it after redirect
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(()=>{});
+// Persist session in localStorage so index.html reads it
+auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
 
-// ── State ──
-let _pendingUser  = null;
-let _pinSetupBuf  = '';
-let _pinFirst     = '';
-let _pinConfirmBuf= '';
-
-// ══════════════════════════════════════════════
-//  SCREEN ROUTING
-// ══════════════════════════════════════════════
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
-  hideErr(); hideInfo();
-}
-
-function switchTab(t) {
-  document.getElementById('tabLogin').classList.toggle('active', t==='login');
-  document.getElementById('tabReg').classList.toggle('active', t==='register');
-  document.getElementById('panelLogin').style.display = t==='login' ? '' : 'none';
-  document.getElementById('panelReg').style.display   = t==='register' ? '' : 'none';
-  hideErr(); hideInfo();
-}
-
-function backToAuth() {
-  try { auth.signOut(); } catch(e) {}
-  _pendingUser = null;
-  showScreen('screenAuth');
-}
-
-// ══════════════════════════════════════════════
-//  UI HELPERS
-// ══════════════════════════════════════════════
-function showErr(msg, id='errBox') {
-  const el = document.getElementById(id);
-  el.textContent = msg; el.style.display = 'block';
-}
-function hideErr(id='errBox') { document.getElementById(id).style.display='none'; }
-function showInfo(msg) {
-  const el = document.getElementById('infoBox');
-  el.textContent = msg; el.style.display = 'block';
-}
-function hideInfo() { document.getElementById('infoBox').style.display='none'; }
-
-function setLoading(id, on, label='') {
-  const btn = document.getElementById(id);
-  btn.disabled = on;
-  btn.innerHTML = on ? '<span class="spinner"></span>Загрузка...' : label || btn.dataset.label || btn.textContent;
-}
-
-function togglePass(inputId, btn) {
-  const inp = document.getElementById(inputId);
-  inp.type = inp.type==='password' ? 'text' : 'password';
-  btn.textContent = inp.type==='password' ? '👁' : '🙈';
-}
-
-function firebaseErr(code) {
-  const map = {
-    'auth/user-not-found':       'Пользователь не найден',
-    'auth/wrong-password':       'Неверный пароль',
-    'auth/email-already-in-use': 'Email уже зарегистрирован',
-    'auth/invalid-email':        'Некорректный email',
-    'auth/weak-password':        'Пароль слишком простой',
-    'auth/too-many-requests':    'Слишком много попыток, попробуйте позже',
-    'auth/network-request-failed':'Нет соединения с сетью',
-  };
-  return map[code] || 'Ошибка: ' + code;
-}
-
-// ══════════════════════════════════════════════
-//  CHECK EXISTING SESSION
-// ══════════════════════════════════════════════
-// Auto-redirect if already fully set up
+// If already logged in & set up → go straight to app
 auth.onAuthStateChanged(async user => {
   if (!user || !user.emailVerified) return;
   try {
@@ -405,325 +247,317 @@ auth.onAuthStateChanged(async user => {
   } catch(e) {}
 });
 
+// ── State ──
+let _pinBuf  = '';
+let _pinFirst = '';
+let _pinBuf2 = '';
+
+// ══════════════════════════════════════════════
+//  SCREENS
+// ══════════════════════════════════════════════
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('on'));
+  document.getElementById(id).classList.add('on');
+  hideErr(); hideInfo();
+}
+
+function tab(t) {
+  document.getElementById('tLogin').classList.toggle('on', t==='login');
+  document.getElementById('tReg').classList.toggle('on',   t==='reg');
+  document.getElementById('pLogin').style.display = t==='login' ? '' : 'none';
+  document.getElementById('pReg').style.display   = t==='reg'   ? '' : 'none';
+  hideErr(); hideInfo();
+}
+
+function backToAuth() {
+  try { auth.signOut(); } catch(e) {}
+  show('sAuth');
+}
+
+// ══════════════════════════════════════════════
+//  HELPERS
+// ══════════════════════════════════════════════
+function showErr(msg)  { const e=document.getElementById('errBox');  e.textContent=msg; e.style.display='block'; }
+function hideErr()     { document.getElementById('errBox').style.display='none'; }
+function showInfo(msg) { const e=document.getElementById('infoBox'); e.textContent=msg; e.style.display='block'; }
+function hideInfo()    { document.getElementById('infoBox').style.display='none'; }
+
+function loading(id, on, label='') {
+  const b = document.getElementById(id);
+  b.disabled = on;
+  b.innerHTML = on ? '<span class="sp"></span>Подождите...' : label;
+}
+
+function toggleEye(id, btn) {
+  const i = document.getElementById(id);
+  i.type = i.type === 'password' ? 'text' : 'password';
+  btn.textContent = i.type === 'password' ? '👁' : '🙈';
+}
+
+function fbErr(code) {
+  const m = {
+    'auth/email-already-in-use': 'Email уже зарегистрирован',
+    'auth/invalid-email':        'Некорректный email',
+    'auth/weak-password':        'Пароль слишком простой (мин. 6 символов)',
+    'auth/user-not-found':       'Пользователь не найден',
+    'auth/wrong-password':       'Неверный пароль',
+    'auth/invalid-credential':   'Неверный email или пароль',
+    'auth/too-many-requests':    'Слишком много попыток, подождите',
+    'auth/network-request-failed': 'Нет соединения с сетью',
+  };
+  return m[code] || ('Ошибка: ' + code);
+}
+
+function goToApp() {
+  window.location.href = 'index.html';
+}
+
 // ══════════════════════════════════════════════
 //  LOGIN
 // ══════════════════════════════════════════════
 async function doLogin() {
-  const email = document.getElementById('loginEmail').value.trim();
-  const pass  = document.getElementById('loginPass').value;
+  const email = document.getElementById('lEmail').value.trim();
+  const pass  = document.getElementById('lPass').value;
   hideErr(); hideInfo();
-  if (!email) { showErr('Введите email'); return; }
-  if (!pass)  { showErr('Введите пароль'); return; }
+  if (!email || !pass) { showErr('Введите email и пароль'); return; }
 
-  setLoading('btnLogin', true);
+  loading('bLogin', true);
   try {
     const cred = await auth.signInWithEmailAndPassword(email, pass);
     const user = cred.user;
+
     if (!user.emailVerified) {
-      document.getElementById('verifySubtext').textContent =
-        `Письмо отправлено на ${email}. Перейдите по ссылке, затем нажмите кнопку ниже.`;
-      _pendingUser = user;
-      showScreen('screenVerify');
-      setLoading('btnLogin', false, 'Войти');
+      document.getElementById('verifyText').textContent =
+        'Письмо отправлено на ' + email + '. Перейдите по ссылке, затем нажмите кнопку ниже.';
+      show('sVerify');
+      loading('bLogin', false, 'Войти');
       return;
     }
+
+    // Check if account set up in memorydeck_meta
     const accId = 'acc_' + user.uid.slice(0,8);
     const snap  = await db.ref('memorydeck_meta/' + accId).once('value');
     if (snap.val()) {
       goToApp();
     } else {
-      _pendingUser = user;
-      const name = user.displayName || '';
-      if (name) document.getElementById('setupName').value = name;
-      showScreen('screenSetup');
+      // Account not set up yet — create it
+      await createAccount(user, user.displayName || email.split('@')[0]);
+      goToApp();
     }
   } catch(e) {
-    showErr(firebaseErr(e.code));
-    setLoading('btnLogin', false, 'Войти');
+    showErr(fbErr(e.code));
+    loading('bLogin', false, 'Войти');
   }
 }
 
-// Enter key
-['loginPass','loginEmail'].forEach(id => {
+['lPass','lEmail'].forEach(id => {
   document.getElementById(id).addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
 });
 
 // ══════════════════════════════════════════════
 //  REGISTER
 // ══════════════════════════════════════════════
-async function doRegister() {
-  const name  = document.getElementById('regName').value.trim();
-  const email = document.getElementById('regEmail').value.trim();
-  const pass  = document.getElementById('regPass').value;
-  const pass2 = document.getElementById('regPass2').value;
-  hideErr(); hideInfo();
-  if (!name)        { showErr('Введите ваше имя'); return; }
-  if (!email)       { showErr('Введите email'); return; }
-  if (!pass)        { showErr('Введите пароль'); return; }
-  if (pass.length<6){ showErr('Пароль — минимум 6 символов'); return; }
+async function doReg() {
+  const name  = document.getElementById('rName').value.trim();
+  const email = document.getElementById('rEmail').value.trim();
+  const pass  = document.getElementById('rPass').value;
+  const pass2 = document.getElementById('rPass2').value;
+  hideErr();
+  if (!name)         { showErr('Введите ваше имя'); return; }
+  if (!email)        { showErr('Введите email'); return; }
+  if (pass.length<6) { showErr('Пароль — минимум 6 символов'); return; }
   if (pass !== pass2){ showErr('Пароли не совпадают'); return; }
 
-  setLoading('btnReg', true);
+  loading('bReg', true);
   try {
     const cred = await auth.createUserWithEmailAndPassword(email, pass);
     const user = cred.user;
-    // Save display name
     await user.updateProfile({ displayName: name });
-    // Send email verification
     await user.sendEmailVerification({ url: window.location.href });
-    _pendingUser = user;
-    document.getElementById('verifySubtext').textContent =
-      `Письмо отправлено на ${email}. Перейдите по ссылке в письме, затем нажмите «Я подтвердил».`;
-    showScreen('screenVerify');
-    setLoading('btnReg', false, 'Создать аккаунт →');
+    document.getElementById('verifyText').textContent =
+      'Письмо отправлено на ' + email + '. Перейдите по ссылке, затем нажмите «Я подтвердил».';
+    show('sVerify');
+    loading('bReg', false, 'Создать аккаунт →');
   } catch(e) {
-    showErr(firebaseErr(e.code));
-    setLoading('btnReg', false, 'Создать аккаунт →');
+    showErr(fbErr(e.code));
+    loading('bReg', false, 'Создать аккаунт →');
   }
 }
 
 // ══════════════════════════════════════════════
-//  EMAIL VERIFICATION
+//  VERIFY
 // ══════════════════════════════════════════════
 async function checkVerified() {
-  setLoading('btnVerified', true);
+  loading('bVerified', true);
   try {
     await auth.currentUser.reload();
     const user = auth.currentUser;
     if (user.emailVerified) {
-      _pendingUser = user;
-      // Check if already set up
       const accId = 'acc_' + user.uid.slice(0,8);
       const snap  = await db.ref('memorydeck_meta/' + accId).once('value');
-      if (snap.val()) {
-        goToApp();
-      } else {
-        const name = user.displayName || '';
-        if (name) document.getElementById('setupName').value = name;
-        showScreen('screenSetup');
+      if (!snap.val()) {
+        await createAccount(user, user.displayName || user.email.split('@')[0]);
       }
+      show('sPin');
+      _pinBuf = ''; updateDots('pinDots', '');
     } else {
-      showErr('Email ещё не подтверждён. Проверьте почту.', 'errBox');
+      showErr('Email ещё не подтверждён. Проверьте почту.');
     }
   } catch(e) {
-    showErr(firebaseErr(e.code));
+    showErr(fbErr(e.code));
   }
-  setLoading('btnVerified', false, 'Я подтвердил ✓');
+  loading('bVerified', false, 'Я подтвердил ✓');
 }
 
 async function resendVerify() {
   try {
     await auth.currentUser.sendEmailVerification({ url: window.location.href });
     showInfo('✅ Письмо отправлено повторно');
-  } catch(e) {
-    showErr(firebaseErr(e.code));
-  }
+  } catch(e) { showErr(fbErr(e.code)); }
 }
 
 // ══════════════════════════════════════════════
-//  SETUP (first-time name save)
+//  CREATE ACCOUNT in memorydeck_meta
 // ══════════════════════════════════════════════
-async function doSetup() {
-  const name = document.getElementById('setupName').value.trim();
-  hideErr();
-  if (!name) { showErr('Введите ваше имя'); return; }
-
-  setLoading('btnSetup', true);
-  try {
-    const user = auth.currentUser;
-    // Save name to Firebase Auth profile
-    await user.updateProfile({ displayName: name });
-
-    // Create account in memorydeck_meta (same structure as index.html)
-    const accId  = 'acc_' + user.uid.slice(0,8);
-    const userId = 'u_'   + user.uid.slice(0,8);
-
-    // Check if account already exists for this user
-    const existSnap = await db.ref('memorydeck_meta/' + accId).once('value');
-    if (!existSnap.val()) {
-      await db.ref('memorydeck_meta/' + accId).set({
-        name:  name,
-        owner: user.uid,
-        color: '#5b7ef8',
-        users: {
-          [userId]: {
-            name:     name,
-            email:    user.email,
-            role:     'admin',
-            uid:      user.uid,
-            password: '1234',  // default PIN, user can change in app
-            color:    '#5b7ef8',
-          }
-        }
-      });
+async function createAccount(user, name) {
+  const accId  = 'acc_' + user.uid.slice(0,8);
+  const userId = 'u_'   + user.uid.slice(0,8);
+  const existing = await db.ref('memorydeck_meta/' + accId).once('value');
+  if (existing.val()) return; // already exists
+  await db.ref('memorydeck_meta/' + accId).set({
+    name:  name,
+    owner: user.uid,
+    color: '#5b7ef8',
+    users: {
+      [userId]: {
+        name:     name,
+        email:    user.email,
+        role:     'editor',
+        uid:      user.uid,
+        password: '1234',
+        color:    '#5b7ef8',
+      }
     }
-
-    showScreen('screenPinSetup');
-    setLoading('btnSetup', false, 'Продолжить →');
-  } catch(e) {
-    showErr('Ошибка: ' + e.message);
-    setLoading('btnSetup', false, 'Продолжить →');
-  }
+  });
 }
 
 // ══════════════════════════════════════════════
-//  PIN SETUP
+//  PIN
 // ══════════════════════════════════════════════
-let _pinSetupStep = 'enter'; // 'enter' | 'confirm'
-
-function pinSetupKey(d) {
-  if (_pinSetupStep === 'enter') {
-    if (_pinSetupBuf.length >= 4) return;
-    _pinSetupBuf += d;
-    updatePinDots('pinSetupDots', _pinSetupBuf);
-    if (_pinSetupBuf.length === 4) {
-      setTimeout(() => {
-        _pinFirst     = _pinSetupBuf;
-        _pinSetupBuf  = '';
-        showScreen('screenPinConfirm');
-        updatePinDots('pinConfirmDots', '');
-      }, 200);
-    }
+function updateDots(id, val) {
+  const dots = document.getElementById(id).children;
+  for (let i=0; i<4; i++) {
+    dots[i].className = 'dot' + (i < val.length ? ' on' : '');
   }
 }
 
-function pinSetupDel() {
-  _pinSetupBuf = _pinSetupBuf.slice(0, -1);
-  updatePinDots('pinSetupDots', _pinSetupBuf);
+function pinErr(id) {
+  const dots = document.getElementById(id).children;
+  for (let i=0;i<4;i++) { dots[i].className = 'dot err'; }
+  setTimeout(() => { for(let i=0;i<4;i++) dots[i].className='dot'; }, 600);
 }
 
-function pinConfirmKey(d) {
-  if (_pinConfirmBuf.length >= 4) return;
-  _pinConfirmBuf += d;
-  updatePinDots('pinConfirmDots', _pinConfirmBuf);
-  if (_pinConfirmBuf.length === 4) {
+// Step 1 — enter PIN
+function pk(d) {
+  if (_pinBuf.length >= 4) return;
+  _pinBuf += d;
+  updateDots('pinDots', _pinBuf);
+  if (_pinBuf.length === 4) {
+    setTimeout(() => {
+      _pinFirst = _pinBuf;
+      _pinBuf   = '';
+      show('sPinConfirm');
+      updateDots('pinDots2', '');
+    }, 200);
+  }
+}
+function pdel() { _pinBuf = _pinBuf.slice(0,-1); updateDots('pinDots', _pinBuf); }
+
+// Step 2 — confirm PIN
+function pc(d) {
+  if (_pinBuf2.length >= 4) return;
+  _pinBuf2 += d;
+  updateDots('pinDots2', _pinBuf2);
+  if (_pinBuf2.length === 4) {
     setTimeout(async () => {
-      if (_pinConfirmBuf === _pinFirst) {
-        // Save PIN hash to DB
+      if (_pinBuf2 === _pinFirst) {
+        // Save PIN to Firebase
         try {
-          const uid = auth.currentUser.uid;
-          await db.ref('memorydeck_meta/acc_' + auth.currentUser.uid.slice(0,8) + '/users/u_' + auth.currentUser.uid.slice(0,8) + '/pin').set(_pinFirst);
+          const user  = auth.currentUser;
+          const accId  = 'acc_' + user.uid.slice(0,8);
+          const userId = 'u_'   + user.uid.slice(0,8);
+          await db.ref('memorydeck_meta/' + accId + '/users/' + userId + '/pin').set(_pinFirst);
           showInfo('✅ PIN сохранён');
-          setTimeout(() => offerFaceId(), 600);
-        } catch(e) { skipPinSetup(); }
+        } catch(e) {}
+        offerFaceId();
       } else {
-        // Wrong — shake and reset
-        pinErrAnim('pinConfirmDots');
-        setTimeout(() => {
-          _pinConfirmBuf = '';
-          updatePinDots('pinConfirmDots', '');
-        }, 700);
+        pinErr('pinDots2');
+        setTimeout(() => { _pinBuf2 = ''; updateDots('pinDots2', ''); }, 700);
       }
     }, 200);
   }
 }
-
-function pinConfirmDel() {
-  _pinConfirmBuf = _pinConfirmBuf.slice(0, -1);
-  updatePinDots('pinConfirmDots', _pinConfirmBuf);
-}
-
-function updatePinDots(id, val) {
-  const dots = document.getElementById(id).children;
-  for (let i=0; i<4; i++) {
-    dots[i].classList.toggle('filled', i < val.length);
-  }
-}
-
-function pinErrAnim(id) {
-  const dots = document.getElementById(id).children;
-  for (let i=0;i<4;i++) dots[i].classList.add('err-anim');
-  setTimeout(() => {
-    for (let i=0;i<4;i++) dots[i].classList.remove('err-anim','filled');
-  }, 600);
-}
-
-function skipPinSetup() {
-  offerFaceId();
-}
+function pcdel() { _pinBuf2 = _pinBuf2.slice(0,-1); updateDots('pinDots2', _pinBuf2); }
+function skipPin() { offerFaceId(); }
 
 // ══════════════════════════════════════════════
 //  FACE ID
 // ══════════════════════════════════════════════
 function offerFaceId() {
-  // Check if WebAuthn/biometric is available
-  if (window.PublicKeyCredential) {
-    showScreen('screenFaceId');
-  } else {
-    // Not available — go straight to app
-    goToApp();
-  }
+  if (window.PublicKeyCredential) { show('sFaceId'); }
+  else { goToApp(); }
 }
 
 async function setupFaceId() {
-  const circle = document.getElementById('faceIdCircle');
-  const sub    = document.getElementById('faceIdSub');
-  const btn    = document.getElementById('btnFaceId');
-  circle.classList.add('scanning');
-  btn.disabled = true;
+  const circle = document.getElementById('fidCircle');
+  const sub    = document.getElementById('fidSub');
+  circle.className = 'fid-circle scan';
+  document.getElementById('bFaceId').disabled = true;
   sub.textContent = 'Сканирование...';
-
   try {
-    // Use WebAuthn / platform authenticator
-    const userId = auth.currentUser.uid;
-    const challenge = new Uint8Array(32);
-    crypto.getRandomValues(challenge);
-
-    const credential = await navigator.credentials.create({
+    const user = auth.currentUser;
+    const chal = new Uint8Array(32);
+    crypto.getRandomValues(chal);
+    const cred = await navigator.credentials.create({
       publicKey: {
-        challenge,
+        challenge: chal,
         rp:   { name: 'MemoryDeck', id: location.hostname || 'localhost' },
-        user: { id: new TextEncoder().encode(userId), name: auth.currentUser.email, displayName: auth.currentUser.displayName || 'User' },
-        pubKeyCredParams: [{ type: 'public-key', alg: -7 }, { type: 'public-key', alg: -257 }],
-        authenticatorSelection: { authenticatorAttachment: 'platform', userVerification: 'required' },
+        user: { id: new TextEncoder().encode(user.uid), name: user.email, displayName: user.displayName || 'User' },
+        pubKeyCredParams: [{ type:'public-key', alg:-7 },{ type:'public-key', alg:-257 }],
+        authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required' },
         timeout: 60000,
       }
     });
-
-    if (credential) {
-      circle.classList.remove('scanning');
-      circle.classList.add('success');
+    if (cred) {
+      circle.className = 'fid-circle ok';
       circle.textContent = '✅';
       sub.textContent = 'Face ID включён!';
-      // Save flag
-      await db.ref('memorydeck_meta/acc_' + userId.slice(0,8) + '/users/u_' + userId.slice(0,8) + '/faceId').set(true);
+      const accId  = 'acc_' + user.uid.slice(0,8);
+      const userId = 'u_'   + user.uid.slice(0,8);
+      await db.ref('memorydeck_meta/' + accId + '/users/' + userId + '/faceId').set(true);
       setTimeout(() => goToApp(), 800);
     }
   } catch(e) {
-    circle.classList.remove('scanning');
-    circle.classList.add('fail');
+    circle.className = 'fid-circle fail';
     circle.textContent = '❌';
-    sub.textContent = 'Не удалось включить Face ID. Устройство может не поддерживать биометрию.';
-    btn.disabled = false;
+    sub.textContent = 'Не удалось. Устройство может не поддерживать биометрию.';
+    document.getElementById('bFaceId').disabled = false;
     setTimeout(() => skipFaceId(), 2000);
   }
 }
-
-function skipFaceId() {
-  goToApp();
-}
+function skipFaceId() { goToApp(); }
 
 // ══════════════════════════════════════════════
 //  FORGOT PASSWORD
 // ══════════════════════════════════════════════
-async function forgotPassword() {
-  const email = document.getElementById('loginEmail').value.trim();
+async function forgotPass() {
+  const email = document.getElementById('lEmail').value.trim();
   hideErr(); hideInfo();
   if (!email) { showErr('Введите email для сброса пароля'); return; }
   try {
     await auth.sendPasswordResetEmail(email);
-    showInfo(`✅ Письмо для сброса пароля отправлено на ${email}`);
-  } catch(e) {
-    showErr(firebaseErr(e.code));
-  }
-}
-
-// ══════════════════════════════════════════════
-//  GO TO APP
-// ══════════════════════════════════════════════
-function goToApp() {
-  // Firebase Auth session is persisted — index.html will read it
-  window.location.href = 'index.html';
+    showInfo('✅ Письмо для сброса пароля отправлено на ' + email);
+  } catch(e) { showErr(fbErr(e.code)); }
 }
 </script>
 </body>
