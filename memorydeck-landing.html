@@ -241,9 +241,16 @@ auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
 auth.onAuthStateChanged(async user => {
   if (!user || !user.emailVerified) return;
   try {
-    const accId = 'acc_' + user.uid.slice(0,8);
-    const snap  = await db.ref('memorydeck_meta/' + accId).once('value');
-    if (snap.val()) goToApp();
+    const snap = await db.ref('memorydeck_meta').once('value');
+    const data = snap.val() || {};
+    for (const [aId, acc] of Object.entries(data)) {
+      if (aId.startsWith('_')) continue;
+      if (acc && acc.users) {
+        for (const u of Object.values(acc.users)) {
+          if (u && u.uid === user.uid) { goToApp(); return; }
+        }
+      }
+    }
   } catch(e) {}
 });
 
@@ -335,12 +342,22 @@ async function doLogin() {
     }
 
     // Check if account set up in memorydeck_meta
-    const accId = 'acc_' + user.uid.slice(0,8);
-    const snap  = await db.ref('memorydeck_meta/' + accId).once('value');
-    if (snap.val()) {
+    // Check if account exists for this uid
+    const snap = await db.ref('memorydeck_meta').once('value');
+    const data = snap.val() || {};
+    let found = false;
+    for (const [aId, acc] of Object.entries(data)) {
+      if (aId.startsWith('_')) continue;
+      if (acc && acc.users) {
+        for (const u of Object.values(acc.users)) {
+          if (u && u.uid === user.uid) { found = true; break; }
+        }
+      }
+      if (found) break;
+    }
+    if (found) {
       goToApp();
     } else {
-      // Account not set up yet — create it
       await createAccount(user, user.displayName || email.split('@')[0]);
       goToApp();
     }

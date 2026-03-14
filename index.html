@@ -2801,15 +2801,35 @@ function checkSession(){
     try {
       const db2 = authApp.database();
       // User's accId is based on their Firebase uid
-      const accId  = 'acc_' + user.uid.slice(0,8);
-      const userId = 'u_'   + user.uid.slice(0,8);
+      // Find account by owner uid — scan memorydeck_meta for matching owner or user uid
+      const metaSnap = await db2.ref('memorydeck_meta').once('value');
+      const metaData = metaSnap.val() || {};
+      let accId = null, userId = null, ad = null, ud = null;
 
-      const snap = await db2.ref('memorydeck_meta/' + accId).once('value');
-      const ad   = snap.val();
-      if(!ad){ await auth.signOut(); showGoToLanding(); return; }
+      // First try: acc_{first8} convention
+      const tryAccId  = 'acc_' + user.uid.slice(0,8);
+      const tryUserId = 'u_'   + user.uid.slice(0,8);
+      if (metaData[tryAccId] && metaData[tryAccId].users) {
+        accId = tryAccId; ad = metaData[tryAccId];
+        userId = tryUserId; ud = ad.users[userId];
+      }
 
-      const ud = ad.users && ad.users[userId];
-      if(!ud){ await auth.signOut(); showGoToLanding(); return; }
+      // Second try: scan all accounts for user with matching uid
+      if (!ud) {
+        for (const [aId, acc] of Object.entries(metaData)) {
+          if (aId.startsWith('_')) continue;
+          if (typeof acc !== 'object' || !acc.users) continue;
+          for (const [uId, u] of Object.entries(acc.users)) {
+            if (u && u.uid === user.uid) {
+              accId = aId; userId = uId; ad = acc; ud = u;
+              break;
+            }
+          }
+          if (ud) break;
+        }
+      }
+
+      if (!ud) { await auth.signOut(); showGoToLanding(); return; }
 
       // Success — hide lock and start app
       const ls = document.getElementById('lockScreen');
