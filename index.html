@@ -2539,13 +2539,11 @@ function _getMetaApp() {
   return _metaApp;
 }
 
-// Вызывается один раз при старте страницы — делает signInAnonymously заранее
+// Прогрев Firebase Auth — используем основной app (не анонимный)
 function _warmMetaAuth() {
-  const app = _getMetaApp();
-  const auth = app.auth();
-  if (!auth.currentUser && !_metaAuthReady) {
-    auth.signInAnonymously().then(()=>{ _metaAuthReady=true; }).catch(()=>{ _metaAuthReady=true; });
-  }
+  try {
+    firebase.app().auth(); // просто инициализируем, onAuthStateChanged уже слушает
+  } catch(e) {}
 }
 
 function loadAcc(cb) {
@@ -2570,7 +2568,8 @@ function loadAcc(cb) {
     });
   };
 
-  auth.currentUser ? doLoad() : auth.signInAnonymously().then(doLoad).catch(doLoad);
+  // Firebase Auth уже инициализирован через основной app
+  doLoad();
 }
 
 // Точечная загрузка одного аккаунта по ID (быстрее чем весь memorydeck_meta)
@@ -2592,7 +2591,7 @@ function loadAccById(accId, cb) {
     });
   };
 
-  auth.currentUser ? doLoad() : auth.signInAnonymously().then(doLoad).catch(doLoad);
+  doLoad();
 }
 
 // Шаг 2: после логина — инициализируем основной Firebase app
@@ -2602,7 +2601,6 @@ function initMainFirebase(accId, userId) {
     mainApp = firebase.initializeApp(Object.assign({}, FB_CONFIG));
   }
 
-  // Anonymous auth для основного app
   const mainAuth = mainApp.auth();
   const initDb = () => {
     db = mainApp.database();
@@ -2710,7 +2708,8 @@ function initMainFirebase(accId, userId) {
       renderAll();
     });
   };
-  mainAuth.currentUser ? initDb() : mainAuth.signInAnonymously().then(initDb).catch(initDb);
+  // Используем уже авторизованного Firebase Auth пользователя
+  initDb();
 }
 
 function startApp(accId, userId, ad, ud) {
@@ -2816,20 +2815,24 @@ function doLogout(){
   if(fbRef){try{fbRef.off();}catch(e){}fbRef=null;}
   sess={accId:null,userId:null,ud:null,ad:null};
   decks={};cards={};cfg={newPerDay:20,maxReviews:200,firstInterval:1};studyLog={};
+  // Выходим из Firebase Auth
+  try{ firebase.app().auth().signOut().catch(()=>{}); }catch(e){}
   window.location.href = 'memorydeck-landing.html';
 }
 
 function checkSession(){
-  // Показываем экран входа сразу
   document.getElementById('lockScreen').style.display='flex';
-  const el=document.getElementById('accList');
-  if(el) el.innerHTML='<div style="text-align:center;padding:32px 0;color:var(--ink3);font-size:13px;"><div style="font-size:28px;margin-bottom:10px;">⏳</div>Загрузка...</div>';
 
   const savedAcc  =(()=>{try{return sessionStorage.getItem('md3_a');}catch(e){return null;}})();
   const savedUser =(()=>{try{return sessionStorage.getItem('md3_u');}catch(e){return null;}})();
 
-  if(savedAcc && savedUser){
-    // Есть сессия — читаем только один аккаунт, не весь memorydeck_meta
+  // Проверяем Firebase Auth + локальную сессию
+  const _doCheck = (firebaseUser) => {
+    // Нет сессионных данных или Firebase Auth — на лендинг
+    if(!savedAcc || !savedUser){
+      window.location.href = 'memorydeck-landing.html';
+      return;
+    }
     const pfx = PFX+savedAcc+'_'+savedUser+'_';
     const ts  =(()=>{try{return localStorage.getItem(pfx+'ts');}catch(e){return null;}})();
     const ver =(()=>{try{return localStorage.getItem(pfx+'v');}catch(e){return null;}})();
@@ -2841,12 +2844,31 @@ function checkSession(){
           window.location.href = 'memorydeck-landing.html';
         }
       });
-      return;
+    } else {
+      window.location.href = 'memorydeck-landing.html';
     }
-  }
+  };
 
-  // Нет сессии — редирект на лендинг
-  window.location.href = 'memorydeck-landing.html';
+  // Ждём Firebase Auth state (быстро — из кэша)
+  let resolved = false;
+  const unsubscribe = firebase.app().auth().onAuthStateChanged(user => {
+    if(resolved) return;
+    resolved = true;
+    unsubscribe();
+    if(user && user.emailVerified){
+      _doCheck(user);
+    } else {
+      window.location.href = 'memorydeck-landing.html';
+    }
+  });
+
+  // Таймаут — если Firebase не ответил за 4 сек, используем локальную сессию
+  setTimeout(()=>{
+    if(!resolved){
+      resolved = true;
+      _doCheck(null);
+    }
+  }, 4000);
 }
 
 // ═══════════════════════════════════════════════════

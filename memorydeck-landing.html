@@ -131,9 +131,9 @@ body{display:flex;align-items:center;justify-content:center;padding:20px;overflo
       <input id="rName" class="inp" type="text" placeholder="Имя" autocomplete="name">
       <label class="lbl">Email</label>
       <input id="rEmail" class="inp" type="email" placeholder="you@example.com" autocomplete="email">
-      <label class="lbl">Пароль для входа в приложение</label>
+      <label class="lbl">Пароль</label>
       <div class="pw">
-        <input id="rPass" class="inp" type="password" placeholder="Минимум 4 символа">
+        <input id="rPass" class="inp" type="password" placeholder="Минимум 6 символов">
         <button class="eye" onclick="toggleEye('rPass',this)">👁</button>
       </div>
       <label class="lbl">Повторите пароль</label>
@@ -229,7 +229,7 @@ const FB_CONFIG = {
   appId:             "1:1015461302295:web:835d7a14a852c224534c52"
 };
 
-// ── Firebase init — same pattern as index.html (anonymous auth) ──
+// ── Firebase — один app, полноценная auth ──
 let app, auth, db;
 try { app = firebase.app('md_landing'); } catch(e) {
   app = firebase.initializeApp(FB_CONFIG, 'md_landing');
@@ -237,18 +237,51 @@ try { app = firebase.app('md_landing'); } catch(e) {
 auth = app.auth();
 db   = app.database();
 
-// Anonymous sign-in to satisfy Firebase Rules
-auth.signInAnonymously().catch(() => {});
+// ── Если уже залогинен — сразу в приложение ──
+auth.onAuthStateChanged(user => {
+  if (user && user.emailVerified) {
+    // Проверяем есть ли запись в memorydeck_meta
+    db.ref('memorydeck_meta').orderByChild('owner').equalTo(user.uid)
+      .once('value').then(snap => {
+        if (snap.val()) {
+          // Аккаунт есть — записываем сессию и идём в приложение
+          _saveSessionAndGo(user);
+        }
+        // Иначе остаёмся на лендинге (новый пользователь ещё не завершил регистрацию)
+      }).catch(() => {});
+  }
+});
 
 // ── State ──
-let _pendingEmail = '';
-let _pendingName  = '';
-let _pendingPass  = ''; // app password (stored in memorydeck_meta)
-let _pinBuf  = '';
-let _pinFirst = '';
-let _pinBuf2 = '';
-let _newAccId  = '';
-let _newUserId = '';
+let _pendingName = '';
+let _pinBuf  = '', _pinFirst = '', _pinBuf2 = '';
+let _newAccId = '', _newUserId = '';
+
+// ══════════════════════════════════════════════
+//  SESSION
+// ══════════════════════════════════════════════
+function _saveSessionAndGo(user) {
+  // Находим accId и userId по uid
+  db.ref('memorydeck_meta').once('value').then(snap => {
+    const data = snap.val() || {};
+    for (const [accId, acc] of Object.entries(data)) {
+      if (accId.startsWith('_') || typeof acc !== 'object' || !acc.users) continue;
+      for (const [userId, u] of Object.entries(acc.users)) {
+        if (u && u.uid === user.uid) {
+          const PFX = 'md3_';
+          try {
+            sessionStorage.setItem('md3_a', accId);
+            sessionStorage.setItem('md3_u', userId);
+            localStorage.setItem(PFX + accId + '_' + userId + '_ts', String(Date.now()));
+            localStorage.setItem(PFX + accId + '_' + userId + '_v', '3.0');
+          } catch(e) {}
+          window.location.href = 'index.html';
+          return;
+        }
+      }
+    }
+  }).catch(() => {});
+}
 
 // ══════════════════════════════════════════════
 //  SCREENS
@@ -268,8 +301,7 @@ function switchTab(t) {
 }
 
 function backToAuth() { show('sAuth'); }
-
-function goToApp() { window.location.href = 'index.html'; }
+function goToApp()    { window.location.href = 'index.html'; }
 
 // ══════════════════════════════════════════════
 //  HELPERS
@@ -293,13 +325,13 @@ function toggleEye(id, btn) {
 
 function fbErr(code) {
   const m = {
-    'auth/email-already-in-use': 'Email уже зарегистрирован',
+    'auth/email-already-in-use': 'Этот email уже зарегистрирован. Войдите через вкладку «Войти».',
     'auth/invalid-email':        'Некорректный email',
-    'auth/weak-password':        'Пароль Firebase слишком простой',
-    'auth/user-not-found':       'Пользователь не найден',
+    'auth/weak-password':        'Пароль слишком простой — минимум 6 символов',
+    'auth/user-not-found':       'Пользователь с таким email не найден',
     'auth/wrong-password':       'Неверный пароль',
     'auth/invalid-credential':   'Неверный email или пароль',
-    'auth/too-many-requests':    'Слишком много попыток, подождите',
+    'auth/too-many-requests':    'Слишком много попыток — подождите немного',
     'auth/network-request-failed': 'Нет соединения с сетью',
   };
   return m[code] || ('Ошибка: ' + code);
@@ -307,9 +339,9 @@ function fbErr(code) {
 
 // ══════════════════════════════════════════════
 //  REGISTER
-//  1. Создаём Firebase Auth аккаунт (для верификации email)
-//  2. После верификации создаём запись в memorydeck_meta
-//     с паролем который пользователь придумал
+//  1. createUserWithEmailAndPassword (Firebase Auth)
+//  2. sendEmailVerification
+//  3. После подтверждения — создаём запись в memorydeck_meta
 // ══════════════════════════════════════════════
 async function doReg() {
   const name  = document.getElementById('rName').value.trim();
@@ -319,106 +351,26 @@ async function doReg() {
   hideErr();
   if (!name)         { showErr('Введите ваше имя'); return; }
   if (!email)        { showErr('Введите email'); return; }
-  if (pass.length<4) { showErr('Пароль — минимум 4 символа'); return; }
+  if (pass.length<6) { showErr('Пароль — минимум 6 символов'); return; }
   if (pass !== pass2){ showErr('Пароли не совпадают'); return; }
-
-  // Check if email already has account in memorydeck_meta
-  const existSnap = await db.ref('memorydeck_meta')
-    .orderByChild('email').equalTo(email).once('value').catch(() => null);
 
   loading('bReg', true);
   try {
-    // Use separate auth app for email registration
-    let regApp;
-    try { regApp = firebase.app('md_reg'); } catch(e) {
-      regApp = firebase.initializeApp(FB_CONFIG, 'md_reg');
-    }
-    const regAuth = regApp.auth();
-    const cred = await regAuth.createUserWithEmailAndPassword(email, pass + '_md_suffix');
+    const cred = await auth.createUserWithEmailAndPassword(email, pass);
     await cred.user.updateProfile({ displayName: name });
-    await cred.user.sendEmailVerification({ url: window.location.href });
+    await cred.user.sendEmailVerification({ url: window.location.origin + '/memorydeck/memorydeck-landing.html' });
 
-    // Store pending data
-    _pendingEmail = email;
-    _pendingName  = name;
-    _pendingPass  = pass;
-    // accId/userId based on Firebase uid
-    _newAccId  = 'acc_' + cred.user.uid.slice(0,8);
-    _newUserId = 'u_'   + cred.user.uid.slice(0,8);
-
-    // Save pending to localStorage in case page reloads
-    try {
-      localStorage.setItem('md_pending', JSON.stringify({
-        email, name, pass,
-        accId:  _newAccId,
-        userId: _newUserId,
-        uid:    cred.user.uid,
-      }));
-    } catch(e) {}
+    _pendingName = name;
+    _newAccId  = 'acc_' + cred.user.uid.slice(0, 8);
+    _newUserId = 'u_'   + cred.user.uid.slice(0, 8);
 
     document.getElementById('verifyText').textContent =
       'Письмо отправлено на ' + email + '. Перейдите по ссылке в письме, затем нажмите «Я подтвердил».';
     show('sVerify');
-    loading('bReg', false, 'Создать аккаунт →');
   } catch(e) {
-    // If email already registered in Firebase Auth
-    if (e.code === 'auth/email-already-in-use') {
-      // Check if this email has a real account in memorydeck_meta
-      let hasRealAccount = false;
-      try {
-        const metaSnap = await db.ref('memorydeck_meta').once('value');
-        const metaData = metaSnap.val() || {};
-        for (const acc of Object.values(metaData)) {
-          if (typeof acc !== 'object' || !acc.users) continue;
-          for (const u of Object.values(acc.users)) {
-            if (u && (u.email||'').toLowerCase() === email.toLowerCase()) {
-              hasRealAccount = true; break;
-            }
-          }
-          if (hasRealAccount) break;
-        }
-      } catch(e2) {}
-
-      if (hasRealAccount) {
-        // Настоящий аккаунт — предлагаем войти
-        showErr('Этот email уже зарегистрирован. Перейдите на вкладку «Войти».');
-      } else {
-        // "Призрак" — Firebase Auth запись без аккаунта memorydeck.
-        // Показываем экран верификации — пусть подтвердит email и завершит регистрацию.
-        document.getElementById('verifyText').textContent =
-          'Письмо отправлено на ' + email + '. Перейдите по ссылке в письме, затем нажмите «Я подтвердил».';
-        _pendingEmail = email;
-        _pendingName  = name;
-        _pendingPass  = pass;
-        // Пробуем войти с тем же паролем чтобы получить user object
-        let regApp2;
-        try { regApp2 = firebase.app('md_reg'); } catch(e2) {
-          regApp2 = firebase.initializeApp(FB_CONFIG, 'md_reg');
-        }
-        try {
-          const cred2 = await regApp2.auth().signInWithEmailAndPassword(email, pass + '_md_suffix');
-          _newAccId  = 'acc_' + cred2.user.uid.slice(0,8);
-          _newUserId = 'u_'   + cred2.user.uid.slice(0,8);
-          if (!cred2.user.emailVerified) {
-            await cred2.user.sendEmailVerification({ url: window.location.href });
-          }
-          try {
-            localStorage.setItem('md_pending', JSON.stringify({
-              email, name, pass,
-              accId: _newAccId, userId: _newUserId, uid: cred2.user.uid,
-            }));
-          } catch(e3) {}
-          show('sVerify');
-        } catch(e2) {
-          // Пароль не совпадает — аккаунт занят другим пользователем
-          showErr('Этот email уже занят. Если это ваш аккаунт — воспользуйтесь «Забыли пароль?».');
-        }
-      }
-    } else {
-      showErr(fbErr(e.code));
-    }
-    loading('bReg', false, 'Создать аккаунт →');
+    showErr(fbErr(e.code));
   }
+  loading('bReg', false, 'Создать аккаунт →');
 }
 
 // ══════════════════════════════════════════════
@@ -427,36 +379,23 @@ async function doReg() {
 async function checkVerified() {
   loading('bVerified', true);
   try {
-    let regApp;
-    try { regApp = firebase.app('md_reg'); } catch(e) {
-      loading('bVerified', false, 'Я подтвердил ✓');
-      showErr('Сессия истекла. Начните регистрацию заново.');
-      return;
-    }
-    await regApp.auth().currentUser.reload();
-    const user = regApp.auth().currentUser;
+    await auth.currentUser.reload();
+    const user = auth.currentUser;
 
     if (user && user.emailVerified) {
-      // Restore pending data
-      let pending = { email: _pendingEmail, name: _pendingName, pass: _pendingPass,
-                      accId: _newAccId, userId: _newUserId, uid: user.uid };
-      if (!pending.name) {
-        try { pending = JSON.parse(localStorage.getItem('md_pending') || '{}'); } catch(e) {}
-      }
-      if (!pending.name || !pending.accId) {
-        showErr('Данные потеряны. Начните регистрацию заново.');
-        loading('bVerified', false, 'Я подтвердил ✓');
-        return;
-      }
+      const name = _pendingName || user.displayName || user.email.split('@')[0];
+      const accId  = _newAccId  || ('acc_' + user.uid.slice(0, 8));
+      const userId = _newUserId || ('u_'   + user.uid.slice(0, 8));
 
-      // Create account in memorydeck_meta
-      await createAccount(pending);
-      try { localStorage.removeItem('md_pending'); } catch(e) {}
+      await _createMetaAccount({ uid: user.uid, email: user.email, name, accId, userId });
+
+      _newAccId  = accId;
+      _newUserId = userId;
 
       show('sPin');
       _pinBuf = ''; updateDots('pinDots', '');
     } else {
-      showErr('Email ещё не подтверждён. Проверьте почту.');
+      showErr('Email ещё не подтверждён. Проверьте почту и перейдите по ссылке.');
     }
   } catch(e) {
     showErr('Ошибка: ' + e.message);
@@ -466,100 +405,96 @@ async function checkVerified() {
 
 async function resendVerify() {
   try {
-    const regApp = firebase.app('md_reg');
-    await regApp.auth().currentUser.sendEmailVerification({ url: window.location.href });
+    await auth.currentUser.sendEmailVerification({ url: window.location.origin + '/memorydeck/memorydeck-landing.html' });
     showInfo('✅ Письмо отправлено повторно');
   } catch(e) { showErr('Ошибка: ' + e.message); }
 }
 
 // ══════════════════════════════════════════════
 //  CREATE ACCOUNT in memorydeck_meta
-//  Структура идентична существующим аккаунтам
+//  Пароль НЕ хранится — аутентификация через Firebase Auth
 // ══════════════════════════════════════════════
-async function createAccount(p) {
+async function _createMetaAccount(p) {
   const COLORS = ['#5b7ef8','#42d9a8','#ff87b2','#ffa94d','#b197fc'];
   const color  = COLORS[Math.floor(Math.random() * COLORS.length)];
 
-  // Check if already exists
+  // Идемпотентно — не перезаписываем если уже есть
   const snap = await db.ref('memorydeck_meta/' + p.accId).once('value');
-  if (snap.val()) return; // already exists
+  if (snap.val()) return;
 
   await db.ref('memorydeck_meta/' + p.accId).set({
     name:  p.name,
     color: color,
-    owner: p.uid || '',
+    owner: p.uid,
     users: {
       [p.userId]: {
-        name:     p.name,
-        email:    p.email,
-        role:     'editor',
-        uid:      p.uid || '',
-        password: p.pass,  // пароль для входа в index.html
-        color:    color,
+        name:  p.name,
+        email: p.email,
+        role:  'editor',
+        uid:   p.uid,
+        color: color,
       }
     }
   });
-
-  // Store for PIN/FaceID step
-  _newAccId  = p.accId;
-  _newUserId = p.userId;
 }
 
 // ══════════════════════════════════════════════
-//  LOGIN
-//  Проверяем email → ищем в memorydeck_meta → проверяем пароль
+//  LOGIN — через Firebase Auth
 // ══════════════════════════════════════════════
 async function doLogin() {
-  const email = document.getElementById('lEmail').value.trim().toLowerCase();
+  const email = document.getElementById('lEmail').value.trim();
   const pass  = document.getElementById('lPass').value;
   hideErr(); hideInfo();
   if (!email || !pass) { showErr('Введите email и пароль'); return; }
 
   loading('bLogin', true);
   try {
-    // Scan memorydeck_meta for user with this email
+    const cred = await auth.signInWithEmailAndPassword(email, pass);
+
+    if (!cred.user.emailVerified) {
+      await auth.signOut();
+      showErr('Email не подтверждён. Проверьте почту или зарегистрируйтесь заново.');
+      loading('bLogin', false, 'Войти');
+      return;
+    }
+
+    // Ищем accId/userId по uid в memorydeck_meta
     const snap = await db.ref('memorydeck_meta').once('value');
     const data = snap.val() || {};
-    let foundAcc = null, foundUserId = null, foundUser = null;
+    let foundAccId = null, foundUserId = null;
 
     for (const [accId, acc] of Object.entries(data)) {
       if (accId.startsWith('_') || typeof acc !== 'object' || !acc.users) continue;
       for (const [userId, u] of Object.entries(acc.users)) {
-        if (u && (u.email||'').toLowerCase() === email) {
-          foundAcc    = { accId, ...acc };
+        if (u && u.uid === cred.user.uid) {
+          foundAccId = accId;
           foundUserId = userId;
-          foundUser   = u;
           break;
         }
       }
-      if (foundUser) break;
+      if (foundAccId) break;
     }
 
-    if (!foundUser) {
-      showErr('Пользователь с таким email не найден');
-      loading('bLogin', false, 'Войти');
-      return;
+    if (!foundAccId) {
+      // Firebase Auth аккаунт есть, но memorydeck_meta записи нет — создаём
+      const name = cred.user.displayName || email.split('@')[0];
+      foundAccId  = 'acc_' + cred.user.uid.slice(0, 8);
+      foundUserId = 'u_'   + cred.user.uid.slice(0, 8);
+      await _createMetaAccount({ uid: cred.user.uid, email, name, accId: foundAccId, userId: foundUserId });
     }
 
-    // Check password
-    if (String(foundUser.password) !== String(pass)) {
-      showErr('Неверный пароль');
-      loading('bLogin', false, 'Войти');
-      return;
-    }
-
-    // Save session — same as index.html checkSession
+    // Сохраняем сессию
     const PFX = 'md3_';
     try {
-      sessionStorage.setItem('md3_a', foundAcc.accId);
+      sessionStorage.setItem('md3_a', foundAccId);
       sessionStorage.setItem('md3_u', foundUserId);
-      localStorage.setItem(PFX + foundAcc.accId + '_' + foundUserId + '_ts', String(Date.now()));
-      localStorage.setItem(PFX + foundAcc.accId + '_' + foundUserId + '_v', '3.0');
+      localStorage.setItem(PFX + foundAccId + '_' + foundUserId + '_ts', String(Date.now()));
+      localStorage.setItem(PFX + foundAccId + '_' + foundUserId + '_v', '3.0');
     } catch(e) {}
 
     goToApp();
   } catch(e) {
-    showErr('Ошибка: ' + e.message);
+    showErr(fbErr(e.code));
     loading('bLogin', false, 'Войти');
   }
 }
@@ -569,31 +504,25 @@ async function doLogin() {
 });
 
 // ══════════════════════════════════════════════
-//  FORGOT PASSWORD
+//  FORGOT PASSWORD — стандартный Firebase сброс
 // ══════════════════════════════════════════════
 async function forgotPass() {
   const email = document.getElementById('lEmail').value.trim();
   hideErr(); hideInfo();
-  if (!email) { showErr('Введите email'); return; }
+  if (!email) { showErr('Введите email в поле выше'); return; }
 
-  // 1. Ищем пользователя в memorydeck_meta
   try {
-    const snap = await db.ref('memorydeck_meta').once('value');
-    const data = snap.val() || {};
-    for (const acc of Object.values(data)) {
-      if (typeof acc !== 'object' || !acc.users) continue;
-      for (const u of Object.values(acc.users)) {
-        if (u && (u.email||'').toLowerCase() === email.toLowerCase()) {
-          // Нашли — это пользователь memorydeck, пароль задаётся вручную
-          showInfo('Пароль от приложения вы задавали при регистрации. Если забыли — обратитесь к администратору.');
-          return;
-        }
-      }
+    await auth.sendPasswordResetEmail(email, {
+      url: window.location.href
+    });
+    showInfo('✅ Письмо для сброса пароля отправлено на ' + email + '. Проверьте почту (и папку «Спам»).');
+  } catch(e) {
+    if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-email') {
+      showErr('Аккаунт с таким email не найден. Зарегистрируйтесь через вкладку «Регистрация».');
+    } else {
+      showErr(fbErr(e.code));
     }
-  } catch(e) {}
-
-  // 2. Не нашли в memorydeck_meta — аккаунта нет
-  showErr('Email не найден. Зарегистрируйтесь через вкладку «Регистрация».');
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -669,7 +598,8 @@ async function setupFaceId() {
         challenge: chal,
         rp:   { name: 'MemoryDeck', id: location.hostname || 'localhost' },
         user: { id: new TextEncoder().encode(_newAccId || 'user'),
-                name: _pendingEmail || 'user', displayName: _pendingName || 'User' },
+                name: auth.currentUser?.email || 'user',
+                displayName: auth.currentUser?.displayName || 'User' },
         pubKeyCredParams: [{ type:'public-key', alg:-7 },{ type:'public-key', alg:-257 }],
         authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required' },
         timeout: 60000,
