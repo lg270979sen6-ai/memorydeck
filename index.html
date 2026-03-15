@@ -1994,6 +1994,11 @@ const FB_CONFIG = {
 };
 const FB  = FB_CONFIG.databaseURL;
 const VER = '3.0', PFX = 'md3_';
+
+// ── Основной Firebase app — инициализируем один раз здесь ──
+let _mainApp;
+try { _mainApp = firebase.app('md_main'); }
+catch(e) { _mainApp = firebase.initializeApp(Object.assign({}, FB_CONFIG), 'md_main'); }
 const EMOJIS = ['📚','🧠','💡','🌍','🔬','📐','🎨','🎵','💪','🏛️','✈️','🍕','💻','🌿','⚽','🎭','📝','🔤','🧪','💰','🇬🇧','🇩🇪','🇯🇵','🇫🇷','🐍'];
 const COLORS = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5856d6','#30b0c7','#ff2d55','#ff6b35','#ffcc00'];
 
@@ -2541,9 +2546,7 @@ function _getMetaApp() {
 
 // Прогрев Firebase Auth — используем основной app (не анонимный)
 function _warmMetaAuth() {
-  try {
-    firebase.app().auth(); // просто инициализируем, onAuthStateChanged уже слушает
-  } catch(e) {}
+  try { _mainApp.auth(); } catch(e) {}
 }
 
 function loadAcc(cb) {
@@ -2596,11 +2599,7 @@ function loadAccById(accId, cb) {
 
 // Шаг 2: после логина — инициализируем основной Firebase app
 function initMainFirebase(accId, userId) {
-  let mainApp;
-  try { mainApp = firebase.app(); } catch(e) {
-    mainApp = firebase.initializeApp(Object.assign({}, FB_CONFIG));
-  }
-
+  const mainApp  = _mainApp;
   const mainAuth = mainApp.auth();
   const initDb = () => {
     db = mainApp.database();
@@ -2816,7 +2815,7 @@ function doLogout(){
   sess={accId:null,userId:null,ud:null,ad:null};
   decks={};cards={};cfg={newPerDay:20,maxReviews:200,firstInterval:1};studyLog={};
   // Выходим из Firebase Auth
-  try{ firebase.app().auth().signOut().catch(()=>{}); }catch(e){}
+  try{ _mainApp.auth().signOut().catch(()=>{}); }catch(e){}
   window.location.href = 'memorydeck-landing.html';
 }
 
@@ -2851,7 +2850,7 @@ function checkSession(){
 
   // Ждём Firebase Auth state (быстро — из кэша)
   let resolved = false;
-  const unsubscribe = firebase.app().auth().onAuthStateChanged(user => {
+  const unsubscribe = _mainApp.auth().onAuthStateChanged(user => {
     if(resolved) return;
     resolved = true;
     unsubscribe();
