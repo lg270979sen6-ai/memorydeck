@@ -1997,8 +1997,8 @@ const VER = '3.0', PFX = 'md3_';
 
 // ── Основной Firebase app — инициализируем один раз здесь ──
 let _mainApp;
-try { _mainApp = firebase.app('md_app'); }
-catch(e) { _mainApp = firebase.initializeApp(Object.assign({}, FB_CONFIG), 'md_app'); }
+try { _mainApp = firebase.app('md_app'); console.log('[MD] md_app: reused'); }
+catch(e) { _mainApp = firebase.initializeApp(Object.assign({}, FB_CONFIG), 'md_app'); console.log('[MD] md_app: created'); }
 const EMOJIS = ['📚','🧠','💡','🌍','🔬','📐','🎨','🎵','💪','🏛️','✈️','🍕','💻','🌿','⚽','🎭','📝','🔤','🧪','💰','🇬🇧','🇩🇪','🇯🇵','🇫🇷','🐍'];
 const COLORS = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5856d6','#30b0c7','#ff2d55','#ff6b35','#ffcc00'];
 
@@ -2532,17 +2532,13 @@ function openStudySett() {
 // Шаг 1: читаем аккаунты через временный Firebase app
 // (анонимная авторизация нужна для Firebase Rules)
 // ── md_meta Firebase app — инициализируется один раз ──
-let _metaApp = null;
-let _metaDb  = null;
-let _metaAuthReady = false;
+// ── md_meta app — инициализируется сразу ──
+let _metaApp, _metaDb;
+try { _metaApp = firebase.app('md_meta'); console.log('[MD] md_meta: reused'); }
+catch(e) { _metaApp = firebase.initializeApp(Object.assign({}, FB_CONFIG), 'md_meta'); console.log('[MD] md_meta: created'); }
+_metaDb = _metaApp.database();
 
-function _getMetaApp() {
-  if (_metaApp) return _metaApp;
-  try { _metaApp = firebase.app('md_meta'); }
-  catch(e) { _metaApp = firebase.initializeApp(Object.assign({}, FB_CONFIG), 'md_meta'); }
-  _metaDb = _metaApp.database();
-  return _metaApp;
-}
+function _getMetaApp() { return _metaApp; }
 
 // Прогрев Firebase Auth — используем основной app (не анонимный)
 function _warmMetaAuth() {
@@ -2599,9 +2595,11 @@ function loadAccById(accId, cb) {
 
 // Шаг 2: после логина — инициализируем основной Firebase app
 function initMainFirebase(accId, userId) {
+  console.log('[MD] initMainFirebase:', accId, userId);
   const mainApp  = _mainApp;
   const mainAuth = mainApp.auth();
   const initDb = () => {
+    console.log('[MD] initDb: connecting to Firebase Realtime DB');
     db = mainApp.database();
     db.ref('.info/connected').on('value', s => {
       const on = !!s.val();
@@ -2712,6 +2710,7 @@ function initMainFirebase(accId, userId) {
 }
 
 function startApp(accId, userId, ad, ud) {
+  console.log('[MD] startApp:', accId, userId, 'name=', ud?.name);
   sess = {accId, userId, ud, ad};
   try{ sessionStorage.setItem('md3_a', accId); sessionStorage.setItem('md3_u', userId); }catch(e){}
   try{ localStorage.setItem(PFX+accId+'_'+userId+'_ts', String(Date.now())); }catch(e){}
@@ -2820,7 +2819,10 @@ function doLogout(){
 }
 
 function checkSession(){
+  console.log('[MD] checkSession: start');
   document.getElementById('lockScreen').style.display='flex';
+
+  console.log('[MD] _mainApp:', _mainApp?.name, '| _metaDb:', !!_metaDb);
 
   let resolved = false;
 
@@ -2829,15 +2831,20 @@ function checkSession(){
     resolved = true;
     unsubscribe();
 
+    console.log('[MD] onAuthStateChanged: user=', user?.email, '| emailVerified=', user?.emailVerified, '| uid=', user?.uid);
+
     if(!user || !user.emailVerified){
-      // Не залогинен — на лендинг
+      console.log('[MD] → no valid user, redirect to landing');
       window.location.href = 'memorydeck-landing.html';
       return;
     }
 
-    // Залогинен — ищем аккаунт по uid в memorydeck_meta
+    console.log('[MD] → user ok, searching memorydeck_meta by uid:', user.uid);
+
     _metaDb.ref('memorydeck_meta').once('value').then(snap => {
       const data = snap.val() || {};
+      console.log('[MD] memorydeck_meta keys:', Object.keys(data));
+
       let foundAccId = null, foundUserId = null, foundAd = null, foundUd = null;
 
       for(const [accId, acc] of Object.entries(data)){
@@ -2848,6 +2855,7 @@ function checkSession(){
             foundUserId = userId;
             foundAd     = { name: acc.name||accId, color: acc.color||COLORS[0], users: acc.users };
             foundUd     = u;
+            console.log('[MD] → found! accId=', accId, 'userId=', userId, 'name=', u.name);
             break;
           }
         }
@@ -2855,12 +2863,11 @@ function checkSession(){
       }
 
       if(!foundAccId){
-        // uid не найден в memorydeck_meta — на лендинг
+        console.warn('[MD] → uid not found in memorydeck_meta, redirect to landing');
         window.location.href = 'memorydeck-landing.html';
         return;
       }
 
-      // Обновляем локальную сессию
       try{
         sessionStorage.setItem('md3_a', foundAccId);
         sessionStorage.setItem('md3_u', foundUserId);
@@ -2868,16 +2875,18 @@ function checkSession(){
         localStorage.setItem(PFX+foundAccId+'_'+foundUserId+'_v', VER);
       }catch(e){}
 
+      console.log('[MD] → startApp:', foundAccId, foundUserId);
       startApp(foundAccId, foundUserId, foundAd, foundUd);
-    }).catch(()=>{
+    }).catch(err=>{
+      console.error('[MD] memorydeck_meta read error:', err.message);
       window.location.href = 'memorydeck-landing.html';
     });
   });
 
-  // Таймаут 5 сек — если Firebase совсем не отвечает
   setTimeout(()=>{
     if(!resolved){
       resolved = true;
+      console.warn('[MD] checkSession timeout — redirect to landing');
       window.location.href = 'memorydeck-landing.html';
     }
   }, 5000);
