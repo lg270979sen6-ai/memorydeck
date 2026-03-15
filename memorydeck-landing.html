@@ -231,9 +231,8 @@ const FB_CONFIG = {
 
 // ── Firebase — один app, полноценная auth ──
 let app, auth, db;
-try { app = firebase.app('md_app'); } catch(e) {
-  app = firebase.initializeApp(FB_CONFIG, 'md_app');
-}
+try { app = firebase.app(); console.log('[MD landing] DEFAULT app: reused'); }
+catch(e) { app = firebase.initializeApp(FB_CONFIG); console.log('[MD landing] DEFAULT app: created'); }
 auth = app.auth();
 db   = app.database();
 
