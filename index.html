@@ -5196,7 +5196,15 @@ function doImport(){
   _csvRows.forEach(row => {
     const vals = {};
     mapping.forEach((fieldId, ci) => {
-      if(fieldId !== '__ignore__') vals[fieldId] = (row[ci]||'').trim();
+      if(fieldId !== '__ignore__') {
+        let val = (row[ci]||'').trim();
+        // Очищаем [sound:filename.mp3] → filename.mp3
+        if(fieldId === 'sound' || fieldId === 'sound_example') {
+          const m = val.match(/^\[sound:([^\]]+)\]$/);
+          if(m) val = m[1];
+        }
+        vals[fieldId] = val;
+      }
     });
     if(!vals.word && !vals.translation) return; // пустая строка
 
