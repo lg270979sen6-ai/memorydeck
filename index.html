@@ -2787,13 +2787,7 @@ function doLogout(){
   if(fbRef){try{fbRef.off();}catch(e){}fbRef=null;}
   sess={accId:null,userId:null,ud:null,ad:null};
   decks={};cards={};cfg={newPerDay:20,maxReviews:200,firstInterval:1};studyLog={};
-  document.getElementById('app').style.display='none';
-  const ls=document.getElementById('lockScreen');
-  ls.style.display='flex'; ls.style.opacity='0';
-  requestAnimationFrame(()=>{ls.style.transition='opacity .3s';ls.style.opacity='1';});
-  setTimeout(()=>{ls.style.transition='';},350);
-  goPan(1);
-  loadAcc(renderLockAcc);
+  window.location.href = 'memorydeck-landing.html';
 }
 
 function checkSession(){
