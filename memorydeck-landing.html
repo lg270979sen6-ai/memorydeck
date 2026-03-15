@@ -492,7 +492,7 @@ async function doLogin() {
     }
 
     // Check password
-    if (foundUser.password !== pass) {
+    if (String(foundUser.password) !== String(pass)) {
       showErr('Неверный пароль');
       loading('bLogin', false, 'Войти');
       return;
