@@ -54,7 +54,7 @@ body{display:flex;align-items:center;justify-content:center;padding:20px;overflo
 .pw{position:relative;margin-bottom:13px;}
 .pw .inp{margin-bottom:0;}
 .eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;padding:4px;}
-.fg{display:block;text-align:right;font-size:12px;color:var(--text3);cursor:pointer;margin-bottom:14px;transition:color .2s;}
+.fg{display:block;text-align:right;font-size:12px;color:var(--text2);cursor:pointer;margin-bottom:14px;transition:color .2s;text-decoration:underline;text-underline-offset:2px;}
 .fg:hover{color:var(--blue);}
 
 .btn{width:100%;padding:13px;border-radius:11px;border:none;background:var(--grad);color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 20px rgba(91,126,248,.3);transition:all .2s;}
@@ -363,7 +363,17 @@ async function doReg() {
   } catch(e) {
     // If email already registered in Firebase Auth — check if they have memorydeck account
     if (e.code === 'auth/email-already-in-use') {
-      showErr('Email уже зарегистрирован. Войдите через вкладку «Войти».');
+      // Email exists in Firebase Auth — offer password reset
+      try {
+        let regApp2;
+        try { regApp2 = firebase.app('md_reg'); } catch(e2) {
+          regApp2 = firebase.initializeApp(FB_CONFIG, 'md_reg');
+        }
+        await regApp2.auth().sendPasswordResetEmail(email + '_md_suffix'.replace('_md_suffix',''), {
+          url: window.location.href
+        }).catch(()=>{});
+      } catch(e2) {}
+      showErr('Этот email уже зарегистрирован. Перейдите на вкладку «Войти» или воспользуйтесь ссылкой «Забыли пароль?» для сброса.');
     } else {
       showErr(fbErr(e.code));
     }
@@ -526,7 +536,7 @@ async function forgotPass() {
   hideErr(); hideInfo();
   if (!email) { showErr('Введите email'); return; }
 
-  // Find user in memorydeck_meta and show their password hint
+  // 1. Ищем пользователя в memorydeck_meta
   try {
     const snap = await db.ref('memorydeck_meta').once('value');
     const data = snap.val() || {};
@@ -534,14 +544,29 @@ async function forgotPass() {
       if (typeof acc !== 'object' || !acc.users) continue;
       for (const u of Object.values(acc.users)) {
         if (u && (u.email||'').toLowerCase() === email.toLowerCase()) {
+          // Нашли — это пользователь memorydeck, пароль задаётся вручную
           showInfo('Пароль от приложения вы задавали при регистрации. Если забыли — обратитесь к администратору.');
           return;
         }
       }
     }
-    showErr('Email не найден');
+  } catch(e) {}
+
+  // 2. Не нашли в memorydeck_meta — пробуем сбросить пароль Firebase Auth
+  // (такой аккаунт мог остаться от незавершённой регистрации)
+  try {
+    let resetApp;
+    try { resetApp = firebase.app('md_reg'); } catch(e) {
+      resetApp = firebase.initializeApp(FB_CONFIG, 'md_reg');
+    }
+    await resetApp.auth().sendPasswordResetEmail(email, { url: window.location.href });
+    showInfo('Письмо для сброса пароля отправлено на ' + email + '. Проверьте почту.');
   } catch(e) {
-    showErr('Ошибка: ' + e.message);
+    if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-email') {
+      showErr('Email не найден. Зарегистрируйтесь через вкладку «Регистрация».');
+    } else {
+      showErr('Ошибка: ' + e.message);
+    }
   }
 }
 
