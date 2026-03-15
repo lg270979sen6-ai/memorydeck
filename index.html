@@ -1913,14 +1913,54 @@ body {
 
 <!-- IMPORT/EXPORT -->
 <div class="sheet-bg" id="importSh">
-  <div class="sheet">
+  <div class="sheet" style="max-height:92vh;overflow-y:auto;padding-bottom:calc(var(--safe-b,0px)+20px);">
     <div class="sheet-grip"></div>
-    <div class="sheet-title">Импорт / Экспорт</div>
-    <div class="sheet-sub">CSV: вопрос;ответ;название колоды</div>
-    <div class="field"><label>Файл для импорта</label><input id="csvFile" type="file" accept=".csv,.txt"></div>
-    <div class="sheet-btns">
-      <button class="sbtn sbtn-cancel" onclick="doExport()" style="background:var(--bg2);color:var(--ink2);">Экспорт ↓</button>
-      <button class="sbtn sbtn-ok" onclick="doImport()">Импорт CSV ↑</button>
+
+    <!-- Шаг 1: выбор файла -->
+    <div id="importStep1">
+      <div class="sheet-title">Импорт CSV</div>
+      <div class="sheet-sub">Поддерживаются разделители: точка с запятой, таб, запятая</div>
+      <div class="field">
+        <label>Файл (.csv, .txt)</label>
+        <input id="csvFile" type="file" accept=".csv,.txt,.tsv" onchange="csvPreview(this)">
+      </div>
+      <div id="csvPreviewBox" style="display:none;">
+        <!-- Предпросмотр -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <div style="font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;">Предпросмотр</div>
+          <div style="font-size:12px;color:var(--ink3);">Разделитель: <b id="csvDetectedSep"></b> · <span id="csvRowCount"></span> строк</div>
+        </div>
+        <div style="overflow-x:auto;border-radius:10px;border:.5px solid var(--border);margin-bottom:16px;">
+          <table id="csvPreviewTable" style="width:100%;border-collapse:collapse;font-size:12px;"></table>
+        </div>
+
+        <!-- Сопоставление полей -->
+        <div style="font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px;">Сопоставление полей</div>
+        <div id="csvFieldMap" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;"></div>
+
+        <!-- Колода -->
+        <div style="font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px;">Импортировать в колоду</div>
+        <div style="display:flex;gap:8px;margin-bottom:16px;">
+          <select id="csvDeckSelect" style="flex:1;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border2);background:var(--card);font-family:var(--font);font-size:14px;font-weight:600;color:var(--ink);outline:none;">
+            <option value="__new__">＋ Создать новую колоду</option>
+          </select>
+        </div>
+        <div id="csvNewDeckRow" style="display:flex;gap:8px;margin-bottom:16px;">
+          <input id="csvNewDeckName" placeholder="Название новой колоды" style="flex:1;padding:10px 12px;border-radius:10px;border:1.5px solid var(--border2);background:var(--card);font-family:var(--font);font-size:14px;font-weight:600;color:var(--ink);outline:none;">
+        </div>
+
+        <div style="display:flex;gap:8px;">
+          <button class="sbtn sbtn-cancel" onclick="closeSh('importSh')" style="flex:1;">Отмена</button>
+          <button class="sbtn sbtn-ok" onclick="doImport()" style="flex:2;">Импортировать ↑</button>
+        </div>
+      </div>
+
+      <div id="csvNoFile" style="margin-bottom:16px;">
+        <div style="display:flex;gap:8px;">
+          <button class="sbtn sbtn-cancel" onclick="doExport()" style="background:var(--bg2);color:var(--ink2);flex:1;">Экспорт ↓</button>
+          <button class="sbtn sbtn-cancel" onclick="closeSh('importSh')" style="flex:1;">Закрыть</button>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -4899,29 +4939,186 @@ function saveStudySett(){
   // algo is already set in cfg by pickAlgo()
   save('cfg', cfg); toast('✅ Сохранено'); closeSh('studySh'); renderAll();
 }
-function openImportEx(){openSh('importSh');}
-function doImport(){
-  const f=document.getElementById('csvFile').files[0];
-  if(!f){toast('❌ Выберите файл');return;}
-  const r=new FileReader();
-  r.onload=e=>{
-    const lines=e.target.result.split('\n').filter(l=>l.trim());
-    let count=0; const updates={};
-    lines.forEach(line=>{
-      const p=line.split(';');
-      if(p.length<2)return;
-      const front=p[0].trim(),back=p[1].trim();
-      if(!front||!back)return;
-      const dn=p[2]?.trim()||'Импорт';
-      let did=Object.entries(decks).find(([,d])=>d.name===dn)?.[0];
-      if(!did){did='deck_imp_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);updates['decks/'+did]={name:dn,emoji:'📥',color:COLORS[0],createdAt:Date.now()};}
-      const cid='card_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-      updates['cards/'+cid]={front,back,deckId:did,tags:[],sm2:null,createdAt:Date.now()};
-      count++;
-    });
-    db.ref('memorydeck/'+sess.accId+'/users/'+sess.userId).update(updates).then(()=>{toast(`✅ Импортировано ${count}`);closeSh('importSh');});
+// ═══════════════════════════════════════════════════
+//  ИМПОРТ CSV — Anki-style с предпросмотром
+// ═══════════════════════════════════════════════════
+let _csvRows = [];
+let _csvSep = ';';
+
+const CSV_FIELDS = [
+  { id:'word',         label:'Word / Вопрос' },
+  { id:'example',      label:'Example / Пример' },
+  { id:'translation',  label:'Translation / Перевод' },
+  { id:'sound',        label:'Sound / Аудио' },
+  { id:'ipa',          label:'IPA / Транскрипция' },
+  { id:'meaning',      label:'Meaning / Значение' },
+  { id:'image',        label:'Image / Картинка' },
+  { id:'__ignore__',   label:'— Игнорировать —' },
+];
+
+function openImportEx(){
+  _csvRows = [];
+  document.getElementById('csvPreviewBox').style.display = 'none';
+  document.getElementById('csvNoFile').style.display = '';
+  const fi = document.getElementById('csvFile');
+  if(fi) fi.value = '';
+  openSh('importSh');
+}
+
+function csvDetectSep(text) {
+  const sample = text.split('\n').slice(0,5).join('\n');
+  const counts = {
+    '\t': (sample.match(/\t/g)||[]).length,
+    ';':   (sample.match(/;/g)||[]).length,
+    ',':   (sample.match(/,(?=(?:[^"]*"[^"]*")*[^"]*$)/g)||[]).length,
   };
-  r.readAsText(f,'UTF-8');
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1])[0][0];
+}
+
+function csvParseLine(line, sep) {
+  if(sep === '\t') return line.split('\t').map(s=>s.trim());
+  const result = [];
+  let cur = '', inQ = false;
+  for(let i=0; i<line.length; i++){
+    const c = line[i];
+    if(c==='"'){ inQ=!inQ; continue; }
+    if(c===sep && !inQ){ result.push(cur.trim()); cur=''; continue; }
+    cur += c;
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function csvPreview(input) {
+  const f = input.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const text = e.target.result;
+    _csvSep = csvDetectSep(text);
+    const sepLabels = {'\t':'Таб', ';':'Точка с запятой', ',':'Запятая'};
+    document.getElementById('csvDetectedSep').textContent = sepLabels[_csvSep] || _csvSep;
+
+    const lines = text.split('\n').filter(l=>l.trim());
+    _csvRows = lines.map(l => csvParseLine(l, _csvSep));
+
+    const colCount = Math.max(..._csvRows.map(r=>r.length));
+    document.getElementById('csvRowCount').textContent = _csvRows.length;
+
+    // Предпросмотр — первые 5 строк
+    const preview = _csvRows.slice(0,5);
+    let th = '<tr style="background:var(--bg2);">';
+    for(let c=0; c<colCount; c++) th += `<th style="padding:6px 10px;font-size:11px;font-weight:700;color:var(--ink3);text-align:left;border-bottom:.5px solid var(--border);">${c+1}</th>`;
+    th += '</tr>';
+    let tbody = preview.map(row => {
+      let td = '<tr style="border-bottom:.5px solid var(--border);">';
+      for(let c=0; c<colCount; c++){
+        const val = (row[c]||'').slice(0,40);
+        td += `<td style="padding:6px 10px;font-size:12px;color:var(--ink2);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${val}</td>`;
+      }
+      return td + '</tr>';
+    }).join('');
+    document.getElementById('csvPreviewTable').innerHTML = th + tbody;
+
+    // Сопоставление полей
+    const fieldOpts = CSV_FIELDS.map(f =>
+      `<option value="${f.id}">${f.label}</option>`
+    ).join('');
+
+    // Автоматическое угадывание по позиции
+    const autoMap = ['word','example','translation','sound','ipa'];
+    let mapHtml = '';
+    for(let c=0; c<colCount; c++){
+      const defaultVal = autoMap[c] || '__ignore__';
+      mapHtml += `
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-size:12px;font-weight:700;color:var(--ink3);min-width:60px;">Колонка ${c+1}</div>
+          <div style="flex:1;font-size:12px;color:var(--ink4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:120px;">${(_csvRows[0]?.[c]||'').slice(0,30)}</div>
+          <select id="csvMap_${c}" style="padding:7px 10px;border-radius:9px;border:1.5px solid var(--border2);background:var(--card);font-family:var(--font);font-size:13px;color:var(--ink);outline:none;">
+            ${fieldOpts}
+          </select>
+        </div>`;
+      // Set default after render
+    }
+    document.getElementById('csvFieldMap').innerHTML = mapHtml;
+    // Set defaults
+    for(let c=0; c<colCount; c++){
+      const sel = document.getElementById('csvMap_'+c);
+      if(sel) sel.value = autoMap[c] || '__ignore__';
+    }
+
+    // Колоды
+    const deckOpts = Object.entries(decks).map(([id,d])=>
+      `<option value="${id}">${d.emoji||'📚'} ${d.name}</option>`
+    ).join('');
+    document.getElementById('csvDeckSelect').innerHTML =
+      '<option value="__new__">＋ Создать новую колоду</option>' + deckOpts;
+    document.getElementById('csvDeckSelect').onchange = function(){
+      document.getElementById('csvNewDeckRow').style.display =
+        this.value === '__new__' ? '' : 'none';
+    };
+
+    document.getElementById('csvPreviewBox').style.display = '';
+    document.getElementById('csvNoFile').style.display = 'none';
+  };
+  reader.readAsText(f, 'UTF-8');
+}
+
+function doImport(){
+  if(!_csvRows.length){ toast('❌ Выберите файл'); return; }
+
+  // Определяем колоду
+  const deckSel = document.getElementById('csvDeckSelect').value;
+  let deckId = deckSel;
+  const updates = {};
+
+  if(deckSel === '__new__'){
+    const name = (document.getElementById('csvNewDeckName').value||'').trim() || 'Импорт '+today();
+    deckId = 'deck_imp_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+    updates['decks/'+deckId] = {name, emoji:'📥', color:COLORS[0], createdAt:Date.now()};
+  }
+
+  // Читаем маппинг
+  const colCount = Math.max(..._csvRows.map(r=>r.length));
+  const mapping = [];
+  for(let c=0; c<colCount; c++){
+    const sel = document.getElementById('csvMap_'+c);
+    mapping.push(sel ? sel.value : '__ignore__');
+  }
+
+  let count = 0;
+  _csvRows.forEach(row => {
+    const vals = {};
+    mapping.forEach((fieldId, ci) => {
+      if(fieldId !== '__ignore__') vals[fieldId] = (row[ci]||'').trim();
+    });
+    if(!vals.word && !vals.translation) return; // пустая строка
+
+    // Собираем front/back из полей
+    const frontParts = [], backParts = [];
+    if(vals.word)        frontParts.push(`<div class="anki-word">${vals.word}</div>`);
+    if(vals.ipa)         frontParts.push(`<div class="anki-ipa">[${vals.ipa}]</div>`);
+    if(vals.sound)       frontParts.push(`[sound:${vals.sound}]`);
+    if(vals.example)     frontParts.push(`<div class="anki-example">${vals.example}</div>`);
+
+    if(vals.word)        backParts.push(`<div class="anki-word">${vals.word}</div>`);
+    if(vals.image)       backParts.push(`<div class="anki-img">[img:${vals.image}]</div>`);
+    if(vals.translation) backParts.push(`<div class="anki-translation">${vals.translation}</div>`);
+    if(vals.meaning)     backParts.push(`<div class="anki-meaning">📖 ${vals.meaning}</div>`);
+    if(vals.example)     backParts.push(`<div class="anki-example">${vals.example}</div>`);
+
+    const front = frontParts.join('\n') || vals.word || '';
+    const back  = backParts.join('\n')  || vals.translation || '';
+    if(!front && !back) return;
+
+    const cid = 'card_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+    updates['cards/'+cid] = {front, back, deckId, tags:[], sm2:null, createdAt:Date.now()};
+    count++;
+  });
+
+  db.ref('memorydeck/'+sess.accId+'/users/'+sess.userId).update(updates)
+    .then(()=>{ toast('✅ Импортировано '+count+' карточек'); closeSh('importSh'); })
+    .catch(e=>toast('❌ '+e.message));
 }
 function doExport(){
   const rows=['Вопрос;Ответ;Колода;Прогресс'];
