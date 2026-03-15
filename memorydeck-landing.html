@@ -361,19 +361,59 @@ async function doReg() {
     show('sVerify');
     loading('bReg', false, 'Создать аккаунт →');
   } catch(e) {
-    // If email already registered in Firebase Auth — check if they have memorydeck account
+    // If email already registered in Firebase Auth
     if (e.code === 'auth/email-already-in-use') {
-      // Email exists in Firebase Auth — offer password reset
+      // Check if this email has a real account in memorydeck_meta
+      let hasRealAccount = false;
       try {
+        const metaSnap = await db.ref('memorydeck_meta').once('value');
+        const metaData = metaSnap.val() || {};
+        for (const acc of Object.values(metaData)) {
+          if (typeof acc !== 'object' || !acc.users) continue;
+          for (const u of Object.values(acc.users)) {
+            if (u && (u.email||'').toLowerCase() === email.toLowerCase()) {
+              hasRealAccount = true; break;
+            }
+          }
+          if (hasRealAccount) break;
+        }
+      } catch(e2) {}
+
+      if (hasRealAccount) {
+        // Настоящий аккаунт — предлагаем войти
+        showErr('Этот email уже зарегистрирован. Перейдите на вкладку «Войти».');
+      } else {
+        // "Призрак" — Firebase Auth запись без аккаунта memorydeck.
+        // Показываем экран верификации — пусть подтвердит email и завершит регистрацию.
+        document.getElementById('verifyText').textContent =
+          'Письмо отправлено на ' + email + '. Перейдите по ссылке в письме, затем нажмите «Я подтвердил».';
+        _pendingEmail = email;
+        _pendingName  = name;
+        _pendingPass  = pass;
+        // Пробуем войти с тем же паролем чтобы получить user object
         let regApp2;
         try { regApp2 = firebase.app('md_reg'); } catch(e2) {
           regApp2 = firebase.initializeApp(FB_CONFIG, 'md_reg');
         }
-        await regApp2.auth().sendPasswordResetEmail(email + '_md_suffix'.replace('_md_suffix',''), {
-          url: window.location.href
-        }).catch(()=>{});
-      } catch(e2) {}
-      showErr('Этот email уже зарегистрирован. Перейдите на вкладку «Войти» или воспользуйтесь ссылкой «Забыли пароль?» для сброса.');
+        try {
+          const cred2 = await regApp2.auth().signInWithEmailAndPassword(email, pass + '_md_suffix');
+          _newAccId  = 'acc_' + cred2.user.uid.slice(0,8);
+          _newUserId = 'u_'   + cred2.user.uid.slice(0,8);
+          if (!cred2.user.emailVerified) {
+            await cred2.user.sendEmailVerification({ url: window.location.href });
+          }
+          try {
+            localStorage.setItem('md_pending', JSON.stringify({
+              email, name, pass,
+              accId: _newAccId, userId: _newUserId, uid: cred2.user.uid,
+            }));
+          } catch(e3) {}
+          show('sVerify');
+        } catch(e2) {
+          // Пароль не совпадает — аккаунт занят другим пользователем
+          showErr('Этот email уже занят. Если это ваш аккаунт — воспользуйтесь «Забыли пароль?».');
+        }
+      }
     } else {
       showErr(fbErr(e.code));
     }
@@ -552,22 +592,8 @@ async function forgotPass() {
     }
   } catch(e) {}
 
-  // 2. Не нашли в memorydeck_meta — пробуем сбросить пароль Firebase Auth
-  // (такой аккаунт мог остаться от незавершённой регистрации)
-  try {
-    let resetApp;
-    try { resetApp = firebase.app('md_reg'); } catch(e) {
-      resetApp = firebase.initializeApp(FB_CONFIG, 'md_reg');
-    }
-    await resetApp.auth().sendPasswordResetEmail(email, { url: window.location.href });
-    showInfo('Письмо для сброса пароля отправлено на ' + email + '. Проверьте почту.');
-  } catch(e) {
-    if (e.code === 'auth/user-not-found' || e.code === 'auth/invalid-email') {
-      showErr('Email не найден. Зарегистрируйтесь через вкладку «Регистрация».');
-    } else {
-      showErr('Ошибка: ' + e.message);
-    }
-  }
+  // 2. Не нашли в memorydeck_meta — аккаунта нет
+  showErr('Email не найден. Зарегистрируйтесь через вкладку «Регистрация».');
 }
 
 // ══════════════════════════════════════════════
