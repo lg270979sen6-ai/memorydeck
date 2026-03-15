@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <title>MemoryDeck — Вход</title>
 <link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Sans:wght@400;500;600&display=swap" rel="stylesheet">
@@ -11,83 +12,75 @@
 <script src="https://www.gstatic.com/firebasejs/9.22.2/firebase-database-compat.js"></script>
 <style>
 :root{
-  --bg:#07090f; --s1:#0d1018; --s2:#131720; --s3:#1a2030;
-  --border:rgba(255,255,255,0.07); --border2:rgba(255,255,255,0.13);
-  --text:#eef2ff; --text2:#8899cc; --text3:#445066;
-  --blue:#5b7ef8; --green:#42d9a8; --red:#ff5f5f;
+  --bg:#07090f;--s1:#0d1018;--s2:#131720;--s3:#1a2030;
+  --border:rgba(255,255,255,0.07);--border2:rgba(255,255,255,0.13);
+  --text:#eef2ff;--text2:#8899cc;--text3:#445066;
+  --blue:#5b7ef8;--green:#42d9a8;--red:#ff5f5f;
   --grad:linear-gradient(135deg,#5b7ef8,#42d9a8);
 }
 *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
 html,body{min-height:100%;background:var(--bg);font-family:'DM Sans',sans-serif;color:var(--text);}
-body{display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;}
+body{display:flex;align-items:center;justify-content:center;padding:20px;overflow-y:auto;min-height:100vh;}
 
-/* BG */
 .bg{position:fixed;inset:0;z-index:0;overflow:hidden;pointer-events:none;}
 .orb{position:absolute;border-radius:50%;filter:blur(90px);opacity:.1;}
-.orb1{width:600px;height:600px;background:#5b7ef8;top:-150px;left:-150px;animation:of 9s ease-in-out infinite;}
-.orb2{width:450px;height:450px;background:#42d9a8;bottom:-100px;right:-100px;animation:of 7s ease-in-out infinite reverse;}
+.orb1{width:500px;height:500px;background:#5b7ef8;top:-150px;left:-150px;animation:of 9s ease-in-out infinite;}
+.orb2{width:400px;height:400px;background:#42d9a8;bottom:-100px;right:-100px;animation:of 7s ease-in-out infinite reverse;}
 .grid{position:absolute;inset:0;background-image:linear-gradient(rgba(91,126,248,.03) 1px,transparent 1px),linear-gradient(90deg,rgba(91,126,248,.03) 1px,transparent 1px);background-size:52px 52px;}
 @keyframes of{0%,100%{transform:translate(0,0);}50%{transform:translate(20px,-15px);}}
 
-/* CARD */
 .wrap{position:relative;z-index:1;width:100%;max-width:400px;}
 .card{background:rgba(13,16,24,.92);border:1px solid var(--border2);border-radius:22px;padding:32px 28px 28px;backdrop-filter:blur(20px);box-shadow:0 40px 80px rgba(0,0,0,.6);}
+
 .logo{display:flex;align-items:center;gap:10px;margin-bottom:26px;}
 .logo-icon{width:34px;height:34px;border-radius:10px;background:var(--grad);display:flex;align-items:center;justify-content:center;font-size:17px;}
 .logo-text{font-family:'Syne',sans-serif;font-weight:800;font-size:18px;background:var(--grad);-webkit-background-clip:text;-webkit-text-fill-color:transparent;}
 .logo-badge{margin-left:auto;font-size:9px;font-weight:600;color:var(--text3);border:1px solid var(--border2);border-radius:20px;padding:2px 8px;letter-spacing:.06em;text-transform:uppercase;-webkit-text-fill-color:var(--text3);}
 
-/* SCREENS */
 .screen{display:none;}
 .screen.on{display:block;animation:fi .3s ease both;}
 @keyframes fi{from{opacity:0;transform:translateX(6px);}to{opacity:1;transform:none;}}
 
-/* TABS */
 .tabs{display:flex;gap:3px;background:var(--s2);border-radius:12px;padding:4px;margin-bottom:22px;}
 .tab{flex:1;padding:8px;border-radius:9px;border:none;font-family:'DM Sans',sans-serif;font-size:13px;font-weight:600;cursor:pointer;color:var(--text2);background:none;transition:all .2s;}
 .tab.on{background:var(--s3);color:var(--text);}
 
-/* FORM */
 .title{font-family:'Syne',sans-serif;font-weight:700;font-size:19px;margin-bottom:4px;}
 .sub{font-size:13px;color:var(--text2);margin-bottom:20px;line-height:1.5;}
-.label{display:block;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:6px;}
-.inp{width:100%;padding:12px 14px;background:var(--s2);border:1.5px solid var(--border);border-radius:12px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:all .2s;margin-bottom:14px;}
+.lbl{display:block;font-size:11px;font-weight:600;color:var(--text3);letter-spacing:.07em;text-transform:uppercase;margin-bottom:5px;}
+.inp{width:100%;padding:12px 14px;background:var(--s2);border:1.5px solid var(--border);border-radius:11px;color:var(--text);font-family:'DM Sans',sans-serif;font-size:14px;outline:none;transition:all .2s;margin-bottom:13px;}
 .inp:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(91,126,248,.1);}
 .inp::placeholder{color:var(--text3);}
-.pw{position:relative;}
+.pw{position:relative;margin-bottom:13px;}
 .pw .inp{margin-bottom:0;}
-.eye{position:absolute;right:13px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;padding:4px;}
-.fg{display:block;text-align:right;font-size:12px;color:var(--text3);cursor:pointer;margin:6px 0 14px;transition:color .2s;}
+.eye{position:absolute;right:12px;top:50%;transform:translateY(-50%);background:none;border:none;cursor:pointer;color:var(--text3);font-size:15px;padding:4px;}
+.fg{display:block;text-align:right;font-size:12px;color:var(--text3);cursor:pointer;margin-bottom:14px;transition:color .2s;}
 .fg:hover{color:var(--blue);}
-.btn{width:100%;padding:13px;border-radius:12px;border:none;background:var(--grad);color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 20px rgba(91,126,248,.3);transition:all .2s;}
+
+.btn{width:100%;padding:13px;border-radius:11px;border:none;background:var(--grad);color:#fff;font-family:'DM Sans',sans-serif;font-size:15px;font-weight:600;cursor:pointer;box-shadow:0 4px 20px rgba(91,126,248,.3);transition:all .2s;}
 .btn:hover{transform:translateY(-1px);opacity:.95;}
 .btn:disabled{opacity:.5;cursor:not-allowed;transform:none;}
-.btn2{width:100%;padding:11px;border-radius:12px;background:none;border:1.5px solid var(--border2);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;margin-top:8px;}
+.btn2{width:100%;padding:11px;border-radius:11px;background:none;border:1.5px solid var(--border2);color:var(--text2);font-family:'DM Sans',sans-serif;font-size:13px;font-weight:500;cursor:pointer;transition:all .2s;margin-top:8px;}
 .btn2:hover{border-color:var(--blue);color:var(--text);}
-.ghost{background:none;border:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text3);cursor:pointer;transition:color .2s;padding:4px;}
+.ghost{background:none;border:none;font-family:'DM Sans',sans-serif;font-size:13px;color:var(--text3);cursor:pointer;padding:4px;transition:color .2s;}
 .ghost:hover{color:var(--blue);}
 .sp{display:inline-block;width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;vertical-align:middle;margin-right:6px;}
 @keyframes spin{to{transform:rotate(360deg);}}
+
 .err{background:rgba(255,95,95,.08);border:1px solid rgba(255,95,95,.2);border-radius:10px;padding:10px 13px;font-size:13px;color:var(--red);margin-bottom:13px;display:none;line-height:1.4;}
 .info{background:rgba(66,217,168,.08);border:1px solid rgba(66,217,168,.2);border-radius:10px;padding:10px 13px;font-size:13px;color:var(--green);margin-bottom:13px;display:none;line-height:1.5;}
-.divider{display:flex;align-items:center;gap:10px;margin:16px 0;color:var(--text3);font-size:12px;}
-.divider::before,.divider::after{content:'';flex:1;height:1px;background:var(--border);}
 
-/* VERIFY */
 .big{font-size:50px;text-align:center;margin-bottom:14px;animation:bn .7s ease infinite alternate;}
 @keyframes bn{from{transform:translateY(0);}to{transform:translateY(-6px);}}
 
-/* PIN */
 .pin-dots{display:flex;justify-content:center;gap:14px;margin:22px 0 18px;}
 .dot{width:16px;height:16px;border-radius:50%;background:var(--s3);border:2px solid var(--border2);transition:all .2s;}
 .dot.on{background:var(--blue);border-color:var(--blue);box-shadow:0 0 10px rgba(91,126,248,.5);}
 .dot.err{background:var(--red);border-color:var(--red);}
 .pin-pad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;max-width:260px;margin:0 auto;}
-.key{padding:17px;border-radius:14px;background:var(--s2);border:1.5px solid var(--border);font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--text);cursor:pointer;text-align:center;transition:all .15s;user-select:none;border:none;}
+.key{padding:17px;border-radius:14px;background:var(--s2);border:none;font-family:'Syne',sans-serif;font-size:20px;font-weight:700;color:var(--text);cursor:pointer;text-align:center;transition:all .15s;user-select:none;}
 .key:active{background:var(--s3);transform:scale(.94);}
-.pin-hint{text-align:center;font-size:12px;color:var(--text3);margin-bottom:16px;}
 
-/* FACE ID */
 .fid-circle{width:90px;height:90px;border-radius:50%;background:var(--s2);border:2px solid var(--border2);display:flex;align-items:center;justify-content:center;font-size:40px;margin:0 auto 16px;transition:all .4s;}
 .fid-circle.scan{border-color:var(--blue);animation:fp 1.5s ease-in-out infinite;}
 .fid-circle.ok{border-color:var(--green);}
@@ -98,8 +91,7 @@ body{display:flex;align-items:center;justify-content:center;padding:20px;overflo
 <body>
 <div class="bg"><div class="orb orb1"></div><div class="orb orb2"></div><div class="grid"></div></div>
 
-<div class="wrap">
-<div class="card">
+<div class="wrap"><div class="card">
   <div class="logo">
     <div class="logo-icon">🧠</div>
     <div class="logo-text">MemoryDeck</div>
@@ -112,37 +104,44 @@ body{display:flex;align-items:center;justify-content:center;padding:20px;overflo
   <!-- ══ AUTH ══ -->
   <div id="sAuth" class="screen on">
     <div class="tabs">
-      <button class="tab on" id="tLogin" onclick="tab('login')">Войти</button>
-      <button class="tab" id="tReg" onclick="tab('reg')">Регистрация</button>
+      <button class="tab on" id="tLogin" onclick="switchTab('login')">Войти</button>
+      <button class="tab" id="tReg" onclick="switchTab('reg')">Регистрация</button>
     </div>
 
+    <!-- LOGIN -->
     <div id="pLogin">
       <div class="title">С возвращением 👋</div>
       <div class="sub">Войдите в свой аккаунт</div>
-      <label class="label">Email</label>
+      <label class="lbl">Email</label>
       <input id="lEmail" class="inp" type="email" placeholder="you@example.com" autocomplete="email">
-      <label class="label">Пароль</label>
-      <div class="pw"><input id="lPass" class="inp" type="password" placeholder="••••••••" autocomplete="current-password">
-        <button class="eye" onclick="toggleEye('lPass',this)">👁</button></div>
+      <label class="lbl">Пароль</label>
+      <div class="pw">
+        <input id="lPass" class="inp" type="password" placeholder="••••••••" autocomplete="current-password">
+        <button class="eye" onclick="toggleEye('lPass',this)">👁</button>
+      </div>
       <span class="fg" onclick="forgotPass()">Забыли пароль?</span>
       <button class="btn" id="bLogin" onclick="doLogin()">Войти</button>
     </div>
 
+    <!-- REGISTER -->
     <div id="pReg" style="display:none">
       <div class="title">Создать аккаунт</div>
       <div class="sub">Бесплатно, без подписок</div>
-      <label class="label">Ваше имя</label>
+      <label class="lbl">Ваше имя</label>
       <input id="rName" class="inp" type="text" placeholder="Имя" autocomplete="name">
-      <label class="label">Email</label>
+      <label class="lbl">Email</label>
       <input id="rEmail" class="inp" type="email" placeholder="you@example.com" autocomplete="email">
-      <label class="label">Пароль</label>
-      <div class="pw"><input id="rPass" class="inp" type="password" placeholder="Минимум 6 символов" autocomplete="new-password">
-        <button class="eye" onclick="toggleEye('rPass',this)">👁</button></div>
-      <div style="margin-bottom:14px"></div>
-      <label class="label">Повторите пароль</label>
-      <div class="pw"><input id="rPass2" class="inp" type="password" placeholder="Повторите пароль" autocomplete="new-password">
-        <button class="eye" onclick="toggleEye('rPass2',this)">👁</button></div>
-      <div style="margin-bottom:14px"></div>
+      <label class="lbl">Пароль для входа в приложение</label>
+      <div class="pw">
+        <input id="rPass" class="inp" type="password" placeholder="Минимум 4 символа">
+        <button class="eye" onclick="toggleEye('rPass',this)">👁</button>
+      </div>
+      <label class="lbl">Повторите пароль</label>
+      <div class="pw">
+        <input id="rPass2" class="inp" type="password" placeholder="Повторите пароль">
+        <button class="eye" onclick="toggleEye('rPass2',this)">👁</button>
+      </div>
+      <div style="margin-top:4px"></div>
       <button class="btn" id="bReg" onclick="doReg()">Создать аккаунт →</button>
     </div>
   </div>
@@ -154,13 +153,15 @@ body{display:flex;align-items:center;justify-content:center;padding:20px;overflo
     <div class="sub" style="text-align:center" id="verifyText">Перейдите по ссылке в письме, затем нажмите кнопку ниже.</div>
     <button class="btn" id="bVerified" onclick="checkVerified()">Я подтвердил ✓</button>
     <button class="btn2" onclick="resendVerify()">Отправить повторно</button>
-    <div style="text-align:center;margin-top:12px"><button class="ghost" onclick="backToAuth()">← Назад</button></div>
+    <div style="text-align:center;margin-top:12px">
+      <button class="ghost" onclick="backToAuth()">← Назад</button>
+    </div>
   </div>
 
   <!-- ══ PIN SETUP ══ -->
   <div id="sPin" class="screen">
     <div class="title" style="text-align:center">Придумайте PIN</div>
-    <div class="sub" style="text-align:center" id="pinHint">Создайте 4-значный PIN для быстрого входа</div>
+    <div class="sub" style="text-align:center">4-значный PIN для быстрого входа</div>
     <div class="pin-dots" id="pinDots">
       <div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div>
     </div>
@@ -178,7 +179,9 @@ body{display:flex;align-items:center;justify-content:center;padding:20px;overflo
       <button class="key" onclick="pk('0')">0</button>
       <button class="key" onclick="pdel()">⌫</button>
     </div>
-    <div style="text-align:center;margin-top:14px"><button class="ghost" onclick="skipPin()">Пропустить →</button></div>
+    <div style="text-align:center;margin-top:14px">
+      <button class="ghost" onclick="skipPin()">Пропустить →</button>
+    </div>
   </div>
 
   <!-- ══ PIN CONFIRM ══ -->
@@ -210,16 +213,12 @@ body{display:flex;align-items:center;justify-content:center;padding:20px;overflo
     <div class="title" style="text-align:center">Face ID</div>
     <div class="sub" style="text-align:center" id="fidSub">Включите биометрический вход</div>
     <button class="btn" id="bFaceId" onclick="setupFaceId()">Включить Face ID</button>
-    <button class="btn2" onclick="skipFaceId()">Пропустить</button>
+    <button class="btn2" onclick="goToApp()">Пропустить</button>
   </div>
 
-</div><!-- /card -->
-</div><!-- /wrap -->
+</div></div>
 
 <script>
-// ══════════════════════════════════════════════
-//  FIREBASE — exact same init as index.html
-// ══════════════════════════════════════════════
 const FB_CONFIG = {
   apiKey:            "AIzaSyBZ1b6yf1WQbhZ7lhIbeYw_fKc4k88mmFc",
   authDomain:        "family-budget-32149.firebaseapp.com",
@@ -230,34 +229,26 @@ const FB_CONFIG = {
   appId:             "1:1015461302295:web:835d7a14a852c224534c52"
 };
 
-firebase.initializeApp(FB_CONFIG);
-const auth = firebase.auth();
-const db   = firebase.database();
+// ── Firebase init — same pattern as index.html (anonymous auth) ──
+let app, auth, db;
+try { app = firebase.app('md_landing'); } catch(e) {
+  app = firebase.initializeApp(FB_CONFIG, 'md_landing');
+}
+auth = app.auth();
+db   = app.database();
 
-// Persist session in localStorage so index.html reads it
-auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(() => {});
-
-// If already logged in & set up → go straight to app
-auth.onAuthStateChanged(async user => {
-  if (!user || !user.emailVerified) return;
-  try {
-    const snap = await db.ref('memorydeck_meta').once('value');
-    const data = snap.val() || {};
-    for (const [aId, acc] of Object.entries(data)) {
-      if (aId.startsWith('_')) continue;
-      if (acc && acc.users) {
-        for (const u of Object.values(acc.users)) {
-          if (u && u.uid === user.uid) { goToApp(); return; }
-        }
-      }
-    }
-  } catch(e) {}
-});
+// Anonymous sign-in to satisfy Firebase Rules
+auth.signInAnonymously().catch(() => {});
 
 // ── State ──
+let _pendingEmail = '';
+let _pendingName  = '';
+let _pendingPass  = ''; // app password (stored in memorydeck_meta)
 let _pinBuf  = '';
 let _pinFirst = '';
 let _pinBuf2 = '';
+let _newAccId  = '';
+let _newUserId = '';
 
 // ══════════════════════════════════════════════
 //  SCREENS
@@ -268,7 +259,7 @@ function show(id) {
   hideErr(); hideInfo();
 }
 
-function tab(t) {
+function switchTab(t) {
   document.getElementById('tLogin').classList.toggle('on', t==='login');
   document.getElementById('tReg').classList.toggle('on',   t==='reg');
   document.getElementById('pLogin').style.display = t==='login' ? '' : 'none';
@@ -276,18 +267,17 @@ function tab(t) {
   hideErr(); hideInfo();
 }
 
-function backToAuth() {
-  try { auth.signOut(); } catch(e) {}
-  show('sAuth');
-}
+function backToAuth() { show('sAuth'); }
+
+function goToApp() { window.location.href = 'index.html'; }
 
 // ══════════════════════════════════════════════
 //  HELPERS
 // ══════════════════════════════════════════════
-function showErr(msg)  { const e=document.getElementById('errBox');  e.textContent=msg; e.style.display='block'; }
-function hideErr()     { document.getElementById('errBox').style.display='none'; }
-function showInfo(msg) { const e=document.getElementById('infoBox'); e.textContent=msg; e.style.display='block'; }
-function hideInfo()    { document.getElementById('infoBox').style.display='none'; }
+function showErr(m)  { const e=document.getElementById('errBox');  e.textContent=m; e.style.display='block'; }
+function hideErr()   { document.getElementById('errBox').style.display='none'; }
+function showInfo(m) { const e=document.getElementById('infoBox'); e.textContent=m; e.style.display='block'; }
+function hideInfo()  { document.getElementById('infoBox').style.display='none'; }
 
 function loading(id, on, label='') {
   const b = document.getElementById(id);
@@ -305,7 +295,7 @@ function fbErr(code) {
   const m = {
     'auth/email-already-in-use': 'Email уже зарегистрирован',
     'auth/invalid-email':        'Некорректный email',
-    'auth/weak-password':        'Пароль слишком простой (мин. 6 символов)',
+    'auth/weak-password':        'Пароль Firebase слишком простой',
     'auth/user-not-found':       'Пользователь не найден',
     'auth/wrong-password':       'Неверный пароль',
     'auth/invalid-credential':   'Неверный email или пароль',
@@ -315,64 +305,11 @@ function fbErr(code) {
   return m[code] || ('Ошибка: ' + code);
 }
 
-function goToApp() {
-  window.location.href = 'index.html';
-}
-
-// ══════════════════════════════════════════════
-//  LOGIN
-// ══════════════════════════════════════════════
-async function doLogin() {
-  const email = document.getElementById('lEmail').value.trim();
-  const pass  = document.getElementById('lPass').value;
-  hideErr(); hideInfo();
-  if (!email || !pass) { showErr('Введите email и пароль'); return; }
-
-  loading('bLogin', true);
-  try {
-    const cred = await auth.signInWithEmailAndPassword(email, pass);
-    const user = cred.user;
-
-    if (!user.emailVerified) {
-      document.getElementById('verifyText').textContent =
-        'Письмо отправлено на ' + email + '. Перейдите по ссылке, затем нажмите кнопку ниже.';
-      show('sVerify');
-      loading('bLogin', false, 'Войти');
-      return;
-    }
-
-    // Check if account set up in memorydeck_meta
-    // Check if account exists for this uid
-    const snap = await db.ref('memorydeck_meta').once('value');
-    const data = snap.val() || {};
-    let found = false;
-    for (const [aId, acc] of Object.entries(data)) {
-      if (aId.startsWith('_')) continue;
-      if (acc && acc.users) {
-        for (const u of Object.values(acc.users)) {
-          if (u && u.uid === user.uid) { found = true; break; }
-        }
-      }
-      if (found) break;
-    }
-    if (found) {
-      goToApp();
-    } else {
-      await createAccount(user, user.displayName || email.split('@')[0]);
-      goToApp();
-    }
-  } catch(e) {
-    showErr(fbErr(e.code));
-    loading('bLogin', false, 'Войти');
-  }
-}
-
-['lPass','lEmail'].forEach(id => {
-  document.getElementById(id).addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
-});
-
 // ══════════════════════════════════════════════
 //  REGISTER
+//  1. Создаём Firebase Auth аккаунт (для верификации email)
+//  2. После верификации создаём запись в memorydeck_meta
+//     с паролем который пользователь придумал
 // ══════════════════════════════════════════════
 async function doReg() {
   const name  = document.getElementById('rName').value.trim();
@@ -382,80 +319,230 @@ async function doReg() {
   hideErr();
   if (!name)         { showErr('Введите ваше имя'); return; }
   if (!email)        { showErr('Введите email'); return; }
-  if (pass.length<6) { showErr('Пароль — минимум 6 символов'); return; }
+  if (pass.length<4) { showErr('Пароль — минимум 4 символа'); return; }
   if (pass !== pass2){ showErr('Пароли не совпадают'); return; }
+
+  // Check if email already has account in memorydeck_meta
+  const existSnap = await db.ref('memorydeck_meta')
+    .orderByChild('email').equalTo(email).once('value').catch(() => null);
 
   loading('bReg', true);
   try {
-    const cred = await auth.createUserWithEmailAndPassword(email, pass);
-    const user = cred.user;
-    await user.updateProfile({ displayName: name });
-    await user.sendEmailVerification({ url: window.location.href });
+    // Use separate auth app for email registration
+    let regApp;
+    try { regApp = firebase.app('md_reg'); } catch(e) {
+      regApp = firebase.initializeApp(FB_CONFIG, 'md_reg');
+    }
+    const regAuth = regApp.auth();
+    const cred = await regAuth.createUserWithEmailAndPassword(email, pass + '_md_suffix');
+    await cred.user.updateProfile({ displayName: name });
+    await cred.user.sendEmailVerification({ url: window.location.href });
+
+    // Store pending data
+    _pendingEmail = email;
+    _pendingName  = name;
+    _pendingPass  = pass;
+    // accId/userId based on Firebase uid
+    _newAccId  = 'acc_' + cred.user.uid.slice(0,8);
+    _newUserId = 'u_'   + cred.user.uid.slice(0,8);
+
+    // Save pending to localStorage in case page reloads
+    try {
+      localStorage.setItem('md_pending', JSON.stringify({
+        email, name, pass,
+        accId:  _newAccId,
+        userId: _newUserId,
+        uid:    cred.user.uid,
+      }));
+    } catch(e) {}
+
     document.getElementById('verifyText').textContent =
-      'Письмо отправлено на ' + email + '. Перейдите по ссылке, затем нажмите «Я подтвердил».';
+      'Письмо отправлено на ' + email + '. Перейдите по ссылке в письме, затем нажмите «Я подтвердил».';
     show('sVerify');
     loading('bReg', false, 'Создать аккаунт →');
   } catch(e) {
-    showErr(fbErr(e.code));
+    // If email already registered in Firebase Auth — check if they have memorydeck account
+    if (e.code === 'auth/email-already-in-use') {
+      showErr('Email уже зарегистрирован. Войдите через вкладку «Войти».');
+    } else {
+      showErr(fbErr(e.code));
+    }
     loading('bReg', false, 'Создать аккаунт →');
   }
 }
 
 // ══════════════════════════════════════════════
-//  VERIFY
+//  VERIFY EMAIL
 // ══════════════════════════════════════════════
 async function checkVerified() {
   loading('bVerified', true);
   try {
-    await auth.currentUser.reload();
-    const user = auth.currentUser;
-    if (user.emailVerified) {
-      const accId = 'acc_' + user.uid.slice(0,8);
-      const snap  = await db.ref('memorydeck_meta/' + accId).once('value');
-      if (!snap.val()) {
-        await createAccount(user, user.displayName || user.email.split('@')[0]);
+    let regApp;
+    try { regApp = firebase.app('md_reg'); } catch(e) {
+      loading('bVerified', false, 'Я подтвердил ✓');
+      showErr('Сессия истекла. Начните регистрацию заново.');
+      return;
+    }
+    await regApp.auth().currentUser.reload();
+    const user = regApp.auth().currentUser;
+
+    if (user && user.emailVerified) {
+      // Restore pending data
+      let pending = { email: _pendingEmail, name: _pendingName, pass: _pendingPass,
+                      accId: _newAccId, userId: _newUserId, uid: user.uid };
+      if (!pending.name) {
+        try { pending = JSON.parse(localStorage.getItem('md_pending') || '{}'); } catch(e) {}
       }
+      if (!pending.name || !pending.accId) {
+        showErr('Данные потеряны. Начните регистрацию заново.');
+        loading('bVerified', false, 'Я подтвердил ✓');
+        return;
+      }
+
+      // Create account in memorydeck_meta
+      await createAccount(pending);
+      try { localStorage.removeItem('md_pending'); } catch(e) {}
+
       show('sPin');
       _pinBuf = ''; updateDots('pinDots', '');
     } else {
       showErr('Email ещё не подтверждён. Проверьте почту.');
     }
   } catch(e) {
-    showErr(fbErr(e.code));
+    showErr('Ошибка: ' + e.message);
   }
   loading('bVerified', false, 'Я подтвердил ✓');
 }
 
 async function resendVerify() {
   try {
-    await auth.currentUser.sendEmailVerification({ url: window.location.href });
+    const regApp = firebase.app('md_reg');
+    await regApp.auth().currentUser.sendEmailVerification({ url: window.location.href });
     showInfo('✅ Письмо отправлено повторно');
-  } catch(e) { showErr(fbErr(e.code)); }
+  } catch(e) { showErr('Ошибка: ' + e.message); }
 }
 
 // ══════════════════════════════════════════════
 //  CREATE ACCOUNT in memorydeck_meta
+//  Структура идентична существующим аккаунтам
 // ══════════════════════════════════════════════
-async function createAccount(user, name) {
-  const accId  = 'acc_' + user.uid.slice(0,8);
-  const userId = 'u_'   + user.uid.slice(0,8);
-  const existing = await db.ref('memorydeck_meta/' + accId).once('value');
-  if (existing.val()) return; // already exists
-  await db.ref('memorydeck_meta/' + accId).set({
-    name:  name,
-    owner: user.uid,
-    color: '#5b7ef8',
+async function createAccount(p) {
+  const COLORS = ['#5b7ef8','#42d9a8','#ff87b2','#ffa94d','#b197fc'];
+  const color  = COLORS[Math.floor(Math.random() * COLORS.length)];
+
+  // Check if already exists
+  const snap = await db.ref('memorydeck_meta/' + p.accId).once('value');
+  if (snap.val()) return; // already exists
+
+  await db.ref('memorydeck_meta/' + p.accId).set({
+    name:  p.name,
+    color: color,
+    owner: p.uid || '',
     users: {
-      [userId]: {
-        name:     name,
-        email:    user.email,
+      [p.userId]: {
+        name:     p.name,
+        email:    p.email,
         role:     'editor',
-        uid:      user.uid,
-        password: '1234',
-        color:    '#5b7ef8',
+        uid:      p.uid || '',
+        password: p.pass,  // пароль для входа в index.html
+        color:    color,
       }
     }
   });
+
+  // Store for PIN/FaceID step
+  _newAccId  = p.accId;
+  _newUserId = p.userId;
+}
+
+// ══════════════════════════════════════════════
+//  LOGIN
+//  Проверяем email → ищем в memorydeck_meta → проверяем пароль
+// ══════════════════════════════════════════════
+async function doLogin() {
+  const email = document.getElementById('lEmail').value.trim().toLowerCase();
+  const pass  = document.getElementById('lPass').value;
+  hideErr(); hideInfo();
+  if (!email || !pass) { showErr('Введите email и пароль'); return; }
+
+  loading('bLogin', true);
+  try {
+    // Scan memorydeck_meta for user with this email
+    const snap = await db.ref('memorydeck_meta').once('value');
+    const data = snap.val() || {};
+    let foundAcc = null, foundUserId = null, foundUser = null;
+
+    for (const [accId, acc] of Object.entries(data)) {
+      if (accId.startsWith('_') || typeof acc !== 'object' || !acc.users) continue;
+      for (const [userId, u] of Object.entries(acc.users)) {
+        if (u && (u.email||'').toLowerCase() === email) {
+          foundAcc    = { accId, ...acc };
+          foundUserId = userId;
+          foundUser   = u;
+          break;
+        }
+      }
+      if (foundUser) break;
+    }
+
+    if (!foundUser) {
+      showErr('Пользователь с таким email не найден');
+      loading('bLogin', false, 'Войти');
+      return;
+    }
+
+    // Check password
+    if (foundUser.password !== pass) {
+      showErr('Неверный пароль');
+      loading('bLogin', false, 'Войти');
+      return;
+    }
+
+    // Save session — same as index.html checkSession
+    const PFX = 'md3_';
+    try {
+      sessionStorage.setItem('md3_a', foundAcc.accId);
+      sessionStorage.setItem('md3_u', foundUserId);
+      localStorage.setItem(PFX + foundAcc.accId + '_' + foundUserId + '_ts', String(Date.now()));
+      localStorage.setItem(PFX + foundAcc.accId + '_' + foundUserId + '_v', '3.0');
+    } catch(e) {}
+
+    goToApp();
+  } catch(e) {
+    showErr('Ошибка: ' + e.message);
+    loading('bLogin', false, 'Войти');
+  }
+}
+
+['lPass','lEmail'].forEach(id => {
+  document.getElementById(id).addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
+});
+
+// ══════════════════════════════════════════════
+//  FORGOT PASSWORD
+// ══════════════════════════════════════════════
+async function forgotPass() {
+  const email = document.getElementById('lEmail').value.trim();
+  hideErr(); hideInfo();
+  if (!email) { showErr('Введите email'); return; }
+
+  // Find user in memorydeck_meta and show their password hint
+  try {
+    const snap = await db.ref('memorydeck_meta').once('value');
+    const data = snap.val() || {};
+    for (const acc of Object.values(data)) {
+      if (typeof acc !== 'object' || !acc.users) continue;
+      for (const u of Object.values(acc.users)) {
+        if (u && (u.email||'').toLowerCase() === email.toLowerCase()) {
+          showInfo('Пароль от приложения вы задавали при регистрации. Если забыли — обратитесь к администратору.');
+          return;
+        }
+      }
+    }
+    showErr('Email не найден');
+  } catch(e) {
+    showErr('Ошибка: ' + e.message);
+  }
 }
 
 // ══════════════════════════════════════════════
@@ -463,26 +550,21 @@ async function createAccount(user, name) {
 // ══════════════════════════════════════════════
 function updateDots(id, val) {
   const dots = document.getElementById(id).children;
-  for (let i=0; i<4; i++) {
-    dots[i].className = 'dot' + (i < val.length ? ' on' : '');
-  }
+  for (let i=0; i<4; i++) dots[i].className = 'dot' + (i < val.length ? ' on' : '');
 }
-
-function pinErr(id) {
+function pinErrAnim(id) {
   const dots = document.getElementById(id).children;
-  for (let i=0;i<4;i++) { dots[i].className = 'dot err'; }
+  for (let i=0;i<4;i++) dots[i].className = 'dot err';
   setTimeout(() => { for(let i=0;i<4;i++) dots[i].className='dot'; }, 600);
 }
 
-// Step 1 — enter PIN
 function pk(d) {
   if (_pinBuf.length >= 4) return;
   _pinBuf += d;
   updateDots('pinDots', _pinBuf);
   if (_pinBuf.length === 4) {
     setTimeout(() => {
-      _pinFirst = _pinBuf;
-      _pinBuf   = '';
+      _pinFirst = _pinBuf; _pinBuf = '';
       show('sPinConfirm');
       updateDots('pinDots2', '');
     }, 200);
@@ -490,7 +572,6 @@ function pk(d) {
 }
 function pdel() { _pinBuf = _pinBuf.slice(0,-1); updateDots('pinDots', _pinBuf); }
 
-// Step 2 — confirm PIN
 function pc(d) {
   if (_pinBuf2.length >= 4) return;
   _pinBuf2 += d;
@@ -498,17 +579,15 @@ function pc(d) {
   if (_pinBuf2.length === 4) {
     setTimeout(async () => {
       if (_pinBuf2 === _pinFirst) {
-        // Save PIN to Firebase
         try {
-          const user  = auth.currentUser;
-          const accId  = 'acc_' + user.uid.slice(0,8);
-          const userId = 'u_'   + user.uid.slice(0,8);
-          await db.ref('memorydeck_meta/' + accId + '/users/' + userId + '/pin').set(_pinFirst);
-          showInfo('✅ PIN сохранён');
+          if (_newAccId && _newUserId) {
+            await db.ref('memorydeck_meta/' + _newAccId + '/users/' + _newUserId + '/pin').set(_pinFirst);
+          }
         } catch(e) {}
+        showInfo('✅ PIN сохранён');
         offerFaceId();
       } else {
-        pinErr('pinDots2');
+        pinErrAnim('pinDots2');
         setTimeout(() => { _pinBuf2 = ''; updateDots('pinDots2', ''); }, 700);
       }
     }, 200);
@@ -532,14 +611,14 @@ async function setupFaceId() {
   document.getElementById('bFaceId').disabled = true;
   sub.textContent = 'Сканирование...';
   try {
-    const user = auth.currentUser;
     const chal = new Uint8Array(32);
     crypto.getRandomValues(chal);
     const cred = await navigator.credentials.create({
       publicKey: {
         challenge: chal,
         rp:   { name: 'MemoryDeck', id: location.hostname || 'localhost' },
-        user: { id: new TextEncoder().encode(user.uid), name: user.email, displayName: user.displayName || 'User' },
+        user: { id: new TextEncoder().encode(_newAccId || 'user'),
+                name: _pendingEmail || 'user', displayName: _pendingName || 'User' },
         pubKeyCredParams: [{ type:'public-key', alg:-7 },{ type:'public-key', alg:-257 }],
         authenticatorSelection: { authenticatorAttachment:'platform', userVerification:'required' },
         timeout: 60000,
@@ -549,32 +628,18 @@ async function setupFaceId() {
       circle.className = 'fid-circle ok';
       circle.textContent = '✅';
       sub.textContent = 'Face ID включён!';
-      const accId  = 'acc_' + user.uid.slice(0,8);
-      const userId = 'u_'   + user.uid.slice(0,8);
-      await db.ref('memorydeck_meta/' + accId + '/users/' + userId + '/faceId').set(true);
+      if (_newAccId && _newUserId) {
+        await db.ref('memorydeck_meta/' + _newAccId + '/users/' + _newUserId + '/faceId').set(true);
+      }
       setTimeout(() => goToApp(), 800);
     }
   } catch(e) {
     circle.className = 'fid-circle fail';
     circle.textContent = '❌';
-    sub.textContent = 'Не удалось. Устройство может не поддерживать биометрию.';
+    sub.textContent = 'Устройство не поддерживает Face ID';
     document.getElementById('bFaceId').disabled = false;
-    setTimeout(() => skipFaceId(), 2000);
+    setTimeout(() => goToApp(), 2000);
   }
-}
-function skipFaceId() { goToApp(); }
-
-// ══════════════════════════════════════════════
-//  FORGOT PASSWORD
-// ══════════════════════════════════════════════
-async function forgotPass() {
-  const email = document.getElementById('lEmail').value.trim();
-  hideErr(); hideInfo();
-  if (!email) { showErr('Введите email для сброса пароля'); return; }
-  try {
-    await auth.sendPasswordResetEmail(email);
-    showInfo('✅ Письмо для сброса пароля отправлено на ' + email);
-  } catch(e) { showErr(fbErr(e.code)); }
 }
 </script>
 </body>
