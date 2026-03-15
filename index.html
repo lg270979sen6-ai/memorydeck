@@ -1997,8 +1997,8 @@ const VER = '3.0', PFX = 'md3_';
 
 // ── Основной Firebase app — инициализируем один раз здесь ──
 let _mainApp;
-try { _mainApp = firebase.app('md_main'); }
-catch(e) { _mainApp = firebase.initializeApp(Object.assign({}, FB_CONFIG), 'md_main'); }
+try { _mainApp = firebase.app('md_app'); }
+catch(e) { _mainApp = firebase.initializeApp(Object.assign({}, FB_CONFIG), 'md_app'); }
 const EMOJIS = ['📚','🧠','💡','🌍','🔬','📐','🎨','🎵','💪','🏛️','✈️','🍕','💻','🌿','⚽','🎭','📝','🔤','🧪','💰','🇬🇧','🇩🇪','🇯🇵','🇫🇷','🐍'];
 const COLORS = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5856d6','#30b0c7','#ff2d55','#ff6b35','#ffcc00'];
 
@@ -2822,52 +2822,65 @@ function doLogout(){
 function checkSession(){
   document.getElementById('lockScreen').style.display='flex';
 
-  const savedAcc  =(()=>{try{return sessionStorage.getItem('md3_a');}catch(e){return null;}})();
-  const savedUser =(()=>{try{return sessionStorage.getItem('md3_u');}catch(e){return null;}})();
-
-  // Проверяем Firebase Auth + локальную сессию
-  const _doCheck = (firebaseUser) => {
-    // Нет сессионных данных или Firebase Auth — на лендинг
-    if(!savedAcc || !savedUser){
-      window.location.href = 'memorydeck-landing.html';
-      return;
-    }
-    const pfx = PFX+savedAcc+'_'+savedUser+'_';
-    const ts  =(()=>{try{return localStorage.getItem(pfx+'ts');}catch(e){return null;}})();
-    const ver =(()=>{try{return localStorage.getItem(pfx+'v');}catch(e){return null;}})();
-    if(ver===VER && ts && ts!=='0' && Date.now()-parseInt(ts)<24*3600*1000){
-      loadAccById(savedAcc, (ad)=>{
-        if(ad && ad.users && ad.users[savedUser]){
-          startApp(savedAcc, savedUser, ad, ad.users[savedUser]);
-        } else {
-          window.location.href = 'memorydeck-landing.html';
-        }
-      });
-    } else {
-      window.location.href = 'memorydeck-landing.html';
-    }
-  };
-
-  // Ждём Firebase Auth state (быстро — из кэша)
   let resolved = false;
+
   const unsubscribe = _mainApp.auth().onAuthStateChanged(user => {
     if(resolved) return;
     resolved = true;
     unsubscribe();
-    if(user && user.emailVerified){
-      _doCheck(user);
-    } else {
+
+    if(!user || !user.emailVerified){
+      // Не залогинен — на лендинг
       window.location.href = 'memorydeck-landing.html';
+      return;
     }
+
+    // Залогинен — ищем аккаунт по uid в memorydeck_meta
+    _metaDb.ref('memorydeck_meta').once('value').then(snap => {
+      const data = snap.val() || {};
+      let foundAccId = null, foundUserId = null, foundAd = null, foundUd = null;
+
+      for(const [accId, acc] of Object.entries(data)){
+        if(accId.startsWith('_') || typeof acc !== 'object' || !acc.users) continue;
+        for(const [userId, u] of Object.entries(acc.users)){
+          if(u && u.uid === user.uid){
+            foundAccId  = accId;
+            foundUserId = userId;
+            foundAd     = { name: acc.name||accId, color: acc.color||COLORS[0], users: acc.users };
+            foundUd     = u;
+            break;
+          }
+        }
+        if(foundAccId) break;
+      }
+
+      if(!foundAccId){
+        // uid не найден в memorydeck_meta — на лендинг
+        window.location.href = 'memorydeck-landing.html';
+        return;
+      }
+
+      // Обновляем локальную сессию
+      try{
+        sessionStorage.setItem('md3_a', foundAccId);
+        sessionStorage.setItem('md3_u', foundUserId);
+        localStorage.setItem(PFX+foundAccId+'_'+foundUserId+'_ts', String(Date.now()));
+        localStorage.setItem(PFX+foundAccId+'_'+foundUserId+'_v', VER);
+      }catch(e){}
+
+      startApp(foundAccId, foundUserId, foundAd, foundUd);
+    }).catch(()=>{
+      window.location.href = 'memorydeck-landing.html';
+    });
   });
 
-  // Таймаут — если Firebase не ответил за 4 сек, используем локальную сессию
+  // Таймаут 5 сек — если Firebase совсем не отвечает
   setTimeout(()=>{
     if(!resolved){
       resolved = true;
-      _doCheck(null);
+      window.location.href = 'memorydeck-landing.html';
     }
-  }, 4000);
+  }, 5000);
 }
 
 // ═══════════════════════════════════════════════════

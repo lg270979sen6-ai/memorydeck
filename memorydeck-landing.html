@@ -231,26 +231,14 @@ const FB_CONFIG = {
 
 // ── Firebase — один app, полноценная auth ──
 let app, auth, db;
-try { app = firebase.app('md_landing'); } catch(e) {
-  app = firebase.initializeApp(FB_CONFIG, 'md_landing');
+try { app = firebase.app('md_app'); } catch(e) {
+  app = firebase.initializeApp(FB_CONFIG, 'md_app');
 }
 auth = app.auth();
 db   = app.database();
 
-// ── Если уже залогинен — сразу в приложение ──
-auth.onAuthStateChanged(user => {
-  if (user && user.emailVerified) {
-    // Проверяем есть ли запись в memorydeck_meta
-    db.ref('memorydeck_meta').orderByChild('owner').equalTo(user.uid)
-      .once('value').then(snap => {
-        if (snap.val()) {
-          // Аккаунт есть — записываем сессию и идём в приложение
-          _saveSessionAndGo(user);
-        }
-        // Иначе остаёмся на лендинге (новый пользователь ещё не завершил регистрацию)
-      }).catch(() => {});
-  }
-});
+// Лендинг не делает авто-редирект — пользователь пришёл сюда осознанно
+// (вышел из аккаунта или открыл прямую ссылку)
 
 // ── State ──
 let _pendingName = '';
