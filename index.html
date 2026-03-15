@@ -2526,26 +2526,35 @@ function openStudySett() {
 
 // Шаг 1: читаем аккаунты через временный Firebase app
 // (анонимная авторизация нужна для Firebase Rules)
-function loadAcc(cb) {
-  let metaApp;
-  try { metaApp = firebase.app('md_meta'); } catch(e) {
-    try {
-      Promise.all(firebase.apps.filter(a=>a.name==='md_meta').map(a=>a.delete().catch(()=>{}))).then(()=>{
-        metaApp = firebase.initializeApp(Object.assign({}, FB_CONFIG), 'md_meta');
-        _doMetaLoad(metaApp, cb);
-      });
-      return;
-    } catch(e2) {}
-  }
-  if (metaApp) _doMetaLoad(metaApp, cb);
+// ── md_meta Firebase app — инициализируется один раз ──
+let _metaApp = null;
+let _metaDb  = null;
+let _metaAuthReady = false;
+
+function _getMetaApp() {
+  if (_metaApp) return _metaApp;
+  try { _metaApp = firebase.app('md_meta'); }
+  catch(e) { _metaApp = firebase.initializeApp(Object.assign({}, FB_CONFIG), 'md_meta'); }
+  _metaDb = _metaApp.database();
+  return _metaApp;
 }
 
-function _doMetaLoad(metaApp, cb) {
-  const metaAuth = metaApp.auth();
-  const metaDb   = metaApp.database();
+// Вызывается один раз при старте страницы — делает signInAnonymously заранее
+function _warmMetaAuth() {
+  const app = _getMetaApp();
+  const auth = app.auth();
+  if (!auth.currentUser && !_metaAuthReady) {
+    auth.signInAnonymously().then(()=>{ _metaAuthReady=true; }).catch(()=>{ _metaAuthReady=true; });
+  }
+}
+
+function loadAcc(cb) {
+  const app  = _getMetaApp();
+  const auth = app.auth();
+  const db   = _metaDb;
 
   const doLoad = () => {
-    metaDb.ref('memorydeck_meta').once('value').then(snap => {
+    db.ref('memorydeck_meta').once('value').then(snap => {
       allAcc = {};
       const data = snap.val() || {};
       Object.entries(data).forEach(([id, v]) => {
@@ -2556,14 +2565,34 @@ function _doMetaLoad(metaApp, cb) {
       cb && cb();
     }).catch(err => {
       console.error('loadAcc error:', err.message);
-      // Показываем ошибку в списке аккаунтов
       const el = document.getElementById('accList');
       if (el) el.innerHTML = `<div style="color:var(--red);padding:20px;text-align:center;font-size:13px;">❌ ${err.message}<br><br><span style="color:var(--blue);cursor:pointer;" onclick="checkSession()">Повторить</span></div>`;
     });
   };
 
-  // Anonymous sign-in для Firebase Rules
-  metaAuth.currentUser ? doLoad() : metaAuth.signInAnonymously().then(doLoad).catch(doLoad);
+  auth.currentUser ? doLoad() : auth.signInAnonymously().then(doLoad).catch(doLoad);
+}
+
+// Точечная загрузка одного аккаунта по ID (быстрее чем весь memorydeck_meta)
+function loadAccById(accId, cb) {
+  const app  = _getMetaApp();
+  const auth = app.auth();
+  const db   = _metaDb;
+
+  const doLoad = () => {
+    db.ref('memorydeck_meta/'+accId).once('value').then(snap => {
+      const v = snap.val();
+      if (!v || typeof v !== 'object') { cb(null); return; }
+      const acc = { name: v.name||accId, color: v.color||COLORS[0], users: v.users||{} };
+      allAcc[accId] = acc;
+      cb(acc);
+    }).catch(err => {
+      console.error('loadAccById error:', err.message);
+      cb(null);
+    });
+  };
+
+  auth.currentUser ? doLoad() : auth.signInAnonymously().then(doLoad).catch(doLoad);
 }
 
 // Шаг 2: после логина — инициализируем основной Firebase app
@@ -2799,23 +2828,25 @@ function checkSession(){
   const savedAcc  =(()=>{try{return sessionStorage.getItem('md3_a');}catch(e){return null;}})();
   const savedUser =(()=>{try{return sessionStorage.getItem('md3_u');}catch(e){return null;}})();
 
-  loadAcc(()=>{
-    // Проверяем сохранённую сессию
-    if(savedAcc && savedUser){
-      const pfx = PFX+savedAcc+'_'+savedUser+'_';
-      const ts  =(()=>{try{return localStorage.getItem(pfx+'ts');}catch(e){return null;}})();
-      const ver =(()=>{try{return localStorage.getItem(pfx+'v');}catch(e){return null;}})();
-      if(ver===VER && ts && ts!=='0' && Date.now()-parseInt(ts)<24*3600*1000){
-        const ad=allAcc[savedAcc];
+  if(savedAcc && savedUser){
+    // Есть сессия — читаем только один аккаунт, не весь memorydeck_meta
+    const pfx = PFX+savedAcc+'_'+savedUser+'_';
+    const ts  =(()=>{try{return localStorage.getItem(pfx+'ts');}catch(e){return null;}})();
+    const ver =(()=>{try{return localStorage.getItem(pfx+'v');}catch(e){return null;}})();
+    if(ver===VER && ts && ts!=='0' && Date.now()-parseInt(ts)<24*3600*1000){
+      loadAccById(savedAcc, (ad)=>{
         if(ad && ad.users && ad.users[savedUser]){
           startApp(savedAcc, savedUser, ad, ad.users[savedUser]);
-          return;
+        } else {
+          window.location.href = 'memorydeck-landing.html';
         }
-      }
+      });
+      return;
     }
-    // Нет сессии — редирект на лендинг
-    window.location.href = 'memorydeck-landing.html';
-  });
+  }
+
+  // Нет сессии — редирект на лендинг
+  window.location.href = 'memorydeck-landing.html';
 }
 
 // ═══════════════════════════════════════════════════
@@ -4921,6 +4952,7 @@ function toast(msg){
 const esc=s=>(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
 
 document.addEventListener('DOMContentLoaded', () => {
+  _warmMetaAuth(); // Запускаем anonymous sign-in заранее, параллельно с рендером
   const pi = document.getElementById('passInp');
   if (pi) pi.addEventListener('keydown', e => { if(e.key==='Enter') doLogin(); });
   checkSession();
