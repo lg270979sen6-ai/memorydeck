@@ -1999,9 +1999,7 @@ const VER = '3.0', PFX = 'md3_';
 let _mainApp;
 try { _mainApp = firebase.app(); console.log('[MD] DEFAULT app: reused'); }
 catch(e) { _mainApp = firebase.initializeApp(FB_CONFIG); console.log('[MD] DEFAULT app: created'); }
-_metaApp = _mainApp;
-_metaDb  = _mainApp.database();
-console.log('[MD] _metaDb assigned from _mainApp');
+// _metaDb назначается ниже после объявления
 const EMOJIS = ['📚','🧠','💡','🌍','🔬','📐','🎨','🎵','💪','🏛️','✈️','🍕','💻','🌿','⚽','🎭','📝','🔤','🧪','💰','🇬🇧','🇩🇪','🇯🇵','🇫🇷','🐍'];
 const COLORS = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5856d6','#30b0c7','#ff2d55','#ff6b35','#ffcc00'];
 
@@ -2534,10 +2532,9 @@ function openStudySett() {
 
 // Шаг 1: читаем аккаунты через временный Firebase app
 // (анонимная авторизация нужна для Firebase Rules)
-// ── md_meta Firebase app — инициализируется один раз ──
-// ── _metaDb — тот же app что и основной (одна auth сессия) ──
-// Инициализируется после _mainApp (см. ниже)
-let _metaApp, _metaDb;
+// _metaDb — тот же DEFAULT app, назначается здесь
+const _metaDb = _mainApp.database();
+console.log('[MD] _metaDb ready, app:', _mainApp.name);
 function _getMetaApp() { return _mainApp; }
 
 // Прогрев Firebase Auth — используем основной app (не анонимный)
