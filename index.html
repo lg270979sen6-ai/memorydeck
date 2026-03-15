@@ -3793,8 +3793,6 @@ async function loadAndPlayAudio(filename, btnEl) {
   if (btnEl) btnEl.classList.add('loading');
 
   try {
-    // Audio stored under memorydeck_audio/{accId}/{hash}
-    // hash = filename (sanitized)
     const safeKey = filename.replace(/[.#$/[\]]/g, '_');
     const snap = await db.ref('memorydeck_audio/' + sess.accId + '/' + safeKey).once('value');
     const data = snap.val();
@@ -3803,11 +3801,42 @@ async function loadAndPlayAudio(filename, btnEl) {
       if (btnEl) btnEl.classList.remove('loading');
       playAudioData(data, btnEl);
     } else {
+      // Файла нет в Firebase — TTS fallback
       if (btnEl) btnEl.classList.remove('loading');
+      // Извлекаем текст для произношения из текущей карточки
+      const card = rQ[rIdx];
+      if (card) {
+        const word = _extractWordFromCard(card.front);
+        if (word) playTTS(word, 'en-US', btnEl);
+      }
     }
   } catch(e) {
     if (btnEl) btnEl.classList.remove('loading');
   }
+}
+
+// Извлекаем слово из поля anki-word
+function _extractWordFromCard(html) {
+  if (!html) return '';
+  const m = html.match(/class="anki-word"[^>]*>([^<]+)</) ||
+            html.match(/style="[^"]*font-size:30px[^"]*"[^>]*>([^<]+)</);
+  if (m) return m[1].trim();
+  // Fallback: просто текст без тегов
+  return html.replace(/<[^>]+>/g,'').replace(/\[sound:[^\]]+\]/g,'').trim().split('\n')[0].slice(0,60);
+}
+
+// TTS через браузерный speechSynthesis
+function playTTS(text, lang, btnEl) {
+  if (!window.speechSynthesis || !text) return;
+  stopCurrentAudio();
+  window.speechSynthesis.cancel();
+  const utt = new SpeechSynthesisUtterance(text);
+  utt.lang = lang || 'en-US';
+  utt.rate = 0.9;
+  if (btnEl) btnEl.classList.add('playing');
+  utt.onend = () => { if (btnEl) btnEl.classList.remove('playing'); };
+  utt.onerror = () => { if (btnEl) btnEl.classList.remove('playing'); };
+  window.speechSynthesis.speak(utt);
 }
 
 function playAudioData(dataUri, btnEl) {
@@ -3831,27 +3860,41 @@ function stopCurrentAudio() {
     try { currentAudio.pause(); currentAudio.currentTime = 0; } catch(e){}
     currentAudio = null;
   }
-  // Remove playing class from all buttons
+  if (window.speechSynthesis) window.speechSynthesis.cancel();
   document.querySelectorAll('.c-audio-btn.playing').forEach(b => b.classList.remove('playing'));
 }
 
 // Called by audio button click
 function playCardAudio(side, event) {
-  event.stopPropagation(); // don't flip card
+  event.stopPropagation();
   const c = rQ[rIdx];
-  const refs = extractAudioRefs(side === 'front' ? c.front : c.back);
-  if (!refs.length) return;
+  const text = side === 'front' ? c.front : c.back;
+  const refs = extractAudioRefs(text);
   const btn = document.getElementById('audiobtn-' + side);
-  loadAndPlayAudio(refs[0], btn);
+  if (refs.length) {
+    loadAndPlayAudio(refs[0], btn);
+  } else {
+    // Нет файла — TTS
+    const lang = side === 'front' ? 'en-US' : 'ru-RU';
+    const word = _extractWordFromCard(text);
+    if (word) playTTS(word, lang, btn);
+  }
 }
 
 // Auto-play without button interaction (called after card renders)
 function autoPlayAudio(card, side) {
   if (!card) return;
-  const refs = extractAudioRefs(side === 'front' ? card.front : card.back);
-  if (!refs.length) return;
+  const text = side === 'front' ? card.front : card.back;
+  const refs = extractAudioRefs(text);
   const btn = document.getElementById('audiobtn-' + side);
-  loadAndPlayAudio(refs[0], btn);
+  if (refs.length) {
+    // Есть [sound:] тег — пробуем Firebase, fallback TTS
+    loadAndPlayAudio(refs[0], btn);
+  } else if (side === 'front') {
+    // Нет звука — TTS произносит слово автоматически
+    const word = _extractWordFromCard(text);
+    if (word) playTTS(word, 'en-US', btn);
+  }
 }
 
 // Stop audio when review closes
@@ -4686,6 +4729,8 @@ function openCardEd(id) {
               style="flex:1;padding:9px 12px;border-radius:10px;border:.5px solid var(--border);font-size:14px;background:var(--bg);">
             <button onclick="cePlaySound('ce_${f.id}')"
               style="padding:8px 12px;border-radius:10px;border:.5px solid var(--border);background:var(--bg2);font-size:18px;cursor:pointer;flex-shrink:0;" title="Воспроизвести">🔊</button>
+            <button onclick="ceTTSGenerate('ce_${f.id}')"
+              style="padding:8px 12px;border-radius:10px;border:.5px solid var(--blue);background:rgba(0,122,255,.08);font-size:13px;font-weight:700;color:var(--blue);cursor:pointer;flex-shrink:0;" title="Сгенерировать TTS из слова">TTS</button>
             <button onclick="ceSndTarget='ce_${f.id}';document.getElementById('ceSndInput').click()"
               style="padding:8px 12px;border-radius:10px;border:.5px solid var(--border);background:var(--bg2);font-size:18px;cursor:pointer;flex-shrink:0;" title="Загрузить звук">📁</button>
           </div>
@@ -4927,6 +4972,67 @@ function deleteCard(id) {
 function editCurrentCard() { const c=rQ[rIdx]; if(c) openCardEd(c.id); }
 function previewSound(f) { cePlaySound('ce_sound'); }
 
+// ── TTS генерация через Google TTS API ──
+async function ceTTSGenerate(soundFieldId) {
+  // Берём текст из поля Word
+  const wordEl = document.getElementById('ce_word');
+  const text = wordEl ? (wordEl.value || wordEl.innerText || '').trim() : '';
+  if (!text) { toast('❌ Сначала заполните поле Word'); return; }
+
+  const btn = event.target;
+  const origText = btn.textContent;
+  btn.textContent = '...';
+  btn.disabled = true;
+
+  try {
+    // Google TTS публичный endpoint (тот же что использует Google Translate)
+    const lang = 'en';
+    const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(text)}&tl=${lang}&client=tw-ob`;
+
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('Google TTS недоступен');
+    const arrayBuf = await resp.arrayBuffer();
+
+    // Конвертируем в base64
+    const uint8 = new Uint8Array(arrayBuf);
+    let b64 = '';
+    const chunk = 8192;
+    for (let i = 0; i < uint8.length; i += chunk) {
+      b64 += String.fromCharCode(...uint8.subarray(i, i + chunk));
+    }
+    b64 = btoa(b64);
+    const dataUri = 'data:audio/mpeg;base64,' + b64;
+
+    // Генерируем имя файла
+    const safeText = text.replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30);
+    const filename = 'tts_' + safeText + '_' + Date.now() + '.mp3';
+    const safeKey = filename.replace(/[.#$/[\]]/g, '_');
+
+    // Сохраняем в Firebase
+    await db.ref('memorydeck_audio/' + sess.accId + '/' + safeKey).set(dataUri);
+    audioCache[filename] = dataUri;
+
+    // Записываем имя файла в поле Sound
+    const inp = document.getElementById(soundFieldId);
+    if (inp) inp.value = filename;
+
+    toast('✅ Аудио сгенерировано');
+
+    // Сразу воспроизводим
+    playAudioData(dataUri, null);
+
+  } catch(e) {
+    // Fallback — браузерный TTS
+    toast('⚠️ Google TTS недоступен, использую браузерный голос');
+    const wordEl2 = document.getElementById('ce_word');
+    const t = wordEl2 ? (wordEl2.value || wordEl2.innerText || '').trim() : text;
+    playTTS(t, 'en-US', null);
+  }
+
+  btn.textContent = origText;
+  btn.disabled = false;
+}
+
 // ════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════
 //  SETTINGS
@@ -5098,7 +5204,14 @@ function doImport(){
     const frontParts = [], backParts = [];
     if(vals.word)        frontParts.push(`<div class="anki-word">${vals.word}</div>`);
     if(vals.ipa)         frontParts.push(`<div class="anki-ipa">[${vals.ipa}]</div>`);
-    if(vals.sound)       frontParts.push(`[sound:${vals.sound}]`);
+    // Sound: добавляем тег только если это не google-TTS имя (те файлы не хранятся локально)
+    if(vals.sound && !vals.sound.match(/^\[?sound:/i)) {
+      frontParts.push(`[sound:${vals.sound}]`);
+    } else if(vals.sound && vals.sound.match(/^google-/i)) {
+      // google-TTS файл — не добавляем, TTS сработает автоматически
+    } else if(vals.sound) {
+      frontParts.push(`[sound:${vals.sound}]`);
+    }
     if(vals.example)     frontParts.push(`<div class="anki-example">${vals.example}</div>`);
 
     if(vals.word)        backParts.push(`<div class="anki-word">${vals.word}</div>`);
