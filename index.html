@@ -1997,8 +1997,8 @@ const VER = '3.0', PFX = 'md3_';
 
 // ── Основной Firebase app — инициализируем один раз здесь ──
 let _mainApp;
-try { _mainApp = firebase.app(); console.log('[MD] DEFAULT app: reused'); }
-catch(e) { _mainApp = firebase.initializeApp(FB_CONFIG); console.log('[MD] DEFAULT app: created'); }
+try { _mainApp = firebase.app(); }
+catch(e) { _mainApp = firebase.initializeApp(FB_CONFIG); }
 // _metaDb назначается ниже после объявления
 const EMOJIS = ['📚','🧠','💡','🌍','🔬','📐','🎨','🎵','💪','🏛️','✈️','🍕','💻','🌿','⚽','🎭','📝','🔤','🧪','💰','🇬🇧','🇩🇪','🇯🇵','🇫🇷','🐍'];
 const COLORS = ['#007aff','#34c759','#ff9500','#ff3b30','#af52de','#5856d6','#30b0c7','#ff2d55','#ff6b35','#ffcc00'];
@@ -2534,7 +2534,6 @@ function openStudySett() {
 // (анонимная авторизация нужна для Firebase Rules)
 // _metaDb — тот же DEFAULT app, назначается здесь
 const _metaDb = _mainApp.database();
-console.log('[MD] _metaDb ready, app:', _mainApp.name);
 function _getMetaApp() { return _mainApp; }
 
 // Прогрев Firebase Auth — используем основной app (не анонимный)
@@ -2591,11 +2590,9 @@ function loadAccById(accId, cb) {
 
 // Шаг 2: после логина — инициализируем основной Firebase app
 function initMainFirebase(accId, userId) {
-  console.log('[MD] initMainFirebase:', accId, userId);
   const mainApp  = _mainApp;
   const mainAuth = mainApp.auth();
   const initDb = () => {
-    console.log('[MD] initDb: connecting to Firebase Realtime DB');
     db = mainApp.database();
     db.ref('.info/connected').on('value', s => {
       const on = !!s.val();
@@ -2622,7 +2619,6 @@ function initMainFirebase(accId, userId) {
           delete cleanSm2.firstReview;
           dirtyFixes['cards/'+id+'/sm2'] = cleanSm2;
           fbCards[id] = {...card, sm2: cleanSm2};
-          console.log('[cleanup] removed dirty firstReview from new card:', id);
         }
       });
       if (Object.keys(dirtyFixes).length > 0) {
@@ -2706,7 +2702,6 @@ function initMainFirebase(accId, userId) {
 }
 
 function startApp(accId, userId, ad, ud) {
-  console.log('[MD] startApp:', accId, userId, 'name=', ud?.name);
   sess = {accId, userId, ud, ad};
   try{ sessionStorage.setItem('md3_a', accId); sessionStorage.setItem('md3_u', userId); }catch(e){}
   try{ localStorage.setItem(PFX+accId+'_'+userId+'_ts', String(Date.now())); }catch(e){}
@@ -2815,10 +2810,8 @@ function doLogout(){
 }
 
 function checkSession(){
-  console.log('[MD] checkSession: start');
   document.getElementById('lockScreen').style.display='flex';
 
-  console.log('[MD] _mainApp:', _mainApp?.name, '| _metaDb:', !!_metaDb);
 
   let resolved = false;
 
@@ -2827,19 +2820,15 @@ function checkSession(){
     resolved = true;
     unsubscribe();
 
-    console.log('[MD] onAuthStateChanged: user=', user?.email, '| emailVerified=', user?.emailVerified, '| uid=', user?.uid);
 
     if(!user || !user.emailVerified){
-      console.log('[MD] → no valid user, redirect to landing');
       window.location.href = 'memorydeck-landing.html';
       return;
     }
 
-    console.log('[MD] → user ok, searching memorydeck_meta by uid:', user.uid);
 
     _metaDb.ref('memorydeck_meta').once('value').then(snap => {
       const data = snap.val() || {};
-      console.log('[MD] memorydeck_meta keys:', Object.keys(data));
 
       let foundAccId = null, foundUserId = null, foundAd = null, foundUd = null;
 
@@ -2851,7 +2840,6 @@ function checkSession(){
             foundUserId = userId;
             foundAd     = { name: acc.name||accId, color: acc.color||COLORS[0], users: acc.users };
             foundUd     = u;
-            console.log('[MD] → found! accId=', accId, 'userId=', userId, 'name=', u.name);
             break;
           }
         }
@@ -2859,7 +2847,6 @@ function checkSession(){
       }
 
       if(!foundAccId){
-        console.warn('[MD] → uid not found in memorydeck_meta, redirect to landing');
         window.location.href = 'memorydeck-landing.html';
         return;
       }
@@ -2871,7 +2858,6 @@ function checkSession(){
         localStorage.setItem(PFX+foundAccId+'_'+foundUserId+'_v', VER);
       }catch(e){}
 
-      console.log('[MD] → startApp:', foundAccId, foundUserId);
       startApp(foundAccId, foundUserId, foundAd, foundUd);
     }).catch(err=>{
       console.error('[MD] memorydeck_meta read error:', err.message);
@@ -2882,7 +2868,6 @@ function checkSession(){
   setTimeout(()=>{
     if(!resolved){
       resolved = true;
-      console.warn('[MD] checkSession timeout — redirect to landing');
       window.location.href = 'memorydeck-landing.html';
     }
   }, 5000);
@@ -3528,7 +3513,6 @@ async function loadCardImages() {
   
   // Find ALL img tags - some may not have data-anki-img if from old format
   const imgs = stage.querySelectorAll('img');
-  console.log('[IMG] total imgs in stage:', imgs.length);
   
   for (const img of imgs) {
     let src = img.getAttribute('src') || '';
@@ -3539,22 +3523,18 @@ async function loadCardImages() {
     if (!m) continue;
     const filename = m[1];
     const safeKey = filename.replace(/[.#$\/\[\]]/g, '_');
-    console.log('[IMG] loading:', filename, '→', safeKey);
     try {
       const snap = await db.ref('memorydeck_audio/' + sess.accId + '/' + safeKey).once('value');
       if (snap.val()) {
         img.src = snap.val();
         img.style.cssText = 'max-width:100%;max-height:200px;border-radius:10px;object-fit:contain;display:block;margin:8px auto;';
-        console.log('[IMG] ✅ loaded:', filename);
       } else {
-        console.log('[IMG] ❌ not found in Firebase:', safeKey);
         // Try without extension replacement (some keys stored differently)
         const altKey = filename.replace(/\./g, '_');
         const snap2 = await db.ref('memorydeck_audio/' + sess.accId + '/' + altKey).once('value');
         if (snap2.val()) {
           img.src = snap2.val();
           img.style.cssText = 'max-width:100%;max-height:200px;border-radius:10px;object-fit:contain;display:block;margin:8px auto;';
-          console.log('[IMG] ✅ loaded via altKey:', altKey);
         } else {
           img.style.display = 'none';
         }
@@ -4219,14 +4199,14 @@ function deleteDeck(){
   const d=decks[eDeckId];
   const cnt=Object.values(cards).filter(c=>c.deckId===eDeckId).length;
   if(!confirm(`Удалить колоду «${d?.name}»?\n\nВместе с ней будут удалены ${cnt} карточек.`)) return;
-  // Delete all cards in this deck
-  const cardUpdates={};
-  Object.entries(cards).forEach(([cid,c])=>{ if(c.deckId===eDeckId) cardUpdates['cards/'+cid]=null; });
-  cardUpdates['decks/'+eDeckId]=null;
-  save('decks/'+eDeckId, null);
-  Object.entries(cards).forEach(([cid,c])=>{ if(c.deckId===eDeckId) save('cards/'+cid, null); });
-  toast('🗑 Колода удалена');
-  closeSh('deckEdSh');
+  if(!db || !sess.accId){ toast('❌ Нет соединения'); return; }
+  const updates={};
+  updates['decks/'+eDeckId]=null;
+  Object.entries(cards).forEach(([cid,c])=>{ if(c.deckId===eDeckId) updates['cards/'+cid]=null; });
+  db.ref('memorydeck/'+sess.accId+'/users/'+sess.userId).update(updates).then(()=>{
+    toast('🗑 Колода удалена');
+    closeSh('deckEdSh');
+  }).catch(e=>toast('❌ '+e.message));
 }
 function renderDEmojis(){
   document.getElementById('dEmojis').innerHTML=EMOJIS.map(e=>`
@@ -5268,14 +5248,12 @@ async function doApkgImport() {
       // Try anki21 format first (notetypes table)
       const ntRes = adb.exec("SELECT name FROM sqlite_master WHERE type='table'");
       const tables = ntRes.length ? ntRes[0].values.map(r=>r[0]) : [];
-      console.log('[APKG] tables:', tables);
 
       if (tables.includes('notetypes')) {
         // Anki 21+ format
         const ntFlds = adb.exec("SELECT nt.name, f.name, f.ord FROM notetypes nt JOIN fields f ON f.ntid = nt.id ORDER BY f.ord");
         if (ntFlds.length && ntFlds[0].values.length) {
           fieldNames = ntFlds[0].values.map(r => r[1]);
-          console.log('[APKG] fields from notetypes:', fieldNames);
         }
       } else if (tables.includes('col')) {
         // Legacy anki2 format — models JSON in col table
@@ -5285,12 +5263,10 @@ async function doApkgImport() {
           const firstModel = Object.values(modJson)[0];
           if (firstModel && firstModel.flds) {
             fieldNames = firstModel.flds.map(f => f.name);
-            console.log('[APKG] fields from col.models:', fieldNames);
           }
         }
       }
     } catch(e) {
-      console.warn('[APKG] field name read error:', e.message);
     }
 
     // Build a map: fieldName -> index (may be empty if schema read failed)
@@ -5319,7 +5295,6 @@ async function doApkgImport() {
                         || hasSoundInPos3             // sound in pos 3 = 4000 Words layout
                         || hasImageInPos2;            // image in pos 2 = 4000 Words layout
 
-    console.log('[APKG] fieldCount:', fieldCount, 'isRichDeck:', isRichDeck, 'hasSoundInPos3:', hasSoundInPos3, 'hasImageInPos2:', hasImageInPos2);
 
     // Process each card
     let pi = 0;
@@ -5331,8 +5306,6 @@ async function doApkgImport() {
 
       // Debug first card
       if (pi === 1) {
-        console.log('[APKG] fieldNames:', fieldNames);
-        console.log('[APKG] fieldIdx:', JSON.stringify(fieldIdx));
         fields.forEach((f,i) => console.log(`[APKG] field[${i}]:`, f.slice(0,60)));
       }
 
@@ -5373,9 +5346,6 @@ async function doApkgImport() {
         if (soundEx)     backParts.push(soundEx);  // [sound:x.mp3]
         back = backParts.join('\n');
         if (pi === 1) {
-          console.log('[APKG] FINAL front:', front ? front.slice(0,200) : 'EMPTY!');
-          console.log('[APKG] FINAL back:', back ? back.slice(0,200) : 'EMPTY!');
-          console.log('[APKG] mediaMap size:', Object.keys(mediaMap).length, 'keys:', Object.keys(mediaMap).slice(0,3));
         }
       } else {
         front = await processField(fields[0]||'', mediaMap);
@@ -6098,7 +6068,6 @@ function learnPickerSelectToday() {
 function startLearnFromPicker(deckId) {
   const sheet = document.getElementById('learnPickerSheet');
   const checked = [...sheet.querySelectorAll('.learn-pick:checked')].map(cb => cb.dataset.id);
-  console.log('learnPicker: checked=', checked.length, 'ids=', checked.slice(0,3));
   if (checked.length === 0) { toast('Выберите хотя бы одну карточку'); return; }
   sheet.remove();
   startLearnSession(deckId, checked);
@@ -6121,12 +6090,10 @@ function startLearnSession_debug(cardIds) {
     const {word,translation} = learnGetWordTranslation(c);
     return `w="${word.slice(0,20)}" t="${translation.slice(0,20)}"`;
   });
-  console.log('learn debug:', sample.join(' | '));
 }
 
 function startLearnSession(deckId, cardIds) {
   const sessionCards = cardIds.map(id => cards[id] ? {...cards[id], id} : null).filter(Boolean);
-  console.log('startLearnSession: cardIds=',cardIds.length,'sessionCards=',sessionCards.length);
   if (!sessionCards.length) { toast('Карточки не найдены'); return; }
 
   // Build learn items: each item has { id, prompt, answer, cardId }

@@ -231,8 +231,8 @@ const FB_CONFIG = {
 
 // ── Firebase — один app, полноценная auth ──
 let app, auth, db;
-try { app = firebase.app(); console.log('[MD landing] DEFAULT app: reused'); }
-catch(e) { app = firebase.initializeApp(FB_CONFIG); console.log('[MD landing] DEFAULT app: created'); }
+try { app = firebase.app(); }
+catch(e) { app = firebase.initializeApp(FB_CONFIG); }
 auth = app.auth();
 db   = app.database();
 
@@ -436,9 +436,7 @@ async function doLogin() {
 
   loading('bLogin', true);
   try {
-    console.log('[MD landing] doLogin: signing in', email);
     const cred = await auth.signInWithEmailAndPassword(email, pass);
-    console.log('[MD landing] signed in uid=', cred.user.uid, 'emailVerified=', cred.user.emailVerified);
 
     if (!cred.user.emailVerified) {
       await auth.signOut();
@@ -448,16 +446,13 @@ async function doLogin() {
     }
 
     // Ищем accId/userId по uid в memorydeck_meta
-    console.log('[MD landing] searching memorydeck_meta...');
     const snap = await db.ref('memorydeck_meta').once('value');
     const data = snap.val() || {};
-    console.log('[MD landing] memorydeck_meta keys:', Object.keys(data));
     let foundAccId = null, foundUserId = null;
 
     for (const [accId, acc] of Object.entries(data)) {
       if (accId.startsWith('_') || typeof acc !== 'object' || !acc.users) continue;
       for (const [userId, u] of Object.entries(acc.users)) {
-        console.log('[MD landing] checking', accId, userId, 'uid=', u.uid, 'vs', cred.user.uid);
         if (u && u.uid === cred.user.uid) {
           foundAccId = accId;
           foundUserId = userId;
@@ -467,10 +462,8 @@ async function doLogin() {
       if (foundAccId) break;
     }
 
-    console.log('[MD landing] foundAccId=', foundAccId, 'foundUserId=', foundUserId);
 
     if (!foundAccId) {
-      console.warn('[MD landing] uid not in memorydeck_meta — creating new account');
       const name = cred.user.displayName || email.split('@')[0];
       foundAccId  = 'acc_' + cred.user.uid.slice(0, 8);
       foundUserId = 'u_'   + cred.user.uid.slice(0, 8);
@@ -485,7 +478,6 @@ async function doLogin() {
       localStorage.setItem(PFX + foundAccId + '_' + foundUserId + '_v', '3.0');
     } catch(e) {}
 
-    console.log('[MD landing] → goToApp');
     goToApp();
   } catch(e) {
     showErr(fbErr(e.code));
