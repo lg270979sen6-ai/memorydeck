@@ -2813,9 +2813,8 @@ function checkSession(){
         }
       }
     }
-    // Нет сессии — показываем список аккаунтов
-    renderLockAcc();
-    goPan(1);
+    // Нет сессии — редирект на лендинг
+    window.location.href = 'memorydeck-landing.html';
   });
 }
 
