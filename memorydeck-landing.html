@@ -357,7 +357,7 @@ async function doReg() {
     _newUserId = 'u_'   + cred.user.uid.slice(0, 8);
 
     document.getElementById('verifyText').textContent =
-      'Письмо отправлено на ' + email + '. Перейдите по ссылке в письме, затем нажмите «Я подтвердил».';
+      'Письмо отправлено на ' + email + '. Перейдите по ссылке для подтверждения, затем нажмите «Я подтвердил». Если письмо не пришло — проверьте папку «Спам».';
     show('sVerify');
   } catch(e) {
     showErr(fbErr(e.code));
