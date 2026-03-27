@@ -6,6 +6,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
+<link rel="manifest" href="manifest.json">
 <meta name="apple-mobile-web-app-title" content="MemoryDeck">
 <link rel="apple-touch-icon" sizes="180x180" href="data:image/png;base64,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">
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCAyMDAgMjAwIj4KICA8cmVjdCB3aWR0aD0iMjAwIiBoZWlnaHQ9IjIwMCIgcng9IjQ0IiBmaWxsPSIjMjk3OUZGIi8+CiAgPGcgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIxLjMiIG9wYWNpdHk9Ii4yNSIgZmlsbD0ibm9uZSI+CiAgICA8bGluZSB4MT0iMTAwIiB5MT0iMjIiIHgyPSI0NiIgIHkyPSI2NyIvPgogICAgPGxpbmUgeDE9IjEwMCIgeTE9IjIyIiB4Mj0iMTAwIiB5Mj0iNjciLz4KICAgIDxsaW5lIHgxPSIxMDAiIHkxPSIyMiIgeDI9IjE1NCIgeTI9IjY3Ii8+CiAgICA8bGluZSB4MT0iNDYiICB5MT0iNjciIHgyPSI0NiIgIHkyPSIxMTIiLz4KICAgIDxsaW5lIHgxPSI0NiIgIHkxPSI2NyIgeDI9IjEwMCIgeTI9IjExMiIvPgogICAgPGxpbmUgeDE9IjQ2IiAgeTE9IjY3IiB4Mj0iMTU0IiB5Mj0iMTEyIi8+CiAgICA8bGluZSB4MT0iMTAwIiB5MT0iNjciIHgyPSI0NiIgIHkyPSIxMTIiLz4KICAgIDxsaW5lIHgxPSIxMDAiIHkxPSI2NyIgeDI9IjEwMCIgeTI9IjExMiIvPgogICAgPGxpbmUgeDE9IjEwMCIgeTE9IjY3IiB4Mj0iMTU0IiB5Mj0iMTEyIi8+CiAgICA8bGluZSB4MT0iMTU0IiB5MT0iNjciIHgyPSI0NiIgIHkyPSIxMTIiLz4KICAgIDxsaW5lIHgxPSIxNTQiIHkxPSI2NyIgeDI9IjEwMCIgeTI9IjExMiIvPgogICAgPGxpbmUgeDE9IjE1NCIgeTE9IjY3IiB4Mj0iMTU0IiB5Mj0iMTEyIi8+CiAgICA8bGluZSB4MT0iNDYiICB5MT0iMTEyIiB4Mj0iNDYiICB5Mj0iMTU3Ii8+CiAgICA8bGluZSB4MT0iNDYiICB5MT0iMTEyIiB4Mj0iMTAwIiB5Mj0iMTU3Ii8+CiAgICA8bGluZSB4MT0iNDYiICB5MT0iMTEyIiB4Mj0iMTU0IiB5Mj0iMTU3Ii8+CiAgICA8bGluZSB4MT0iMTAwIiB5MT0iMTEyIiB4Mj0iNDYiICB5Mj0iMTU3Ii8+CiAgICA8bGluZSB4MT0iMTAwIiB5MT0iMTEyIiB4Mj0iMTAwIiB5Mj0iMTU3Ii8+CiAgICA8bGluZSB4MT0iMTAwIiB5MT0iMTEyIiB4Mj0iMTU0IiB5Mj0iMTU3Ii8+CiAgICA8bGluZSB4MT0iMTU0IiB5MT0iMTEyIiB4Mj0iNDYiICB5Mj0iMTU3Ii8+CiAgICA8bGluZSB4MT0iMTU0IiB5MT0iMTEyIiB4Mj0iMTAwIiB5Mj0iMTU3Ii8+CiAgICA8bGluZSB4MT0iMTU0IiB5MT0iMTEyIiB4Mj0iMTU0IiB5Mj0iMTU3Ii8+CiAgPC9nPgogIDxjaXJjbGUgY3g9IjEwMCIgY3k9IjIyIiAgcj0iMTIiIGZpbGw9IndoaXRlIi8+CiAgPGNpcmNsZSBjeD0iNDYiICBjeT0iNjciICByPSIxMiIgZmlsbD0id2hpdGUiLz4KICA8Y2lyY2xlIGN4PSIxMDAiIGN5PSI2NyIgIHI9IjEyIiBmaWxsPSJ3aGl0ZSIvPgogIDxjaXJjbGUgY3g9IjE1NCIgY3k9IjY3IiAgcj0iMTIiIGZpbGw9IndoaXRlIi8+CiAgPGNpcmNsZSBjeD0iNDYiICBjeT0iMTEyIiByPSIxMiIgZmlsbD0id2hpdGUiLz4KICA8Y2lyY2xlIGN4PSIxMDAiIGN5PSIxMTIiIHI9IjEyIiBmaWxsPSJ3aGl0ZSIvPgogIDxjaXJjbGUgY3g9IjE1NCIgY3k9IjExMiIgcj0iMTIiIGZpbGw9IndoaXRlIi8+CiAgPGNpcmNsZSBjeD0iNDYiICBjeT0iMTU3IiByPSIxMiIgZmlsbD0id2hpdGUiLz4KICA8Y2lyY2xlIGN4PSIxMDAiIGN5PSIxNTciIHI9IjEyIiBmaWxsPSJ3aGl0ZSIvPgogIDxjaXJjbGUgY3g9IjE1NCIgY3k9IjE1NyIgcj0iMTIiIGZpbGw9IndoaXRlIi8+Cjwvc3ZnPg==">
@@ -1186,7 +1187,6 @@ body {
     <div class="view" id="vDecks">
       <div class="sec-head" style="position:sticky;top:0;background:rgba(242,242,247,.9);backdrop-filter:blur(10px);z-index:5;border-bottom:.5px solid var(--border);">
         <div class="sec-title">Все колоды</div>
-        <div class="sec-more" onclick="openDeckEd(null)">＋ Новая</div>
       </div>
       <div id="allDecks"></div>
     </div>
@@ -1275,7 +1275,10 @@ body {
     </div>
   </nav>
 
-  <button class="fab" id="fab" onclick="fabClick()">＋</button>
+  <button class="fab" id="fab" onclick="fabClick()" style="width:auto;padding:0 20px;border-radius:24px;font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;">
+    <span style="font-size:22px;line-height:1;">＋</span>
+    <span>Новая колода</span>
+  </button>
 </div>
 
 <!-- REVIEW -->
@@ -2002,22 +2005,35 @@ body {
       ⚠️ Не импортируется: аудио &gt; 500 КБ, картинки &gt; 200 КБ, LaTeX-формулы. Аудио воспроизводится автоматически при показе карточки.
     </div>
 
-    <div class="field">
-      <label>Файл .apkg</label>
-      <input id="apkgFile" type="file" accept=".apkg,application/zip,application/octet-stream,*/*">
-    </div>
-
-    <!-- Progress indicator -->
-    <div id="apkgProgress" style="display:none;margin-bottom:12px;">
-      <div style="font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:8px;" id="apkgProgressTxt">Читаю файл...</div>
-      <div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;">
-        <div id="apkgProgressBar" style="height:100%;background:var(--blue);border-radius:3px;width:0%;transition:width .3s;"></div>
+    <!-- ШАГ 1: выбор файла -->
+    <div id="apkgStep1">
+      <div class="field">
+        <label>Файл .apkg</label>
+        <input id="apkgFile" type="file" accept=".apkg,application/zip,application/octet-stream,*/*" onchange="apkgReadFields(this)">
+      </div>
+      <div class="sheet-btns">
+        <button class="sbtn sbtn-cancel" onclick="closeSh('apkgSh')">Отмена</button>
       </div>
     </div>
 
-    <div class="sheet-btns">
-      <button class="sbtn sbtn-cancel" onclick="closeSh('apkgSh')">Отмена</button>
-      <button class="sbtn sbtn-ok" id="apkgImportBtn" onclick="doApkgImport()">Импортировать</button>
+    <!-- ШАГ 2: маппинг полей (показывается после чтения файла) -->
+    <div id="apkgStep2" style="display:none;">
+      <div style="font-size:12px;font-weight:700;color:var(--ink3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Поля в файле Anki</div>
+      <div style="font-size:12px;color:var(--ink4);margin-bottom:12px;">Сопоставь каждое поле Anki с полем MemoryDeck</div>
+      <div id="apkgFieldMap" style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px;"></div>
+
+      <!-- Progress indicator -->
+      <div id="apkgProgress" style="display:none;margin-bottom:12px;">
+        <div style="font-size:13px;font-weight:700;color:var(--ink2);margin-bottom:8px;" id="apkgProgressTxt">Читаю файл...</div>
+        <div style="height:6px;background:var(--bg2);border-radius:3px;overflow:hidden;">
+          <div id="apkgProgressBar" style="height:100%;background:var(--blue);border-radius:3px;width:0%;transition:width .3s;"></div>
+        </div>
+      </div>
+
+      <div class="sheet-btns">
+        <button class="sbtn sbtn-cancel" onclick="apkgBackToStep1()">← Назад</button>
+        <button class="sbtn sbtn-ok" id="apkgImportBtn" onclick="doApkgImport()">Импортировать</button>
+      </div>
     </div>
   </div>
 </div>
@@ -5426,18 +5442,153 @@ function setApkgProgress(pct, txt) {
   if (txt) document.getElementById('apkgProgressTxt').textContent = txt;
 }
 
+// Поля MemoryDeck для маппинга
+const APKG_MD_FIELDS = [
+  { id:'word',         label:'Word / Слово' },
+  { id:'translation',  label:'Translation / Перевод' },
+  { id:'example',      label:'Example / Пример' },
+  { id:'meaning',      label:'Meaning / Значение' },
+  { id:'ipa',          label:'IPA / Транскрипция' },
+  { id:'sound',        label:'Sound / Аудио (лицевая)' },
+  { id:'sound_meaning',label:'Sound / Аудио (значение)' },
+  { id:'sound_example',label:'Sound / Аудио (пример)' },
+  { id:'image',        label:'Image / Картинка' },
+  { id:'grammar',      label:'Grammar / Часть речи' },
+  { id:'__ignore__',   label:'— Игнорировать —' },
+];
+
+let _apkgFieldNames = []; // имена полей из Anki
+let _apkgFileBuffer = null;
+
+async function apkgReadFields(input) {
+  const file = input.files[0];
+  if (!file) return;
+  if (!file.name.endsWith('.apkg')) { toast('❌ Нужен файл .apkg'); return; }
+
+  try {
+    const arrayBuffer = await file.arrayBuffer();
+    _apkgFileBuffer = arrayBuffer;
+    const zip = await JSZip.loadAsync(arrayBuffer);
+
+    // Читаем имена полей из базы
+    let dbFile = zip.file('collection.anki21') || zip.file('collection.anki2') || zip.file('collection.anki21b');
+    if (!dbFile) { toast('❌ Не найдена база данных'); return; }
+
+    const dbBytes = await dbFile.async('arraybuffer');
+    const SQL = await initSqlJs({ locateFile: f => `https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.2/${f}` });
+    const adb = new SQL.Database(new Uint8Array(dbBytes));
+
+    _apkgFieldNames = [];
+    try {
+      const tables = adb.exec("SELECT name FROM sqlite_master WHERE type='table'")[0]?.values.map(r=>r[0]) || [];
+      if (tables.includes('notetypes')) {
+        const res = adb.exec("SELECT f.name, f.ord FROM fields f ORDER BY f.ord");
+        if (res.length) _apkgFieldNames = res[0].values.map(r => r[0]);
+      } else {
+        const res = adb.exec("SELECT models FROM col LIMIT 1");
+        if (res.length) {
+          const modJson = JSON.parse(res[0].values[0][0] || '{}');
+          const firstModel = Object.values(modJson)[0];
+          if (firstModel?.flds) _apkgFieldNames = firstModel.flds.map(f => f.name);
+        }
+      }
+    } catch(e) {}
+
+    // Читаем первую карточку для предпросмотра
+    let previewFields = [];
+    try {
+      const res = adb.exec("SELECT flds FROM notes LIMIT 1");
+      if (res.length) previewFields = (res[0].values[0][0] || '').split('\x1f');
+    } catch(e) {}
+    adb.close();
+
+    if (!_apkgFieldNames.length) {
+      // Если не смогли прочитать имена — используем Field1, Field2...
+      _apkgFieldNames = previewFields.map((_, i) => 'Field' + (i+1));
+    }
+
+    // Умный автомаппинг по именам
+    const autoMap = {
+      'word': 'word', 'word1': 'word', 'word2': 'word',
+      'translation': 'translation', 'перевод': 'translation',
+      'example': 'example', 'sentence': 'example', 'sentence1': 'example', 'sentence2': 'example',
+      'meaning': 'meaning',
+      'ipa': 'ipa',
+      'sound': 'sound', 'sound1': 'sound', 'sound2': 'sound',
+      'sound_meaning': 'sound_meaning', 'soundmeaning': 'sound_meaning',
+      'sound_example': 'sound_example', 'soundexample': 'sound_example',
+      'image': 'image', 'picture': 'image',
+      'grammar': 'grammar', 'rank': '__ignore__', 'note': '__ignore__',
+      'plural': '__ignore__', 'field01': '__ignore__', 'field02': '__ignore__',
+      'field03': '__ignore__', 'field04': '__ignore__', 'field05': '__ignore__',
+    };
+
+    const fieldOpts = APKG_MD_FIELDS.map(f =>
+      `<option value="${f.id}">${f.label}</option>`
+    ).join('');
+
+    const mapHtml = _apkgFieldNames.map((name, i) => {
+      const preview = (previewFields[i] || '').replace(/<[^>]+>/g,'').slice(0, 35);
+      const def = autoMap[name.toLowerCase()] || '__ignore__';
+      return `<div style="display:flex;align-items:center;gap:8px;">
+        <div style="min-width:90px;font-size:12px;font-weight:700;color:var(--ink2);">${name}</div>
+        <div style="flex:1;font-size:11px;color:var(--ink4);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${preview}</div>
+        <select id="apkgMap_${i}" style="padding:6px 8px;border-radius:9px;border:1.5px solid var(--border2);background:var(--card);font-size:12px;color:var(--ink);outline:none;min-width:130px;">
+          ${fieldOpts}
+        </select>
+      </div>`;
+    }).join('');
+
+    document.getElementById('apkgFieldMap').innerHTML = mapHtml;
+
+    // Ставим дефолтные значения
+    _apkgFieldNames.forEach((name, i) => {
+      const sel = document.getElementById('apkgMap_' + i);
+      if (sel) sel.value = autoMap[name.toLowerCase()] || '__ignore__';
+    });
+
+    document.getElementById('apkgStep1').style.display = 'none';
+    document.getElementById('apkgStep2').style.display = '';
+
+  } catch(e) {
+    toast('❌ Ошибка чтения файла: ' + e.message);
+  }
+}
+
+function apkgBackToStep1() {
+  document.getElementById('apkgStep1').style.display = '';
+  document.getElementById('apkgStep2').style.display = 'none';
+  _apkgFileBuffer = null;
+  _apkgFieldNames = [];
+}
+
 async function doApkgImport() {
+  if (!_apkgFileBuffer) { toast('❌ Выберите .apkg файл'); return; }
+
+  // Читаем маппинг из UI
+  const _apkgMapping = {};
+  _apkgFieldNames.forEach((name, i) => {
+    const sel = document.getElementById('apkgMap_' + i);
+    if (sel) _apkgMapping[i] = sel.value;
+  });
+
+  // Хелпер: получить значение поля по маппингу
+  const getMappedField = (fields, mdField) => {
+    for (const [idx, mapped] of Object.entries(_apkgMapping)) {
+      if (mapped === mdField) return fields[parseInt(idx)] || '';
+    }
+    return '';
+  };
+
   const fileInput = document.getElementById('apkgFile');
   const file = fileInput.files[0];
-  if (!file) { toast('❌ Выберите .apkg файл'); return; }
-  if (!file.name.endsWith('.apkg')) { toast('❌ Нужен файл с расширением .apkg'); return; }
 
   const btn = document.getElementById('apkgImportBtn');
   btn.disabled = true; btn.textContent = 'Читаю...';
 
   try {
     setApkgProgress(5, 'Распаковываю архив...');
-    const arrayBuffer = await file.arrayBuffer();
+    const arrayBuffer = _apkgFileBuffer;
     const zip = await JSZip.loadAsync(arrayBuffer);
 
     setApkgProgress(15, 'Читаю медиафайлы...');
@@ -5649,16 +5800,16 @@ async function doApkgImport() {
         // Fields by NAME (case-insensitive) with fallback to position from screenshot:
         // 0:Word 1:Translation 2:Image 3:Sound 4:Sound_Meaning 5:Sound_Example 6:Meaning 7:Example 8:IPA
         // Word field: take only first line (some cards have example embedded in word field)
-        const wordRaw = getField(fields, 'word', 0).split('\n')[0].split('<br')[0].trim();
+        const wordRaw = (getMappedField(fields,'word') || getField(fields,'word',0)).split('\n')[0].split('<br')[0].trim();
         const word    = await processField(wordRaw, mediaMap);
-        const translation = await processField(getField(fields, 'translation',  1), mediaMap);
-        const image       = await processField(getField(fields, 'image',        2), mediaMap);
-        const sound       = await processField(getField(fields, 'sound',        3), mediaMap);
-        const soundMeaning= await processField(getField(fields, 'sound_meaning',4), mediaMap);
-        const soundEx     = await processField(getField(fields, 'sound_example',5), mediaMap);
-        const meaning     = await processField(getField(fields, 'meaning',      6), mediaMap);
-        const example     = await processField(getField(fields, 'example',      7), mediaMap);
-        const ipa         = await processField(getField(fields, 'ipa',          8), mediaMap);
+        const translation = await processField(getMappedField(fields,'translation') || getField(fields,'translation',1), mediaMap);
+        const image       = await processField(getMappedField(fields,'image')       || getField(fields,'image',2), mediaMap);
+        const sound       = await processField(getMappedField(fields,'sound')       || getField(fields,'sound',3), mediaMap);
+        const soundMeaning= await processField(getMappedField(fields,'sound_meaning')|| getField(fields,'sound_meaning',4), mediaMap);
+        const soundEx     = await processField(getMappedField(fields,'sound_example')|| getField(fields,'sound_example',5), mediaMap);
+        const meaning     = await processField(getMappedField(fields,'meaning')     || getField(fields,'meaning',6), mediaMap);
+        const example     = await processField(getMappedField(fields,'example')     || getField(fields,'sentence',7), mediaMap);
+        const ipa         = await processField(getMappedField(fields,'ipa')         || getField(fields,'ipa',8), mediaMap);
 
         // debug moved below after front/back are built
 
@@ -6761,6 +6912,53 @@ function closeLearnMode() {
     </div>
 
   </div>
+<script>
+// ── Service Worker + Уведомления ──
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.register('./sw.js').then(reg => {
+    window._swReg = reg;
+  }).catch(e => {});
+}
+
+async function requestNotifications() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'granted') return scheduleReminder();
+  if (Notification.permission === 'denied') return;
+  const perm = await Notification.requestPermission();
+  if (perm === 'granted') scheduleReminder();
+}
+
+function scheduleReminder() {
+  if (!navigator.serviceWorker.controller) return;
+  // Считаем карточки на завтра
+  const tomorrow = new Date();
+  tomorrow.setHours(9, 0, 0, 0);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  const delay = tomorrow.getTime() - Date.now();
+  const count = typeof cards !== 'undefined'
+    ? Object.values(cards).filter(c => {
+        if (!c.sm2?.nextReview) return true;
+        return new Date(c.sm2.nextReview) <= tomorrow;
+      }).length
+    : 0;
+
+  navigator.serviceWorker.controller.postMessage({
+    type: 'SCHEDULE_NOTIFICATION',
+    delay,
+    title: 'MemoryDeck',
+    body: count > 0
+      ? `Сегодня ${count} карточек к повторению!`
+      : 'Не забудь позаниматься сегодня 📚'
+  });
+}
+
+// Запрашиваем разрешение через 3 секунды после загрузки
+setTimeout(() => {
+  if (typeof sess !== 'undefined' && sess?.userId) {
+    requestNotifications();
+  }
+}, 3000);
+</script>
 </body>
 </html>
 
