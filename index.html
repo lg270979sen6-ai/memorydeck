@@ -3757,7 +3757,14 @@ function doFlip(){
   if (rFlipped) {
     const c = rQ[rIdx];
     const backAudio = extractAudioRefs(c.back);
-    if (backAudio.length) setTimeout(() => autoPlayAudio(c, 'back'), 300);
+    const frontAudio = extractAudioRefs(c.front);
+    if (backAudio.length) {
+      // Есть звук в тыльной стороне — воспроизводим его
+      setTimeout(() => autoPlayAudio(c, 'back'), 300);
+    } else if (frontAudio.length) {
+      // Звука в тыльной нет, но есть во фронте — воспроизводим фронтовой
+      setTimeout(() => autoPlayAudio(c, 'front'), 300);
+    }
     setTimeout(loadCardImages, 200); // load back-side images
   }
 }
