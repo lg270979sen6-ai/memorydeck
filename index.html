@@ -5768,56 +5768,38 @@ async function doApkgImport() {
     // 1. By field names (if schema was read)
     // 2. By field count — 4000 Words deck always has 9 fields
     // 3. By content — field[3] contains [sound:...] in 4000 Words
-    const firstRowFields = rows.length ? (rows[0][0]||'').split('\x1f') : [];
-    const fieldCount = firstRowFields.length;
-    const hasSoundInPos3 = /\[sound:/i.test(firstRowFields[3]||'');
-    const hasImageInPos2 = /<img/i.test(firstRowFields[2]||'');
-
-    const hasIPA         = fieldIdx['ipa']          !== undefined;
-    const hasTranslation = fieldIdx['translation']   !== undefined;
-    const isRichDeck     = hasTranslation || hasIPA  // from schema
-                        || fieldCount >= 8            // 8-9 fields = rich deck
-                        || hasSoundInPos3             // sound in pos 3 = 4000 Words layout
-                        || hasImageInPos2;            // image in pos 2 = 4000 Words layout
-
-
-    // Process each card
+    // Process each card — всегда используем маппинг пользователя
     let pi = 0;
     for (const [flds, tags, ankiDid, type, ivl, factor, due, reps, lapses] of rows) {
       pi++;
       if (pi % 50 === 0) setApkgProgress(65 + Math.round(pi/rows.length*20), `Обрабатываю ${pi}/${rows.length}...`);
 
       const fields = (flds||'').split('\x1f');
-
-      // Debug first card
-      if (pi === 1) {
-        fields.forEach((f,i) => console.log(`[APKG] field[${i}]:`, f.slice(0,60)));
-      }
-
       let front, back;
 
-      if (isRichDeck) {
-        // Fields by NAME (case-insensitive) with fallback to position from screenshot:
-        // 0:Word 1:Translation 2:Image 3:Sound 4:Sound_Meaning 5:Sound_Example 6:Meaning 7:Example 8:IPA
-        // Word field: take only first line (some cards have example embedded in word field)
-        const wordRaw = (getMappedField(fields,'word') || getField(fields,'word',0)).split('\n')[0].split('<br')[0].trim();
-        const word    = await processField(wordRaw, mediaMap);
-        const translation = await processField(getMappedField(fields,'translation') || getField(fields,'translation',1), mediaMap);
-        const image       = await processField(getMappedField(fields,'image')       || getField(fields,'image',2), mediaMap);
-        const sound       = await processField(getMappedField(fields,'sound')       || getField(fields,'sound',3), mediaMap);
-        const soundMeaning= await processField(getMappedField(fields,'sound_meaning')|| getField(fields,'sound_meaning',4), mediaMap);
-        const soundEx     = await processField(getMappedField(fields,'sound_example')|| getField(fields,'sound_example',5), mediaMap);
-        const meaning     = await processField(getMappedField(fields,'meaning')     || getField(fields,'meaning',6), mediaMap);
-        const example     = await processField(getMappedField(fields,'example')     || getField(fields,'sentence',7), mediaMap);
-        const ipa         = await processField(getMappedField(fields,'ipa')         || getField(fields,'ipa',8), mediaMap);
+      // Используем маппинг пользователя
+      const wordRaw = getMappedField(fields,'word').split('\n')[0].split('<br')[0].trim();
+      const word         = await processField(wordRaw, mediaMap);
+      const translation  = await processField(getMappedField(fields,'translation'), mediaMap);
+      const image        = await processField(getMappedField(fields,'image'), mediaMap);
+      const sound        = await processField(getMappedField(fields,'sound'), mediaMap);
+      const soundMeaning = await processField(getMappedField(fields,'sound_meaning'), mediaMap);
+      const soundEx      = await processField(getMappedField(fields,'sound_example'), mediaMap);
+      const meaning      = await processField(getMappedField(fields,'meaning'), mediaMap);
+      const example      = await processField(getMappedField(fields,'example'), mediaMap);
+      const ipa          = await processField(getMappedField(fields,'ipa'), mediaMap);
 
-        // debug moved below after front/back are built
-
-        // FRONT: Word + IPA + Sound (autoplay) + Example
+      // Если маппинг не задан (все поля пустые) — fallback на первые два поля
+      const hasMapping = Object.values(_apkgMapping).some(v => v !== '__ignore__');
+      if (!hasMapping || (!word && !translation)) {
+        front = await processField(fields[0]||'', mediaMap);
+        back  = await processField(fields[1]||'', mediaMap);
+      } else {
+        // FRONT: Word + IPA + Sound + Example
         const frontParts = [];
         if (word)    frontParts.push(`<div class="anki-word">${word}</div>`);
         if (ipa)     frontParts.push(`<div class="anki-ipa">[${ipa}]</div>`);
-        if (sound)   frontParts.push(sound);  // keeps [sound:file.mp3] for audio engine
+        if (sound)   frontParts.push(sound);
         if (example) frontParts.push(`<div class="anki-example">${example}</div>`);
         front = frontParts.join('\n');
 
@@ -5828,13 +5810,8 @@ async function doApkgImport() {
         if (translation) backParts.push(`<div class="anki-translation">${translation}</div>`);
         if (meaning)     backParts.push(`<div class="anki-meaning">📖 ${meaning}</div>`);
         if (example)     backParts.push(`<div class="anki-example">${example}</div>`);
-        if (soundEx)     backParts.push(soundEx);  // [sound:x.mp3]
+        if (soundEx)     backParts.push(soundEx);
         back = backParts.join('\n');
-        if (pi === 1) {
-        }
-      } else {
-        front = await processField(fields[0]||'', mediaMap);
-        back  = await processField(fields[1]||'', mediaMap);
       }
 
       if (!front || !back) { skipped++; continue; }
