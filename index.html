@@ -1244,6 +1244,11 @@ body {
           <div class="s-row-info"><div class="s-row-name">Сбросить прогресс</div><div class="s-row-desc">Все карточки станут новыми</div></div>
           <div class="s-row-arr">›</div>
         </div>
+        <div class="settings-row" onclick="enableNotifications()" id="notifRow">
+          <div class="s-row-icon" style="background:#f0f4ff;">🔔</div>
+          <div class="s-row-info"><div class="s-row-name">Уведомления</div><div class="s-row-desc" id="notifDesc">Нажмите чтобы включить</div></div>
+          <div class="s-row-arr" id="notifArr">›</div>
+        </div>
         <div class="settings-row" onclick="doLogout()">
           <div class="s-row-icon" style="background:#fff0f0;">🚪</div>
           <div class="s-row-info"><div class="s-row-name">Выйти</div><div class="s-row-desc" id="sAccLabel"></div></div>
@@ -6896,51 +6901,78 @@ function closeLearnMode() {
 
   </div>
 <script>
-// ── Service Worker + Уведомления ──
+// ── Service Worker ──
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('./sw.js').then(reg => {
     window._swReg = reg;
   }).catch(e => {});
 }
 
-async function requestNotifications() {
-  if (!('Notification' in window)) return;
-  if (Notification.permission === 'granted') return scheduleReminder();
-  if (Notification.permission === 'denied') return;
+// ── Уведомления — только по кнопке ──
+function updateNotifUI() {
+  const desc = document.getElementById('notifDesc');
+  const arr  = document.getElementById('notifArr');
+  const row  = document.getElementById('notifRow');
+  if (!desc || !('Notification' in window)) {
+    if (row) row.style.display = 'none';
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    desc.textContent = '✅ Включены — напомним в 9:00';
+    if (arr) arr.textContent = '';
+  } else if (Notification.permission === 'denied') {
+    desc.textContent = '🚫 Отклонены — разрешите в настройках iPhone';
+    if (arr) arr.textContent = '';
+  } else {
+    desc.textContent = 'Нажмите чтобы включить';
+    if (arr) arr.textContent = '›';
+  }
+}
+
+async function enableNotifications() {
+  if (!('Notification' in window)) {
+    toast('❌ Уведомления не поддерживаются');
+    return;
+  }
+  if (Notification.permission === 'granted') {
+    scheduleReminder();
+    toast('🔔 Уведомление запланировано на 9:00');
+    return;
+  }
+  if (Notification.permission === 'denied') {
+    toast('🚫 Разрешите уведомления в Настройки → Safari → MemoryDeck');
+    return;
+  }
   const perm = await Notification.requestPermission();
-  if (perm === 'granted') scheduleReminder();
+  updateNotifUI();
+  if (perm === 'granted') {
+    scheduleReminder();
+    toast('✅ Уведомления включены!');
+  }
 }
 
 function scheduleReminder() {
-  if (!navigator.serviceWorker.controller) return;
-  // Считаем карточки на завтра
+  const sw = navigator.serviceWorker.controller;
+  if (!sw) return;
   const tomorrow = new Date();
-  tomorrow.setHours(9, 0, 0, 0);
   tomorrow.setDate(tomorrow.getDate() + 1);
+  tomorrow.setHours(9, 0, 0, 0);
   const delay = tomorrow.getTime() - Date.now();
   const count = typeof cards !== 'undefined'
     ? Object.values(cards).filter(c => {
         if (!c.sm2?.nextReview) return true;
         return new Date(c.sm2.nextReview) <= tomorrow;
-      }).length
-    : 0;
-
-  navigator.serviceWorker.controller.postMessage({
+      }).length : 0;
+  sw.postMessage({
     type: 'SCHEDULE_NOTIFICATION',
     delay,
     title: 'MemoryDeck',
-    body: count > 0
-      ? `Сегодня ${count} карточек к повторению!`
-      : 'Не забудь позаниматься сегодня 📚'
+    body: count > 0 ? `Сегодня ${count} карточек к повторению 📚` : 'Не забудь позаниматься сегодня 📚'
   });
 }
 
-// Запрашиваем разрешение через 3 секунды после загрузки
-setTimeout(() => {
-  if (typeof sess !== 'undefined' && sess?.userId) {
-    requestNotifications();
-  }
-}, 3000);
+// Обновляем UI при загрузке
+window.addEventListener('load', updateNotifUI);
 </script>
 </body>
 </html>
