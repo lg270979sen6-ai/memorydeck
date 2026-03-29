@@ -1245,11 +1245,6 @@ body {
           <div class="s-row-info"><div class="s-row-name">Сбросить прогресс</div><div class="s-row-desc">Все карточки станут новыми</div></div>
           <div class="s-row-arr">›</div>
         </div>
-        <div class="settings-row" onclick="showCardLog()">
-          <div class="s-row-icon" style="background:#e8f4ff;">📋</div>
-          <div class="s-row-info"><div class="s-row-name">Лог карточек</div><div class="s-row-desc" id="cardLogDesc">История действий</div></div>
-          <div class="s-row-arr">›</div>
-        </div>
         <div class="settings-row" onclick="doLogout()">
           <div class="s-row-icon" style="background:#fff0f0;">🚪</div>
           <div class="s-row-info"><div class="s-row-name">Выйти</div><div class="s-row-desc" id="sAccLabel"></div></div>
@@ -2059,53 +2054,6 @@ let pendAcc=null, pendUser=null;
 let decks={}, cards={}, cfg={newPerDay:20,maxReviews:200,firstInterval:1,algo:'sm2'}, studyLog={}, newLog={}, gradeLog={};
 let statsFilter = { deckId: null, days: 30 }; // null = все колоды
 let rQ=[], rIdx=0, rFlipped=false, rStats={}, rDeckId=null;
-
-// ── Card Action Log (временный отладочный лог) ──
-const cardLog = [];
-function logCard(action, card, extra='') {
-  const sm = card?.sm2 || {};
-  const entry = {
-    time: new Date().toLocaleTimeString('ru'),
-    action,
-    id: card?.id?.slice(-6) || '?',
-    front: (card?.front||'').replace(/<[^>]+>/g,'').slice(0,30),
-    state: sm.state||'new',
-    due: sm.due||'—',
-    dueMs: sm.dueMs ? new Date(sm.dueMs).toLocaleTimeString('ru') : '—',
-    interval: sm.interval?.toFixed?.(3)||sm.interval||0,
-    lastGraded: sm.lastGraded||'—',
-    extra
-  };
-  cardLog.push(entry);
-  if (cardLog.length > 200) cardLog.shift();
-  console.log(`[CardLog] ${entry.time} ${action} | ${entry.front} | state=${entry.state} due=${entry.due} dueMs=${entry.dueMs} ivl=${entry.interval} ${extra}`);
-}
-function showCardLog() {
-  const w = window.open('', '_blank', 'width=900,height=600');
-  const rows = cardLog.map(e => 
-    `<tr style="border-bottom:1px solid #eee;">
-      <td style="padding:4px 8px;white-space:nowrap;">${e.time}</td>
-      <td style="padding:4px 8px;color:#007aff;font-weight:700;">${e.action}</td>
-      <td style="padding:4px 8px;font-family:monospace;font-size:11px;">${e.id}</td>
-      <td style="padding:4px 8px;max-width:200px;overflow:hidden;">${e.front}</td>
-      <td style="padding:4px 8px;color:${e.state==='review'?'#34c759':e.state==='learning'?'#ff9500':'#888'};">${e.state}</td>
-      <td style="padding:4px 8px;">${e.due}</td>
-      <td style="padding:4px 8px;">${e.dueMs}</td>
-      <td style="padding:4px 8px;">${e.interval}</td>
-      <td style="padding:4px 8px;">${e.lastGraded}</td>
-      <td style="padding:4px 8px;color:#666;">${e.extra}</td>
-    </tr>`
-  ).join('');
-  w.document.write(`<html><head><title>Card Log</title>
-    <style>body{font-family:system-ui;font-size:12px;} table{border-collapse:collapse;width:100%;} th{background:#f0f0f0;padding:6px 8px;text-align:left;position:sticky;top:0;}</style>
-    </head><body>
-    <h3 style="margin:12px;">📋 Card Action Log (${cardLog.length} записей) <button onclick="window.location.reload()">↻</button></h3>
-    <table><thead><tr>
-      <th>Время</th><th>Действие</th><th>ID</th><th>Карточка</th>
-      <th>State</th><th>Due</th><th>DueMs</th><th>Interval</th><th>LastGraded</th><th>Доп.</th>
-    </tr></thead><tbody>${rows}</tbody></table>
-    </body></html>`);
-}
 let eDeckId=null, eCardId=null, eDetailDeck=null;
 let dColor=COLORS[0], dEmoji='📚';
 
@@ -2122,13 +2070,8 @@ const today = () => {
 };
 const nowMs  = () => Date.now();
 const addD = (s, n) => {
-  const d = new Date(s);
-  d.setDate(d.getDate() + n);
-  // Используем локальную дату (не UTC) как в today()
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return y+'-'+m+'-'+day;
+  const d = new Date(s); d.setDate(d.getDate()+n);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
 };
 
 // isDue: learning cards due today = available immediately (Anki day-based logic)
@@ -2138,8 +2081,8 @@ const isDue = sm => {
   if (sm.state==='learning' || sm.state==='relearning') {
     if (sm.dueMs) {
       // Intraday steps: check actual millisecond timestamp
-      const _dm = new Date(sm.dueMs);
-      const dueDay = _dm.getFullYear()+'-'+String(_dm.getMonth()+1).padStart(2,'0')+'-'+String(_dm.getDate()).padStart(2,'0');
+      const _d = new Date(sm.dueMs);
+      const dueDay = _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
       if (dueDay > today()) return false;        // future calendar day → not due
       return sm.dueMs <= Date.now();             // same day: check exact time
     }
@@ -2339,11 +2282,7 @@ function addDFrac(dateStr, fracDays) {
   }
   const d = new Date(dateStr);
   d.setDate(d.getDate() + Math.round(fracDays));
-  // Локальная дата — не UTC, важно при переходе на летнее/зимнее время
-  const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2,'0');
-  const day = String(d.getDate()).padStart(2,'0');
-  return { due: y+'-'+m+'-'+day };
+  return { due: d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0') };
 }
 
 // ═══════════════════════════════════════════════════
@@ -3058,23 +2997,13 @@ function computeCards(deckId = null) {
       }
     } else if ((sm.state === 'learning' || sm.state === 'relearning') && isDue(sm)) {
       // Interday learning (dueMs spans day boundary) → counts as review
-      if (sm.dueMs && (() => {
-        const d = new Date(sm.dueMs);
-        const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), dy=String(d.getDate()).padStart(2,'0');
-        return y+'-'+m+'-'+dy;
-      })() > t) {
+      if (sm.dueMs && new Date(sm.dueMs).toISOString().slice(0,10) > t) {
         rvCards.push(card);
       } else {
         lnCards.push(card);
       }
     } else if (sm.state === 'review' && sm.due <= t) {
-      // Не показываем карточку если она уже была оценена сегодня
-      // (защита от повторного появления при interval=1)
-      if (sm.lastGraded === t && sm.due === t) {
-        // Карточка оценена сегодня и due сегодня — пропускаем до завтра
-      } else {
-        rvCards.push(card);
-      }
+      rvCards.push(card);
     }
   });
 
@@ -3083,12 +3012,9 @@ function computeCards(deckId = null) {
   const ln = lnCards.length;
   // Cap reviews: if single deck use deck maxRev, else global
   const globalMaxRev = cfg.maxReviews || 200;
-  const maxRevLimit = deckId
-    ? (deckInfo[deckId]?.maxRev ?? globalMaxRev)
-    : globalMaxRev;
-  // Вычитаем уже пройденные сегодня повторения
-  const doneRevToday = Math.max(0, (studyLog[t]||0) - Object.values(cards).filter(c=>c.sm2?.firstReview===t).length);
-  const rv = Math.max(0, Math.min(rvCards.length, maxRevLimit - doneRevToday));
+  const rv = deckId
+    ? Math.min(rvCards.length, deckInfo[deckId]?.maxRev ?? globalMaxRev)
+    : Math.min(rvCards.length, globalMaxRev);
 
   // ── Build interleaved queue ──
   const opt      = deckId ? deckInfo[deckId]?.opt : null;
@@ -3113,9 +3039,6 @@ function computeCards(deckId = null) {
     if (ni < sortedNw.length) queue.push(sortedNw[ni++]);
   }
 
-  // Логируем очередь
-  queue.forEach(c => logCard('queued', c, `deck=${c.deckId?.slice(-4)}`));
-  console.log(`[CardLog] Queue built: nw=${nw} rv=${rv} ln=${ln} total=${queue.length}`);
   return { nw, rv, ln, queue };
 }
 
@@ -3141,8 +3064,6 @@ window.addEventListener('pageshow', (e) => {
 });
 
 function renderHome(){
-  const logDesc = document.getElementById('cardLogDesc');
-  if (logDesc) logDesc.textContent = `История действий (${cardLog.length} записей)`;
   const h=new Date().getHours();
   const g=h<12?'Доброе утро':h<18?'Добрый день':'Добрый вечер';
   document.getElementById('todayGreet').textContent=g+', '+(sess.ud?.name||'')+'!';
@@ -3704,8 +3625,8 @@ function renderCard(){
       if (sm.state!=='learning' && sm.state!=='relearning') return false;
       if (!sm.dueMs) return false;
       // Due today (not interday)
-      const _dm = new Date(sm.dueMs);
-      const dueDay = _dm.getFullYear()+'-'+String(_dm.getMonth()+1).padStart(2,'0')+'-'+String(_dm.getDate()).padStart(2,'0');
+      const _d = new Date(sm.dueMs);
+      const dueDay = _d.getFullYear()+'-'+String(_d.getMonth()+1).padStart(2,'0')+'-'+String(_d.getDate()).padStart(2,'0');
       if (dueDay > t) return false;
       // Not yet due (still waiting their timer)
       return true; // include even if not yet due — they're in-session
@@ -3995,7 +3916,6 @@ function doGrade(g){
 
   const c=rQ[rIdx];
   if (!c) { console.warn('doGrade: no card at rIdx', rIdx, 'rQ.length', rQ.length); return; }
-  logCard('grade-start', c, `grade=${['Again','Hard','Good','Easy'][g]}`);;
   ['again','hard','good','easy'].forEach((k,i)=>{if(i===g)rStats[k]++;});
 
   // DRILL MODE: show feedback only, never alter scheduling
@@ -4017,10 +3937,8 @@ function doGrade(g){
   }
 
   // ── Update local cache ALWAYS (even if key wasn't there before) ──
-  ns.lastGraded = t;  // запоминаем дату последней оценки
   cards[c.id] = {...(cards[c.id]||{}), ...c, sm2: ns};
   save('cards/'+c.id+'/sm2', ns);
-  logCard('grade-done', {...c, sm2: ns}, `grade=${['Again','Hard','Good','Easy'][g]} prevState=${prevState}`);
 
 
   // ── Grade log ──
