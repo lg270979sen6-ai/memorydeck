@@ -2181,7 +2181,7 @@ function sm2Calc(sm, g, deckOpt) {
     if (inReview) {
       // ease -0.15, interval × hardInterval (1.20)
       s.ease     = Math.max(1.3, s.ease - 0.15);
-      s.interval = Math.min(maxInterval, Math.max(1, Math.round(s.interval * 1.2)));
+      s.interval = Math.min(maxInterval, Math.max(s.interval + 1, Math.round(s.interval * 1.2)));
     } else {
       // In learning/relearning: repeat current step with avg interval, stepIdx unchanged
       const steps = inRelearning ? relearnSteps : learnSteps;
@@ -2198,7 +2198,7 @@ function sm2Calc(sm, g, deckOpt) {
     // ── GOOD ─────────────────────────────────────────
     if (inReview) {
       // interval × ease, ease unchanged
-      s.interval = Math.min(maxInterval, Math.max(1, Math.round(s.interval * s.ease)));
+      s.interval = Math.min(maxInterval, Math.max(s.interval + 1, Math.round(s.interval * s.ease)));
       s.reps++;
     } else {
       // Advance to next step, or graduate
@@ -2223,7 +2223,7 @@ function sm2Calc(sm, g, deckOpt) {
     if (inReview) {
       // interval × ease × easyBonus (1.30), ease +0.15
       s.ease     = Math.min(4.0, s.ease + 0.15);
-      s.interval = Math.min(maxInterval, Math.max(1, Math.round(s.interval * s.ease * 1.3)));
+      s.interval = Math.min(maxInterval, Math.max(s.interval + 1, Math.round(s.interval * s.ease * 1.3)));
       s.reps++;
     } else {
       // Immediate graduation regardless of step
