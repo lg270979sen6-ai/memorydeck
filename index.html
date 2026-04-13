@@ -3000,8 +3000,10 @@ function computeCards(deckId = null) {
         di.remaining--;
       }
     } else if ((sm.state === 'learning' || sm.state === 'relearning') && isDue(sm)) {
-      // Interday learning (dueMs spans day boundary) → counts as review
-      if (sm.dueMs && new Date(sm.dueMs).toISOString().slice(0,10) > t) {
+      if (di.paused || !decks[did]) return;
+      const _dms = sm.dueMs ? new Date(sm.dueMs) : null;
+      const _dmsDay = _dms ? _dms.getFullYear()+'-'+String(_dms.getMonth()+1).padStart(2,'0')+'-'+String(_dms.getDate()).padStart(2,'0') : null;
+      if (_dmsDay && _dmsDay > t) {
         rvCards.push(card);
       } else {
         lnCards.push(card);
@@ -3406,19 +3408,28 @@ function renderStats(){
     const h = Math.round(n/fMax*72);
     const isToday = i===0;
     const col = isToday ? 'var(--orange)' : 'var(--green)';
-    const lbl = isToday ? 'Сегодня' : i===1 ? '+1д' : '+'+i+'д';
+    const lbl = isToday ? 'Сегодня' : 'День '+i;
     return `<div style="display:flex;flex-direction:column;align-items:center;flex:1;min-width:0;" title="${lbl}: ${n} карт">
       <div style="width:100%;background:${col};border-radius:3px 3px 0 0;height:${h}px;min-height:${n>0?2:0}px;opacity:${isToday?.9:.75};"></div>
     </div>`;
   }).join('');
 
-  // X-axis: same flex structure as bars, label shown for key days
+  // X-axis: убраны +, только числа
   const xAxisLabels = forecast.map((n,i) => {
-    const show = i===0||i===1||i===2||i===3||i===4||i===5||i===10||i===20||i===29;
-    const lbl = i===0?'Сег':'+'+i;
+    const show = i===0||i===5||i===10||i===15||i===20||i===25||i===29;
+    const lbl = i===0?'0':String(i);
     return `<div style="flex:1;min-width:0;text-align:center;font-size:8px;color:var(--ink4);overflow:hidden;white-space:nowrap;">${show?lbl:''}</div>`;
   }).join('');
   const xLabels = `<div style="display:flex;gap:1px;margin-top:3px;">${xAxisLabels}</div>`;
+
+  // Y-axis метки
+  const yMax = fMax;
+  const yMid = Math.round(fMax/2);
+  const yAxis = `<div style="position:absolute;left:0;top:0;height:72px;display:flex;flex-direction:column;justify-content:space-between;pointer-events:none;">
+    <div style="font-size:8px;color:var(--ink4);line-height:1;">${yMax}</div>
+    <div style="font-size:8px;color:var(--ink4);line-height:1;">${yMid}</div>
+    <div style="font-size:8px;color:var(--ink4);line-height:1;">0</div>
+  </div>`;
 
   document.getElementById('statsForecast').innerHTML=`
     <div class="chart-title">📅 Прогноз повторений — 30 дней</div>
@@ -3426,8 +3437,11 @@ function renderStats(){
       <span><span style="display:inline-block;width:10px;height:10px;background:var(--orange);border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Сегодня</span>
       <span><span style="display:inline-block;width:10px;height:10px;background:var(--green);border-radius:2px;margin-right:4px;vertical-align:middle;"></span>Будущие повторения</span>
     </div>
-    <div style="display:flex;align-items:flex-end;height:72px;gap:1px;">${fBars}</div>
-    ${xLabels}
+    <div style="position:relative;padding-left:20px;">
+      ${yAxis}
+      <div style="display:flex;align-items:flex-end;height:72px;gap:1px;">${fBars}</div>
+      ${xLabels}
+    </div>
     <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px;font-size:12px;">
       <div style="background:var(--bg2);border-radius:10px;padding:8px 10px;text-align:center;">
         <div style="font-size:20px;font-weight:800;color:var(--orange);">${todayLeft}</div>
